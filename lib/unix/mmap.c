@@ -1,11 +1,12 @@
 #include "hmll/unix/mmap.h"
+#include "hmll/status.h"
 
 #include <sys/file.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
-hmll_status_t hmll_open_mmap(const char *path, hmll_context_t *ctx, hmll_flags_t flags)
+hmll_status_t hmll_open_mmap(const char *path, hmll_context_t *ctx)
 {
     hmll_status_t result = {0};
     const int fd = open(path, O_RDONLY);

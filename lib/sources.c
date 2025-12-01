@@ -10,7 +10,7 @@
 hmll_status_t hmll_open(const char *path, hmll_context_t *ctx, const hmll_file_kind_t kind, const hmll_flags_t flags)
 {
     if (flags & HMLL_MMAP) {
-        const auto status = hmll_open_mmap(path, ctx, flags);
+        auto const status = hmll_open_mmap(path, ctx);
         if (hmll_status_has_error(status))
             return status;
 

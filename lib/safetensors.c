@@ -112,34 +112,34 @@ hmll_tensor_data_type_t hmll_safetensors_dtype_from_str(const char *dtype, const
 }
 
 
-hmll_status_t hmll_safetensors_read_table(hmll_context_t *ctx, hmll_flags_t flags)
+hmll_status_t hmll_safetensors_read_table(hmll_context_t *ctx, const hmll_flags_t flags)
 {
-    hmll_status_t status = {0};
+    auto status = HMLL_SUCCEEDED;
 
     // Get the size of the JSON header
     // TODO: Change that when fd is supported
     uint64_t hsize;
     memcpy(&hsize, ctx->source.content, sizeof(uint64_t));
 
-    char *header = ctx->source.content + sizeof(uint64_t);
+    auto const header = ctx->source.content + sizeof(uint64_t);
 
     // Parse JSON
     yyjson_read_err error;
-    yyjson_doc *document = yyjson_read_opts(header, hsize, YYJSON_READ_NOFLAG, nullptr, &error);
+    auto const document = yyjson_read_opts(header, hsize, YYJSON_READ_NOFLAG, nullptr, &error);
     if (!document) {
         status.what = HMLL_SAFETENSORS_HEADER_JSON_ERROR;
         status.message = error.msg;
         goto freeup_and_return;
     }
 
-    yyjson_val *root = yyjson_doc_get_root(document);
+    auto const root = yyjson_doc_get_root(document);
     if (!yyjson_is_obj(root)) {
         status.what = HMLL_SAFETENSORS_HEADER_JSON_ERROR;
         status.message = error.msg;
         goto freeup_and_return;
     }
 
-    const size_t num_tensors = yyjson_obj_size(root);
+    auto const num_tensors = yyjson_obj_size(root);
     if ((ctx->table.names = calloc(num_tensors, sizeof(char*))) == nullptr) {
         status.what = HMLL_ALLOCATION_FAILED;
         status.message = "Failed to allocated memory to store tensor's names";
@@ -150,22 +150,22 @@ hmll_status_t hmll_safetensors_read_table(hmll_context_t *ctx, hmll_flags_t flag
         status.message = "Failed to allocated memory to store tensor's descriptor";
     }
 
-    const auto names = ctx->table.names;
-    const auto tensors = ctx->table.tensors;
+    auto const names = ctx->table.names;
+    auto const tensors = ctx->table.tensors;
 
     size_t idx, max;
     yyjson_val *key, *val;
     yyjson_obj_foreach(root, idx, max, key, val) {
 
-        const char *keyval = yyjson_get_str(key);
-        const bool is_metadata = strcmp(keyval, "__metadata__") == 0;
+        auto const keyval = yyjson_get_str(key);
+        auto const is_metadata = strcmp(keyval, "__metadata__") == 0;
 
         // Skip __metadata__ if the flag is set
         if (is_metadata)
             if (!(flags & HMLL_SKIP_METADATA)) { /* TODO: Not implemented yet */ }
 
         // Create the final tensor name with a null-terminator string to allow usage of str functions like strncmp
-        const size_t name_len = yyjson_get_len(key);
+        auto const name_len = yyjson_get_len(key);
         if ((names[idx] = calloc(name_len + 1, sizeof(char))) == nullptr) {
             status.what = HMLL_ALLOCATION_FAILED;
             status.message = "Failed to allocated memory to store tensor's name";
@@ -192,7 +192,7 @@ hmll_status_t hmll_safetensors_read_table(hmll_context_t *ctx, hmll_flags_t flag
         ++ctx->num_tensors;
     }
 
-    return HMLL_SUCCEEDED;
+    return status;
 
 freeup_and_return:
     if (document != nullptr)

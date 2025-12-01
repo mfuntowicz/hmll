@@ -35,6 +35,7 @@ fetchcontent_makeavailable(yyjson)
 # Definition of libhmll
 ###########################################################
 set(LIBHMLL_HEADERS
+        include/hmll/fetch.h
         include/hmll/hmll.h
         include/hmll/safetensors.h
         include/hmll/status.h
@@ -53,7 +54,7 @@ target_include_directories(libhmll PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
 )
-target_compile_options(libhmll PRIVATE $<$<COMPILE_LANGUAGE:C>:-Werror -Wpedantic>)
+target_compile_options(libhmll PRIVATE $<$<COMPILE_LANGUAGE:C>:-Wall -Werror -Wextra -Wpedantic>)
 target_link_libraries(libhmll yyjson)
 
 ###########################################################

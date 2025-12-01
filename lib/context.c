@@ -10,7 +10,7 @@
 hmll_status_t hmll_context_free(const hmll_context_t *ctx)
 {
     if (ctx->table.names) {
-        const auto names = ctx->table.names;
+        auto const names = ctx->table.names;
         for (size_t i = 0; i < ctx->num_tensors; ++i)
             free(names + i);
 
@@ -18,7 +18,7 @@ hmll_status_t hmll_context_free(const hmll_context_t *ctx)
     }
 
     if (ctx->table.tensors) {
-        const auto tensors = ctx->table.tensors;
+        auto const tensors = ctx->table.tensors;
         for (size_t i = 0; i < ctx->num_tensors; ++i)
             free(tensors + i);
 

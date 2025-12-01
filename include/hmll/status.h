@@ -53,10 +53,11 @@ struct hmll_status
 };
 typedef struct hmll_status hmll_status_t;
 
-static struct hmll_status HMLL_SUCCEEDED = {HMLL_SUCCESS, nullptr};
-
 /// Helper methods indicating the result of a status
 bool hmll_success(struct hmll_status status);
 bool hmll_status_has_error(struct hmll_status status);
+
+
+#define HMLL_SUCCEEDED (hmll_status_t){HMLL_SUCCESS, nullptr}
 
 #endif //HMLL_HMLL_TYPES_H
