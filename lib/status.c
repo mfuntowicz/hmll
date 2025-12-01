@@ -4,7 +4,7 @@
 
 #include "hmll/status.h"
 
-bool hmll_status_succeeded(const struct hmll_status status)
+bool hmll_success(const struct hmll_status status)
 {
     return status.what == HMLL_STATUS_OK;
 }

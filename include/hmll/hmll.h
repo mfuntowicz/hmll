@@ -19,7 +19,13 @@ extern "C" {
 #endif
 
 #include "status.h"
+#include "types.h"
+#include "safetensors.h"
 
+HMLL_EXTERN hmll_status_t hmll_context_free(hmll_context_t *);
+
+HMLL_EXTERN hmll_status_t hmll_open(const char *, hmll_context_t *, hmll_file_kind_t, hmll_flags_t);
+HMLL_EXTERN hmll_status_t hmll_close(const char *, hmll_context_t *, hmll_flags_t);
 
 #ifdef __cplusplus
 }
