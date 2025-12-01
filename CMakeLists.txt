@@ -31,7 +31,6 @@ set(LIBHMLL_HEADERS
         include/hmll/hmll.h
         include/hmll/safetensors.h
         include/hmll/status.h
-        include/hmll/types.h
 )
 set(LIBHMLL_SOURCES
     lib/hmll_safetensors.c
