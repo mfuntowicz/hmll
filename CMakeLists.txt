@@ -15,6 +15,7 @@ option(HMLL_BUILD_STATIC "Flag indicating if cmake should generate a static buil
 option(HMLL_BUILD_EXAMPLES "Flag indicating if cmake should build examples" OFF)
 option(HMLL_BUILD_TESTS "Flag indicating if cmake should build unit-tests" OFF)
 option(HMLL_ENABLE_SANITIZERS "Flag indicating if cmake should enable sanitizers" OFF)
+option(HMLL_ENABLE_IO_URING "Flag to include io_uring backend (only on Linux)" ON)
 
 if(${HMLL_BUILD_STATIC})
     message(STATUS "Building libhmll statically")
@@ -24,22 +25,33 @@ endif()
 ###########################################################
 # Dependencies
 ###########################################################
+set(HMLL_LIBRARIES "")
 fetchcontent_declare(
         yyjson
         GIT_REPOSITORY https://github.com/ibireme/yyjson.git
         GIT_TAG        master
 )
 fetchcontent_makeavailable(yyjson)
+list(APPEND HMLL_LIBRARIES yyjson)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND ${HMLL_ENABLE_IO_URING})
+    include(cmake/liburing.cmake)
+    list(APPEND HMLL_LIBRARIES liburing_static)
+    message(STATUS "Enabling io_uring backend")
+endif()
 
 ###########################################################
 # Definition of libhmll
 ###########################################################
 set(LIBHMLL_HEADERS
+        include/hmll/fetcher.h
         include/hmll/hmll.h
         include/hmll/safetensors.h
         include/hmll/status.h
         include/hmll/types.h
         include/hmll/unix/mmap.h
+        include/hmll/unix/fetcher.h
+        include/hmll/unix/fetcher_io_uring.h
 )
 set(LIBHMLL_SOURCES
         lib/safetensors.c
@@ -54,7 +66,7 @@ target_include_directories(libhmll PUBLIC
         $<INSTALL_INTERFACE:include>
 )
 target_compile_options(libhmll PRIVATE $<$<COMPILE_LANGUAGE:C>:-Wall -Werror -Wextra -Wpedantic>)
-target_link_libraries(libhmll yyjson)
+target_link_libraries(libhmll ${HMLL_LIBRARIES})
 
 ###########################################################
 # Examples

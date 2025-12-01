@@ -176,8 +176,7 @@ hmll_status_t hmll_safetensors_read_table(hmll_context_t *ctx, const hmll_flags_
         strncpy(names[idx], keyval, name_len);
 
         // Parse tensor object
-        if (!is_metadata)
-        {
+        if (!is_metadata) {
             if (!yyjson_is_obj(val)) {
                 status.what = HMLL_SAFETENSORS_HEADER_INVALID;
                 status.message = "Expected JSON object";

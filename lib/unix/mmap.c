@@ -52,8 +52,7 @@ close_fd_and_return:
 
 hmll_status_t hmll_close_mmap(hmll_context_t *ctx)
 {
-    if (ctx != nullptr && ctx->source.kind == HMLL_SOURCE_MMAP && ctx->source.size > 0)
-    {
+    if (ctx != nullptr && ctx->source.kind == HMLL_SOURCE_MMAP && ctx->source.size > 0) {
         munmap(ctx->source.content, ctx->source.size);
         ctx->source.kind = HMLL_SOURCE_UNDEFINED;
         ctx->source.size = 0;
