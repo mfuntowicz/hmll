@@ -15,6 +15,7 @@ option(HMLL_BUILD_TESTS "Flag indicating if cmake should build unit-tests" OFF)
 option(HMLL_ENABLE_SANITIZERS "Flag indicating if cmake should enable sanitizers" OFF)
 
 if(${HMLL_BUILD_STATIC})
+    message(STATUS "Building libhmll statically")
     set(HMLL_STATIC ON)
 endif()
 
