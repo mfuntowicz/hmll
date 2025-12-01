@@ -84,7 +84,7 @@ if(${HMLL_BUILD_TESTS})
     include(Catch)
 
     add_executable(libhmll_tests tests/tests_hmll_safetensors.cpp
-            tests/test_hmll_status.cpp)
+            tests/tests_hmll_status.cpp)
     target_link_libraries(libhmll_tests PRIVATE Catch2::Catch2WithMain libhmll)
     catch_discover_tests(libhmll_tests)
 endif()
