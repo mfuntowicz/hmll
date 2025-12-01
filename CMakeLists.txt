@@ -35,7 +35,6 @@ fetchcontent_makeavailable(yyjson)
 # Definition of libhmll
 ###########################################################
 set(LIBHMLL_HEADERS
-        include/hmll/fetch.h
         include/hmll/hmll.h
         include/hmll/safetensors.h
         include/hmll/status.h
