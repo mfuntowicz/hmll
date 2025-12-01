@@ -27,9 +27,6 @@ HMLL_EXTERN hmll_status_t hmll_context_free(hmll_context_t *);
 HMLL_EXTERN hmll_status_t hmll_open(const char *, hmll_context_t *, hmll_file_kind_t, hmll_flags_t);
 HMLL_EXTERN hmll_status_t hmll_close(const char *, hmll_context_t *, hmll_flags_t);
 
-HMLL_EXTERN hmll_status_t hmll_fetcher_init(hmll_fetcher_kind_t *);
-HMLL_EXTERN hmll_status_t hmll_fetcher_free();
-
 #ifdef __cplusplus
 }
 #endif
