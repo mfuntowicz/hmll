@@ -20,7 +20,9 @@ enum hmll_status_code
     HMLL_SAFETENSORS_HEADER_JSON_ERROR = 23,
     HMLL_TENSOR_NOT_FOUND = 30,
     HMLL_UNKNOWN_DTYPE = 31,
+    HMLL_UNSUPPORTED_OP = 40
 };
+typedef enum hmll_status_code hmll_status_code_t;
 
 #define HMLL_STATUS_OK HMLL_SUCCESS;
 
@@ -54,7 +56,7 @@ typedef struct hmll_status hmll_status_t;
 static struct hmll_status HMLL_SUCCEEDED = {HMLL_SUCCESS, nullptr};
 
 /// Helper methods indicating the result of a status
-bool hmll_status_succeeded(struct hmll_status status);
+bool hmll_success(struct hmll_status status);
 bool hmll_status_has_error(struct hmll_status status);
 
 #endif //HMLL_HMLL_TYPES_H

@@ -8,7 +8,9 @@ set(CMAKE_C_VISIBILITY_PRESET hidden)
 
 include(FetchContent)
 
+###########################################################
 # Build Arguments
+###########################################################
 option(HMLL_BUILD_STATIC "Flag indicating if cmake should generate a static build for libhmll" OFF)
 option(HMLL_BUILD_EXAMPLES "Flag indicating if cmake should build examples" OFF)
 option(HMLL_BUILD_TESTS "Flag indicating if cmake should build unit-tests" OFF)
@@ -19,7 +21,9 @@ if(${HMLL_BUILD_STATIC})
     set(HMLL_STATIC ON)
 endif()
 
+###########################################################
 # Dependencies
+###########################################################
 fetchcontent_declare(
         yyjson
         GIT_REPOSITORY https://github.com/ibireme/yyjson.git
@@ -27,16 +31,22 @@ fetchcontent_declare(
 )
 fetchcontent_makeavailable(yyjson)
 
+###########################################################
 # Definition of libhmll
+###########################################################
 set(LIBHMLL_HEADERS
         include/hmll/hmll.h
         include/hmll/safetensors.h
         include/hmll/status.h
         include/hmll/types.h
+        include/hmll/unix/mmap.h
 )
 set(LIBHMLL_SOURCES
-        lib/hmll_safetensors.c
-        lib/hmll_status.c
+        lib/safetensors.c
+        lib/sources.c
+        lib/status.c
+        lib/unix/mmap.c
+        lib/context.c
 )
 add_library(libhmll ${LIBHMLL_HEADERS} ${LIBHMLL_SOURCES})
 target_include_directories(libhmll PUBLIC
@@ -44,8 +54,19 @@ target_include_directories(libhmll PUBLIC
         $<INSTALL_INTERFACE:include>
 )
 target_compile_options(libhmll PRIVATE $<$<COMPILE_LANGUAGE:C>:-Werror -Wpedantic>)
+target_link_libraries(libhmll yyjson)
 
+###########################################################
+# Examples
+###########################################################
+if(${HMLL_BUILD_EXAMPLES})
+    add_executable(hmll_safetensors_ex examples/safetensors.c)
+    target_link_libraries(hmll_safetensors_ex PRIVATE libhmll)
+endif()
+
+###########################################################
 # Unit-tests
+###########################################################
 if(${HMLL_BUILD_TESTS})
     if(NOT ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
         message(FATAL_ERROR "Test should be run with Debug configuration, got: ${CMAKE_BUILD_TYPE}")

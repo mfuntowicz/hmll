@@ -1,17 +1,76 @@
 #ifndef HMLL_TYPES_H
 #define HMLL_TYPES_H
 
+#include <stdint.h>
+
+#include "stdio.h"
+
+enum hmll_source_kind
+{
+    HMLL_SOURCE_UNDEFINED,
+    HMLL_SOURCE_FD,
+    HMLL_SOURCE_MMAP
+};
+typedef enum hmll_source_kind hmll_source_kind_t;
+
+struct hmll_source
+{
+    union
+    {
+        FILE *fd;
+        char *buffer;
+    } content;
+    size_t size;
+    enum hmll_source_kind kind;
+};
+typedef struct hmll_source hmll_source_t;
+
 enum hmll_flags
 {
-    hmll_hmll = 1 << 0,
-    hmll_gguf = 1 << 1,
-    hmll_skip_metadata = 1 << 2
+    HMLL_MMAP = 1 << 0,
+    HMLL_SKIP_METADATA = 1 << 1
 };
-typedef hmll_flags hmll_flags_t;
+typedef enum hmll_flags hmll_flags_t;
+
+enum hmll_file_kind
+{
+    HMLL_SAFETENSORS,
+    HMLL_GGUF
+};
+typedef enum hmll_file_kind hmll_file_kind_t;
+
+enum hmll_tensor_data_type
+{
+    HMLL_DTYPE_BFLOAT16,
+    HMLL_DTYPE_FLOAT16,
+    HMLL_DTYPE_FLOAT32,
+    HMLL_DTYPE_UNKNOWN
+};
+typedef enum hmll_tensor_data_type hmll_tensor_data_type_t;
+
+struct hmll_tensor_specs
+{
+    size_t start;
+    size_t end;
+    size_t *shape;
+    uint8_t rank;
+    enum hmll_tensor_data_type dtype;
+};
+typedef struct hmll_tensor_specs hmll_tensor_specs_t;
+
+struct hmll_table
+{
+    struct hmll_tensor_specs *tensors;
+    char **names;
+};
+typedef struct hmll_table hmll_table_t;
 
 struct hmll_context {
-    
+    struct hmll_source source;
+    struct hmll_table table;
+    size_t num_tensors;
+    enum hmll_file_kind kind;
 };
-typedef hmll_context hmll_context_t;
+typedef struct hmll_context hmll_context_t;
 
 #endif // HMLL_TYPES_H
