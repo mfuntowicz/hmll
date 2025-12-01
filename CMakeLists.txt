@@ -9,9 +9,14 @@ set(CMAKE_C_VISIBILITY_PRESET hidden)
 include(FetchContent)
 
 # Build Arguments
+option(HMLL_BUILD_STATIC "Flag indicating if cmake should generate a static build for libhmll" OFF)
 option(HMLL_BUILD_EXAMPLES "Flag indicating if cmake should build examples" OFF)
 option(HMLL_BUILD_TESTS "Flag indicating if cmake should build unit-tests" OFF)
 option(HMLL_ENABLE_SANITIZERS "Flag indicating if cmake should enable sanitizers" OFF)
+
+if(${HMLL_BUILD_STATIC})
+    set(HMLL_STATIC ON)
+endif()
 
 # Dependencies
 fetchcontent_declare(
@@ -26,6 +31,7 @@ set(LIBHMLL_HEADERS
         include/hmll/hmll.h
         include/hmll/safetensors.h
         include/hmll/status.h
+        include/hmll/types.h
 )
 set(LIBHMLL_SOURCES
     lib/hmll_safetensors.c
