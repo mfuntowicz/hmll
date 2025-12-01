@@ -32,10 +32,11 @@ set(LIBHMLL_HEADERS
         include/hmll/hmll.h
         include/hmll/safetensors.h
         include/hmll/status.h
+        include/hmll/types.h
 )
 set(LIBHMLL_SOURCES
-    lib/hmll_safetensors.c
-    lib/hmll_status.c
+        lib/hmll_safetensors.c
+        lib/hmll_status.c
 )
 add_library(libhmll ${LIBHMLL_HEADERS} ${LIBHMLL_SOURCES})
 target_include_directories(libhmll PUBLIC

@@ -19,6 +19,12 @@ extern "C" {
 #endif
 
 #include "status.h"
+#include "types.h"
+
+HMLL_EXTERN hmll_status_t hmll_context_free(hmll_context_t ctx);
+
+HMLL_EXTERN hmll_status_t hmll_open(const char* path, hmll_context_t ctx, hmll_flags_t flags);
+HMLL_EXTERN hmll_status_t hmll_close(const char* path, hmll_context_t ctx, hmll_flags_t flags);
 
 
 #ifdef __cplusplus

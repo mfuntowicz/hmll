@@ -49,6 +49,7 @@ struct hmll_status
     enum hmll_status_code what;
     const char* message;
 };
+typedef struct hmll_status hmll_status_t;
 
 static struct hmll_status HMLL_SUCCEEDED = {HMLL_SUCCESS, nullptr};
 
