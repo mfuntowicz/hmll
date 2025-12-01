@@ -119,9 +119,9 @@ hmll_status_t hmll_safetensors_read_table(hmll_context_t *ctx, hmll_flags_t flag
     // Get the size of the JSON header
     // TODO: Change that when fd is supported
     uint64_t hsize;
-    memcpy(&hsize, ctx->source.content.buffer, sizeof(uint64_t));
+    memcpy(&hsize, ctx->source.content, sizeof(uint64_t));
 
-    char *header = ctx->source.content.buffer + sizeof(uint64_t);
+    char *header = ctx->source.content + sizeof(uint64_t);
 
     // Parse JSON
     yyjson_read_err error;

@@ -37,8 +37,9 @@ hmll_status_t hmll_open_mmap(const char *path, hmll_context_t *ctx, hmll_flags_t
         goto close_fd_and_return;
     }
 
+    ctx->source.fd = fd;
     ctx->source.kind = HMLL_SOURCE_MMAP;
-    ctx->source.content.buffer = content;
+    ctx->source.content = content;
     ctx->source.size = sb.st_size;
 
     return HMLL_SUCCEEDED;
@@ -52,7 +53,7 @@ hmll_status_t hmll_close_mmap(hmll_context_t *ctx)
 {
     if (ctx != nullptr && ctx->source.kind == HMLL_SOURCE_MMAP && ctx->source.size > 0)
     {
-        munmap(ctx->source.content.buffer, ctx->source.size);
+        munmap(ctx->source.content, ctx->source.size);
         ctx->source.kind = HMLL_SOURCE_UNDEFINED;
         ctx->source.size = 0;
     }

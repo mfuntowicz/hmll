@@ -15,11 +15,10 @@ typedef enum hmll_source_kind hmll_source_kind_t;
 
 struct hmll_source
 {
-    union
-    {
-        FILE *fd;
-        char *buffer;
-    } content;
+#if defined(__linux) || defined(__unix) || defined(APPLE)
+    int fd;
+    char *content;
+#endif
     size_t size;
     enum hmll_source_kind kind;
 };
