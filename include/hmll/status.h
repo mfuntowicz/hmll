@@ -11,6 +11,7 @@ enum hmll_status_code
 {
     HMLL_SUCCESS = 0,
     HMLL_ALLOCATION_FAILED = 1,
+    HMLL_IO_ERROR = 2,
     HMLL_FILE_NOT_FOUND = 10,
     HMLL_FILE_EMPTY = 11,
     HMLL_FILE_MMAP_FAILED = 12,

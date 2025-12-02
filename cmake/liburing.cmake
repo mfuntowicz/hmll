@@ -1,3 +1,6 @@
+# Enable POSIX extensions for types like sigset_t
+add_compile_definitions(_POSIX_C_SOURCE=200809L)
+
 fetchcontent_declare(
         liburing
         GIT_REPOSITORY https://github.com/axboe/liburing

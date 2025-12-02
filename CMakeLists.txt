@@ -58,6 +58,7 @@ set(LIBHMLL_SOURCES
         lib/sources.c
         lib/status.c
         lib/unix/mmap.c
+        lib/unix/fetcher_io_uring.c
         lib/context.c
 )
 add_library(libhmll ${LIBHMLL_HEADERS} ${LIBHMLL_SOURCES})

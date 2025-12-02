@@ -35,8 +35,8 @@ void hmll_context_free(const hmll_context_t *ctx)
         if (ctx->table.tensors) hmll_tensor_specs_free(ctx->table.tensors + i);
     }
 
-    if (ctx->table.names) free(ctx->table.names);
-    if (ctx->table.tensors) free(ctx->table.tensors);
+    // if (ctx->table.names) free(ctx->table.names);
+    // if (ctx->table.tensors) free(ctx->table.tensors);
 }
 
 
