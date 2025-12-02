@@ -185,6 +185,10 @@ hmll_status_t hmll_safetensors_read_table(hmll_context_t *ctx, const hmll_flags_
 
             if (hmll_safetensors_header_parse_tensor(val, tensors + idx, &status) != HMLL_SUCCESS)
                 goto freeup_and_return;
+
+            // Tensor offsets start at 0, we need to add header size + 8 to get the real position in the file
+            tensors[idx].start += hsize + 8;
+            tensors[idx].end += hsize + 8;
         }
 
         // TODO: What if we allocated names but not tensors? num_tensors would be different ~~
