@@ -62,7 +62,7 @@ hmll_status_code_t hmll_safetensors_header_parse_shape(
 
         if (rank > 0) {
             //TODO : Add malloc checking
-            if ((tensor->shape = calloc(rank, sizeof(uint32_t))) == nullptr) {
+            if ((tensor->shape = calloc(rank, sizeof(size_t))) == nullptr) {
                 status->what = HMLL_ALLOCATION_FAILED;
                 status->message = "Failed to allocate memory to store tensor's shape";
             }
@@ -71,7 +71,7 @@ hmll_status_code_t hmll_safetensors_header_parse_shape(
             yyjson_val* dim_val;
             yyjson_arr_foreach(shape, shape_idx, shape_max, dim_val) {
                 if (yyjson_is_uint(dim_val))
-                    tensor->shape[shape_idx] = (uint32_t)yyjson_get_uint(dim_val);
+                    tensor->shape[shape_idx] = yyjson_get_uint(dim_val);
             }
             return HMLL_SUCCESS;
         }
@@ -190,8 +190,6 @@ hmll_status_t hmll_safetensors_read_table(hmll_context_t *ctx, const hmll_flags_
         // TODO: What if we allocated names but not tensors? num_tensors would be different ~~
         ++ctx->num_tensors;
     }
-
-    return status;
 
 freeup_and_return:
     if (document != nullptr)
