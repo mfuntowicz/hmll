@@ -44,6 +44,7 @@ endif()
 # Definition of libhmll
 ###########################################################
 set(LIBHMLL_HEADERS
+        include/hmll/buffer.c
         include/hmll/fetcher.h
         include/hmll/hmll.h
         include/hmll/safetensors.h
@@ -54,12 +55,13 @@ set(LIBHMLL_HEADERS
         include/hmll/unix/fetcher_io_uring.h
 )
 set(LIBHMLL_SOURCES
+        lib/context.c
+        lib/dtypes.c
         lib/safetensors.c
         lib/sources.c
         lib/status.c
         lib/unix/mmap.c
         lib/unix/fetcher_io_uring.c
-        lib/context.c
 )
 add_library(libhmll ${LIBHMLL_HEADERS} ${LIBHMLL_SOURCES})
 target_include_directories(libhmll PUBLIC
@@ -100,8 +102,9 @@ if(${HMLL_BUILD_TESTS})
     include(CTest)
     include(Catch)
 
-    add_executable(libhmll_tests tests/tests_hmll_safetensors.cpp
-            tests/tests_hmll_status.cpp)
+    add_executable(libhmll_tests
+            tests/tests_hmll_status.cpp
+            tests/test_hmll_dtype.cpp)
     target_link_libraries(libhmll_tests PRIVATE Catch2::Catch2WithMain libhmll)
     catch_discover_tests(libhmll_tests)
 endif()

@@ -6,7 +6,7 @@
 
 #include "hmll/hmll.h"
 
-TEST_CASE("Status succeeded", "[status]")
+TEST_CASE("success", "[status]")
 {
     REQUIRE(hmll_success(HMLL_SUCCEEDED));
     REQUIRE(hmll_success({HMLL_SUCCESS, nullptr}));

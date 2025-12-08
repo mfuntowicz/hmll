@@ -64,6 +64,21 @@ struct hmll_table
 };
 typedef struct hmll_table hmll_table_t;
 
+enum hmll_device
+{
+    HMLL_DEVICE_CPU,
+};
+typedef enum hmll_device hmll_device_t;
+
+
+struct hmll_device_buffer
+{
+    void *ptr;
+    size_t size;
+    hmll_device_t device;
+};
+typedef struct hmll_device_buffer hmll_device_buffer_t;
+
 struct hmll_context {
     struct hmll_source source;
     struct hmll_table table;
