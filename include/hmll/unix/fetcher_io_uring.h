@@ -8,8 +8,8 @@
 #include "hmll/types.h"
 
 #define HMLL_IO_URING_DEFAULT_NUM_IO_VECTORS 128
-#define HMLL_IO_URING_DEFAULT_BUFFER_SIZE (4 * 1024)
-#define HMLL_IO_URING_DEFAULT_READ_SIZE (4 * 1024)
+#define HMLL_IO_URING_DEFAULT_BUFFER_SIZE (512 * 1024)
+#define HMLL_IO_URING_DEFAULT_READ_SIZE (512 * 1024)
 
 
 typedef struct hmll_fetcher_io_uring_buffer hmll_fetcher_io_uring_buffer_t;
