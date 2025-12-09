@@ -44,7 +44,7 @@ endif()
 # Definition of libhmll
 ###########################################################
 set(LIBHMLL_HEADERS
-        include/hmll/buffer.c
+        lib/buffer.c
         include/hmll/fetcher.h
         include/hmll/hmll.h
         include/hmll/safetensors.h
