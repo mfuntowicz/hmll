@@ -21,7 +21,8 @@ enum hmll_status_code
     HMLL_SAFETENSORS_HEADER_JSON_ERROR = 23,
     HMLL_EMPTY_TABLE = 30,
     HMLL_TENSOR_NOT_FOUND = 31,
-    HMLL_UNKNOWN_DTYPE = 32,
+    HMLL_BUFFER_TOO_SMALL = 32,
+    HMLL_UNKNOWN_DTYPE = 33,
     HMLL_UNSUPPORTED_OP = 40
 };
 typedef enum hmll_status_code hmll_status_code_t;

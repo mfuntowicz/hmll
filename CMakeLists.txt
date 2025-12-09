@@ -37,6 +37,7 @@ list(APPEND HMLL_LIBRARIES yyjson)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND ${HMLL_ENABLE_IO_URING})
     include(cmake/liburing.cmake)
     list(APPEND HMLL_LIBRARIES liburing_static)
+    add_compile_definitions("_GNU_SOURCE")
     message(STATUS "Enabling io_uring backend")
 endif()
 
