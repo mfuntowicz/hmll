@@ -56,7 +56,7 @@ set(LIBHMLL_HEADERS
 )
 set(LIBHMLL_SOURCES
         lib/context.c
-        lib/dtypes.c
+        lib/misc.c
         lib/safetensors.c
         lib/sources.c
         lib/status.c
@@ -104,7 +104,8 @@ if(${HMLL_BUILD_TESTS})
 
     add_executable(libhmll_tests
             tests/tests_hmll_status.cpp
-            tests/test_hmll_dtype.cpp)
+            tests/test_hmll_dtype.cpp
+            tests/test_hmll_tensor_specs.cpp)
     target_link_libraries(libhmll_tests PRIVATE Catch2::Catch2WithMain libhmll)
     catch_discover_tests(libhmll_tests)
 endif()

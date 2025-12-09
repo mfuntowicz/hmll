@@ -1,6 +1,5 @@
+#include "hmll/hmll.h"
 #include "hmll/safetensors.h"
-#include "hmll/status.h"
-#include "hmll/types.h"
 
 #if defined(__linux) || defined(__unix__) || defined(__APPLE__)
 #include "hmll/unix/mmap.h"
@@ -11,7 +10,7 @@ hmll_status_t hmll_open(const char *path, hmll_context_t *ctx, const hmll_file_k
 {
     if (flags & HMLL_MMAP) {
         auto const status = hmll_open_mmap(path, ctx);
-        if (hmll_status_has_error(status))
+        if (!hmll_success(status))
             return status;
 
         if (kind == HMLL_SAFETENSORS)

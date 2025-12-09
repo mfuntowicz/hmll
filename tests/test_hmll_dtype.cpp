@@ -7,7 +7,7 @@
 
 TEST_CASE("sizeof dtype", "[dtype]")
 {
-    REQUIRE(hmll_get_dtype_nbytes(HMLL_DTYPE_BFLOAT16) == 2);
-    REQUIRE(hmll_get_dtype_nbytes(HMLL_DTYPE_FLOAT16)  == 2);
-    REQUIRE(hmll_get_dtype_nbytes(HMLL_DTYPE_FLOAT32)  == 4);
+    REQUIRE(hmll_sizeof(HMLL_DTYPE_BFLOAT16) == 2);
+    REQUIRE(hmll_sizeof(HMLL_DTYPE_FLOAT16)  == 2);
+    REQUIRE(hmll_sizeof(HMLL_DTYPE_FLOAT32)  == 4);
 }

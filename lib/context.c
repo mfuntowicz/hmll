@@ -27,7 +27,7 @@ hmll_status_t hmll_get_tensor_specs(const hmll_context_t *ctx, const char *name,
 }
 
 
-void hmll_context_free(const hmll_context_t *ctx)
+void hmll_destroy(const hmll_context_t *ctx)
 {
     for (size_t i = 0; i < ctx->num_tensors; ++i)
     {
