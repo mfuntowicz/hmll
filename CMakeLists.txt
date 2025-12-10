@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20.0)
 
 project(hmll LANGUAGES C CXX)
-set(CMAKE_C_STANDARD 23)
+set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 set(CMAKE_C_VISIBILITY_PRESET hidden)
@@ -11,6 +11,7 @@ include(FetchContent)
 ###########################################################
 # Build Arguments
 ###########################################################
+option(HMLL_ENABLE_CUDA "Flag to build with CUDA capabilities" OFF)
 option(HMLL_BUILD_STATIC "Flag indicating if cmake should generate a static build for libhmll" OFF)
 option(HMLL_BUILD_EXAMPLES "Flag indicating if cmake should build examples" OFF)
 option(HMLL_BUILD_TESTS "Flag indicating if cmake should build unit-tests" OFF)
@@ -41,6 +42,12 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND ${HMLL_ENABLE_IO_URING})
     message(STATUS "Enabling io_uring backend")
 endif()
 
+
+if(${HMLL_ENABLE_CUDA})
+    find_package(CUDAToolkit REQUIRED)
+    list(APPEND HMLL_LIBRARIES CUDA::cudart)
+    message(STATUS "Enabling CUDA support")
+endif()
 ###########################################################
 # Definition of libhmll
 ###########################################################

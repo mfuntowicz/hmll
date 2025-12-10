@@ -14,8 +14,7 @@ hmll_status_t hmll_get_tensor_specs(const hmll_context_t *ctx, const char *name,
 {
     if (!ctx || ctx->num_tensors == 0) return (hmll_status_t){HMLL_EMPTY_TABLE, "Empty tensor table"};
 
-    auto const names = ctx->table.names;
-
+    char **names = ctx->table.names;
     for (size_t i = 0; i < ctx->num_tensors; ++i) {
         if (strcmp(name, names[i]) == 0) {
             *specs = ctx->table.tensors + i;

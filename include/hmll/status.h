@@ -56,6 +56,6 @@ struct hmll_status
 };
 typedef struct hmll_status hmll_status_t;
 
-#define HMLL_SUCCEEDED (hmll_status_t){HMLL_SUCCESS, nullptr}
+#define HMLL_SUCCEEDED (hmll_status_t){HMLL_SUCCESS, 0}
 
 #endif //HMLL_HMLL_TYPES_H

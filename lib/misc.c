@@ -18,7 +18,7 @@ size_t hmll_numel(const hmll_tensor_specs_t *specs)
     if (!specs || specs->rank == 0) return 0;
 
     size_t numel = 1;
-    for (auto i = 0; i < specs->rank; ++i)
+    for (size_t i = 0; i < specs->rank; ++i)
         numel *= specs->shape[i];
 
     return numel;

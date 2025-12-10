@@ -62,7 +62,7 @@ hmll_status_code_t hmll_safetensors_header_parse_shape(
 
         if (rank > 0) {
             //TODO : Add malloc checking
-            if ((tensor->shape = calloc(rank, sizeof(size_t))) == nullptr) {
+            if ((tensor->shape = calloc(rank, sizeof(size_t))) == NULL) {
                 status->what = HMLL_ALLOCATION_FAILED;
                 status->message = "Failed to allocate memory to store tensor's shape";
             }
@@ -76,7 +76,7 @@ hmll_status_code_t hmll_safetensors_header_parse_shape(
             return HMLL_SUCCESS;
         }
 
-        tensor->shape = nullptr;
+        tensor->shape = 0;
         return HMLL_SUCCESS;
     }
 
@@ -114,59 +114,59 @@ hmll_tensor_data_type_t hmll_safetensors_dtype_from_str(const char *dtype, const
 
 hmll_status_t hmll_safetensors_read_table(hmll_context_t *ctx, const hmll_flags_t flags)
 {
-    auto status = HMLL_SUCCEEDED;
+    hmll_status_t status = HMLL_SUCCEEDED;
 
     // Get the size of the JSON header
     // TODO: Change that when fd is supported
     uint64_t hsize;
     memcpy(&hsize, ctx->source.content, sizeof(uint64_t));
 
-    auto const header = ctx->source.content + sizeof(uint64_t);
+    char *header = ctx->source.content + sizeof(uint64_t);
 
     // Parse JSON
     yyjson_read_err error;
-    auto const document = yyjson_read_opts(header, hsize, YYJSON_READ_NOFLAG, nullptr, &error);
+    yyjson_doc *document = yyjson_read_opts(header, hsize, YYJSON_READ_NOFLAG, NULL, &error);
     if (!document) {
         status.what = HMLL_SAFETENSORS_HEADER_JSON_ERROR;
         status.message = error.msg;
         goto freeup_and_return;
     }
 
-    auto const root = yyjson_doc_get_root(document);
+    yyjson_val *root = yyjson_doc_get_root(document);
     if (!yyjson_is_obj(root)) {
         status.what = HMLL_SAFETENSORS_HEADER_JSON_ERROR;
         status.message = error.msg;
         goto freeup_and_return;
     }
 
-    auto const num_tensors = yyjson_obj_size(root);
-    if ((ctx->table.names = calloc(num_tensors, sizeof(char*))) == nullptr) {
+    const size_t num_tensors = yyjson_obj_size(root);
+    if ((ctx->table.names = calloc(num_tensors, sizeof(char*))) == NULL) {
         status.what = HMLL_ALLOCATION_FAILED;
         status.message = "Failed to allocated memory to store tensor's names";
     }
 
-    if ((ctx->table.tensors = calloc(num_tensors, sizeof(struct hmll_tensor_specs))) == nullptr) {
+    if ((ctx->table.tensors = calloc(num_tensors, sizeof(struct hmll_tensor_specs))) == NULL) {
         status.what = HMLL_ALLOCATION_FAILED;
         status.message = "Failed to allocated memory to store tensor's descriptor";
     }
 
-    auto const names = ctx->table.names;
-    auto const tensors = ctx->table.tensors;
+    char **names = ctx->table.names;
+    hmll_tensor_specs_t *tensors = ctx->table.tensors;
 
     size_t idx, max;
     yyjson_val *key, *val;
     yyjson_obj_foreach(root, idx, max, key, val) {
 
-        auto const keyval = yyjson_get_str(key);
-        auto const is_metadata = strcmp(keyval, "__metadata__") == 0;
+        const char *keyval = yyjson_get_str(key);
+        const int is_metadata = strcmp(keyval, "__metadata__") == 0;
 
         // Skip __metadata__ if the flag is set
         if (is_metadata)
             if (!(flags & HMLL_SKIP_METADATA)) { /* TODO: Not implemented yet */ }
 
         // Create the final tensor name with a null-terminator string to allow usage of str functions like strncmp
-        auto const name_len = yyjson_get_len(key);
-        if ((names[idx] = calloc(name_len + 1, sizeof(char))) == nullptr) {
+        const size_t name_len = yyjson_get_len(key);
+        if ((names[idx] = calloc(name_len + 1, sizeof(char))) == NULL) {
             status.what = HMLL_ALLOCATION_FAILED;
             status.message = "Failed to allocated memory to store tensor's name";
             goto freeup_and_return;
@@ -196,7 +196,7 @@ hmll_status_t hmll_safetensors_read_table(hmll_context_t *ctx, const hmll_flags_
     }
 
 freeup_and_return:
-    if (document != nullptr)
+    if (document)
         yyjson_doc_free(document);
 
     // TODO: Free the table only - not the source
