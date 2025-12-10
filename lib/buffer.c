@@ -17,7 +17,7 @@ hmll_status_t hmll_get_io_buffer(const hmll_device_t device, void **ptr, const s
         // Try to allocate with 2MB huge pages first
         *ptr = mmap(0, size,
                     PROT_READ | PROT_WRITE,
-                    MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB | MAP_HUGE_2MB,
+                    MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB | MAP_HUGE_1MB,
                     -1, 0);
 
         // If huge pages fail, fall back to regular anonymous mmap
