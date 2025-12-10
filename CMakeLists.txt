@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20.0)
 
 project(hmll LANGUAGES C CXX)
-set(CMAKE_C_STANDARD 23)
+set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 set(CMAKE_C_VISIBILITY_PRESET hidden)
@@ -11,10 +11,12 @@ include(FetchContent)
 ###########################################################
 # Build Arguments
 ###########################################################
+option(HMLL_ENABLE_CUDA "Flag to build with CUDA capabilities" OFF)
 option(HMLL_BUILD_STATIC "Flag indicating if cmake should generate a static build for libhmll" OFF)
 option(HMLL_BUILD_EXAMPLES "Flag indicating if cmake should build examples" OFF)
 option(HMLL_BUILD_TESTS "Flag indicating if cmake should build unit-tests" OFF)
 option(HMLL_ENABLE_SANITIZERS "Flag indicating if cmake should enable sanitizers" OFF)
+option(HMLL_ENABLE_IO_URING "Flag to include io_uring backend (only on Linux)" ON)
 
 if(${HMLL_BUILD_STATIC})
     message(STATUS "Building libhmll statically")
@@ -24,29 +26,50 @@ endif()
 ###########################################################
 # Dependencies
 ###########################################################
+set(HMLL_LIBRARIES "")
 fetchcontent_declare(
         yyjson
         GIT_REPOSITORY https://github.com/ibireme/yyjson.git
         GIT_TAG        master
 )
 fetchcontent_makeavailable(yyjson)
+list(APPEND HMLL_LIBRARIES yyjson)
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND ${HMLL_ENABLE_IO_URING})
+    include(cmake/liburing.cmake)
+    list(APPEND HMLL_LIBRARIES liburing_static)
+    add_compile_definitions("_GNU_SOURCE")
+    message(STATUS "Enabling io_uring backend")
+endif()
+
+
+if(${HMLL_ENABLE_CUDA})
+    find_package(CUDAToolkit REQUIRED)
+    list(APPEND HMLL_LIBRARIES CUDA::cudart)
+    message(STATUS "Enabling CUDA support")
+endif()
 ###########################################################
 # Definition of libhmll
 ###########################################################
 set(LIBHMLL_HEADERS
+        lib/buffer.c
+        include/hmll/fetcher.h
         include/hmll/hmll.h
         include/hmll/safetensors.h
         include/hmll/status.h
         include/hmll/types.h
         include/hmll/unix/mmap.h
+        include/hmll/unix/fetcher.h
+        include/hmll/unix/fetcher_io_uring.h
 )
 set(LIBHMLL_SOURCES
+        lib/context.c
+        lib/misc.c
         lib/safetensors.c
         lib/sources.c
         lib/status.c
         lib/unix/mmap.c
-        lib/context.c
+        lib/unix/fetcher_io_uring.c
 )
 add_library(libhmll ${LIBHMLL_HEADERS} ${LIBHMLL_SOURCES})
 target_include_directories(libhmll PUBLIC
@@ -54,7 +77,11 @@ target_include_directories(libhmll PUBLIC
         $<INSTALL_INTERFACE:include>
 )
 target_compile_options(libhmll PRIVATE $<$<COMPILE_LANGUAGE:C>:-Wall -Werror -Wextra -Wpedantic>)
-target_link_libraries(libhmll yyjson)
+target_link_libraries(libhmll ${HMLL_LIBRARIES})
+
+if(${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+    target_compile_definitions(libhmll PUBLIC DEBUG=1)
+endif()
 
 ###########################################################
 # Examples
@@ -83,8 +110,10 @@ if(${HMLL_BUILD_TESTS})
     include(CTest)
     include(Catch)
 
-    add_executable(libhmll_tests tests/tests_hmll_safetensors.cpp
-            tests/tests_hmll_status.cpp)
+    add_executable(libhmll_tests
+            tests/tests_hmll_status.cpp
+            tests/test_hmll_dtype.cpp
+            tests/test_hmll_tensor_specs.cpp)
     target_link_libraries(libhmll_tests PRIVATE Catch2::Catch2WithMain libhmll)
     catch_discover_tests(libhmll_tests)
 endif()

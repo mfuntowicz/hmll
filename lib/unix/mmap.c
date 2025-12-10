@@ -31,7 +31,7 @@ hmll_status_t hmll_open_mmap(const char *path, hmll_context_t *ctx)
 
     // 3. Map the file into memory
     // arguments: addr, length, prot, flags, fd, offset
-    char *content = mmap(nullptr, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    char *content = mmap(0, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
     if (content == MAP_FAILED) {
         result.what = HMLL_FILE_MMAP_FAILED;
         result.message = path;
@@ -52,8 +52,7 @@ close_fd_and_return:
 
 hmll_status_t hmll_close_mmap(hmll_context_t *ctx)
 {
-    if (ctx != nullptr && ctx->source.kind == HMLL_SOURCE_MMAP && ctx->source.size > 0)
-    {
+    if (ctx && ctx->source.kind == HMLL_SOURCE_MMAP && ctx->source.size > 0) {
         munmap(ctx->source.content, ctx->source.size);
         ctx->source.kind = HMLL_SOURCE_UNDEFINED;
         ctx->source.size = 0;

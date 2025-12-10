@@ -11,6 +11,7 @@ enum hmll_status_code
 {
     HMLL_SUCCESS = 0,
     HMLL_ALLOCATION_FAILED = 1,
+    HMLL_IO_ERROR = 2,
     HMLL_FILE_NOT_FOUND = 10,
     HMLL_FILE_EMPTY = 11,
     HMLL_FILE_MMAP_FAILED = 12,
@@ -18,8 +19,10 @@ enum hmll_status_code
     HMLL_SAFETENSORS_HEADER_TOO_LARGE = 21,
     HMLL_SAFETENSORS_HEADER_INVALID_START_CHAR = 22,
     HMLL_SAFETENSORS_HEADER_JSON_ERROR = 23,
-    HMLL_TENSOR_NOT_FOUND = 30,
-    HMLL_UNKNOWN_DTYPE = 31,
+    HMLL_EMPTY_TABLE = 30,
+    HMLL_TENSOR_NOT_FOUND = 31,
+    HMLL_BUFFER_TOO_SMALL = 32,
+    HMLL_UNKNOWN_DTYPE = 33,
     HMLL_UNSUPPORTED_OP = 40
 };
 typedef enum hmll_status_code hmll_status_code_t;
@@ -53,11 +56,6 @@ struct hmll_status
 };
 typedef struct hmll_status hmll_status_t;
 
-/// Helper methods indicating the result of a status
-bool hmll_success(struct hmll_status status);
-bool hmll_status_has_error(struct hmll_status status);
-
-
-#define HMLL_SUCCEEDED (hmll_status_t){HMLL_SUCCESS, nullptr}
+#define HMLL_SUCCEEDED (hmll_status_t){HMLL_SUCCESS, 0}
 
 #endif //HMLL_HMLL_TYPES_H
