@@ -4,7 +4,6 @@
 #include <liburing.h>
 
 #include "hmll/fetcher.h"
-#include "hmll/status.h"
 #include "hmll/types.h"
 
 #define HMLL_IO_URING_DEFAULT_NUM_IO_VECTORS 128U
@@ -34,11 +33,11 @@ struct hmll_fetcher_io_uring {
 typedef struct hmll_fetcher_io_uring hmll_fetcher_io_uring_t;
 
 
-hmll_fetcher_io_uring_t hmll_fetcher_io_uring_init(void);
+hmll_fetcher_io_uring_t hmll_fetcher_io_uring_init(struct hmll_context *);
 // void hmll_fetcher_io_uring_free(hmll_fetcher_io_uring_t *);
-hmll_status_t hmll_fetcher_io_uring_fetch(
-    const hmll_context_t *, hmll_fetcher_io_uring_t *, const char*, const hmll_device_buffer_t *);
-hmll_status_t hmll_fetcher_io_uring_fetch_range(
-    const hmll_context_t *, hmll_fetcher_io_uring_t *, hmll_fetch_range_t, const hmll_device_buffer_t *);
+enum hmll_error_code hmll_fetcher_io_uring_fetch(
+    struct hmll_context *, struct hmll_fetcher_io_uring *, const char* name, const struct hmll_device_buffer *);
+enum hmll_error_code hmll_fetcher_io_uring_fetch_range(
+    struct hmll_context *, struct hmll_fetcher_io_uring *, struct hmll_fetch_range, const struct hmll_device_buffer *);
 
 #endif // HMLL_FETCHER_UNIX_IO_URING_H

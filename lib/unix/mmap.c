@@ -1,41 +1,40 @@
 #include "hmll/unix/mmap.h"
-#include "hmll/status.h"
 
 #include <sys/file.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
-hmll_status_t hmll_open_mmap(const char *path, hmll_context_t *ctx)
+#include "hmll/hmll.h"
+
+enum hmll_error_code hmll_open_mmap(const char *path, hmll_context_t *ctx)
 {
-    hmll_status_t result = {0};
+    if (hmll_has_error(ctx))
+        goto return_error;
+
     const int fd = open(path, O_RDONLY);
     if (fd == -1) {
-        result.what = HMLL_FILE_NOT_FOUND;
-        result.message = path;
-        return result;
+        ctx->error = HMLL_ERR_FILE_NOT_FOUND;
+        goto return_error;
     }
 
     struct stat sb;
     if (fstat(fd, &sb) == -1) {
-        result.what = HMLL_FILE_NOT_FOUND;
-        result.message = path;
-        goto close_fd_and_return;
+        ctx->error = HMLL_ERR_FILE_NOT_FOUND;
+        goto close_fd_and_return_error;
     }
 
     if (sb.st_size == 0) {
-        result.what = HMLL_FILE_EMPTY;
-        result.message = path;
-        goto close_fd_and_return;
+        ctx->error = HMLL_ERR_FILE_EMPTY;
+        goto close_fd_and_return_error;
     }
 
     // 3. Map the file into memory
     // arguments: addr, length, prot, flags, fd, offset
     char *content = mmap(0, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
     if (content == MAP_FAILED) {
-        result.what = HMLL_FILE_MMAP_FAILED;
-        result.message = path;
-        goto close_fd_and_return;
+        ctx->error = HMLL_ERR_MMAP_FAILED;
+        goto close_fd_and_return_error;
     }
 
     ctx->source.fd = fd;
@@ -43,21 +42,21 @@ hmll_status_t hmll_open_mmap(const char *path, hmll_context_t *ctx)
     ctx->source.content = content;
     ctx->source.size = sb.st_size;
 
-    return HMLL_SUCCEEDED;
+    return HMLL_ERR_SUCCESS;
 
-close_fd_and_return:
+close_fd_and_return_error:
     close(fd);
-    return result;
+
+return_error:
+    return ctx->error;
 }
 
-hmll_status_t hmll_close_mmap(hmll_context_t *ctx)
+void hmll_close_mmap(hmll_context_t *ctx)
 {
     if (ctx && ctx->source.kind == HMLL_SOURCE_MMAP && ctx->source.size > 0) {
         munmap(ctx->source.content, ctx->source.size);
         ctx->source.kind = HMLL_SOURCE_UNDEFINED;
         ctx->source.size = 0;
     }
-
-    return HMLL_SUCCEEDED;
 }
 

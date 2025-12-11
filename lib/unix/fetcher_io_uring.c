@@ -6,9 +6,12 @@
 
 #include "hmll/hmll.h"
 
-hmll_fetcher_io_uring_t hmll_fetcher_io_uring_init(void)
+hmll_fetcher_io_uring_t hmll_fetcher_io_uring_init(struct hmll_context *ctx)
 {
     hmll_fetcher_io_uring_t fetcher = {0};
+
+    if (hmll_has_error(ctx))
+        return fetcher;
 
     const size_t nblks = HMLL_IO_URING_DEFAULT_BUFFER_SIZE / HMLL_IO_URING_DEFAULT_READ_SIZE * HMLL_IO_URING_DEFAULT_NUM_IO_VECTORS;
 
@@ -17,9 +20,8 @@ hmll_fetcher_io_uring_t hmll_fetcher_io_uring_init(void)
     if ((status = io_uring_queue_init(nblks, &fetcher.ioring, IORING_SETUP_SQPOLL)) < 0) {
         // return (hmll_status_t) {HMLL_ALLOCATION_FAILED, "Failed to initialize io_uring ring"};
     }
-    void* arena;
-    hmll_get_io_buffer(HMLL_DEVICE_CPU, &arena, HMLL_IO_URING_DEFAULT_BUFFER_SIZE * HMLL_IO_URING_DEFAULT_NUM_IO_VECTORS);
 
+    void* arena = hmll_get_io_buffer(ctx, HMLL_DEVICE_CPU, HMLL_IO_URING_DEFAULT_BUFFER_SIZE * HMLL_IO_URING_DEFAULT_NUM_IO_VECTORS);
     for (unsigned int i = 0; i < HMLL_IO_URING_DEFAULT_NUM_IO_VECTORS; i++) {
         fetcher.iovs[i].iov_base = (char *)arena + HMLL_IO_URING_DEFAULT_NUM_IO_VECTORS * i;
         fetcher.iovs[i].iov_len = HMLL_IO_URING_DEFAULT_BUFFER_SIZE;
@@ -29,23 +31,27 @@ hmll_fetcher_io_uring_t hmll_fetcher_io_uring_init(void)
     return fetcher;
 }
 
-hmll_status_t hmll_fetcher_io_uring_fetch(
-    const hmll_context_t *ctx, hmll_fetcher_io_uring_t *fetcher, const char* name, const hmll_device_buffer_t *dst)
+enum hmll_error_code hmll_fetcher_io_uring_fetch(
+    struct hmll_context *ctx,
+    struct hmll_fetcher_io_uring *fetcher,
+    const char* name,
+    const struct hmll_device_buffer *dst)
 {
+    if (hmll_has_error(ctx))
+        return ctx->error;
+
 #ifdef DEBUG
     printf("[DEBUG] fetching tensor %s\n", name);
 #endif
 
-    hmll_tensor_specs_t *specs;
-    const hmll_status_t status = hmll_get_tensor_specs(ctx, name, &specs);
-    if (!hmll_success(status)) {
-        return status;
-    }
+    hmll_tensor_specs_t specs = hmll_get_tensor_specs(ctx, name);
 
-    const hmll_fetch_range_t range = (hmll_fetch_range_t){specs->start, specs->end};
+    if (hmll_has_error(ctx))
+        return ctx->error;
+
+    const hmll_fetch_range_t range = (hmll_fetch_range_t){specs.start, specs.end};
     return hmll_fetcher_io_uring_fetch_range(ctx, fetcher, range, dst);
 }
-
 
 int32_t hmll_fetcher_io_uring_get_slot(const hmll_fetcher_io_uring_t *fetcher)
 {
@@ -64,21 +70,19 @@ void hmll_fetcher_io_uring_prepare_payload(hmll_fetcher_io_uring_t *fetcher, con
     fetcher->iobusy[slot] = 1;
 }
 
-hmll_status_t hmll_fetcher_io_uring_fetch_range(
-    const hmll_context_t *ctx,
+enum hmll_error_code hmll_fetcher_io_uring_fetch_range(
+    hmll_context_t *ctx,
     hmll_fetcher_io_uring_t *fetcher,
     const hmll_fetch_range_t range,
     const hmll_device_buffer_t *dst
 )
 {
-    hmll_status_t status = HMLL_SUCCEEDED;
     const size_t size = range.end - range.start;
     const size_t nchunks = (size + HMLL_IO_URING_DEFAULT_BUFFER_SIZE - 1) / HMLL_IO_URING_DEFAULT_BUFFER_SIZE;
 
     if (dst->size < size) {
-        status.what = HMLL_BUFFER_TOO_SMALL;
-        status.message = "Provided buffer is too small to hold requested range";
-        return status;
+        ctx->error = HMLL_ERR_BUFFER_TOO_SMALL;
+        return ctx->error;
     }
 
 #ifdef DEBUG
@@ -126,7 +130,8 @@ hmll_status_t hmll_fetcher_io_uring_fetch_range(
     while (chunks_completed < nchunks) {
         struct io_uring_cqe *cqe;
         if (io_uring_wait_cqe(&fetcher->ioring, &cqe) < 0){
-            return (hmll_status_t){HMLL_IO_ERROR, "Failed to wait for io_uring completion"};
+            ctx->error = HMLL_ERR_IO_ERROR;
+            return ctx->error;
         }
 
         // Check if read succeeded
@@ -135,7 +140,9 @@ hmll_status_t hmll_fetcher_io_uring_fetch_range(
             printf("[ERROR] Read failed: %s\n", strerror(-cqe->res));
 #endif
             io_uring_cqe_seen(&fetcher->ioring, cqe);
-            return (hmll_status_t){HMLL_IO_ERROR, "Read operation failed"};
+
+            ctx->error = HMLL_ERR_IO_ERROR;
+            return ctx->error;
         }
 
         // Get the buffer that just completed
@@ -189,5 +196,5 @@ hmll_status_t hmll_fetcher_io_uring_fetch_range(
     printf("[DEBUG] fetch complete: %lu chunks read\n", chunks_completed);
 #endif
 
-    return status;
+    return HMLL_ERR_SUCCESS;
 }
