@@ -2,8 +2,26 @@
 #define HMLL_TYPES_H
 
 #include <stdint.h>
+#include <stdio.h>
 
-#include "stdio.h"
+
+enum hmll_error_code
+{
+    HMLL_ERR_SUCCESS = 0,
+    HMLL_ERR_FILE_NOT_FOUND = -1,
+    HMLL_ERR_FILE_EMPTY = -2,
+    HMLL_ERR_MMAP_FAILED = -3,
+    HMLL_ERR_UNSUPPORTED_FILE_FORMAT = -4,
+    HMLL_ERR_ALLOCATION_FAILED = -5,
+    HMLL_ERR_TABLE_EMPTY = -6,
+    HMLL_ERR_TENSOR_NOT_FOUND = -7,
+    HMLL_ERR_BUFFER_TOO_SMALL = -8,
+    HMLL_ERR_IO_ERROR = -9,
+    HMLL_ERR_SAFETENSORS_JSON_INVALID_HEADER = -10,
+    HMLL_ERR_SAFETENSORS_JSON_MALFORMED_HEADER = -11,
+    HMLL_ERR_UNKNOWN_DTYPE = -20,
+};
+typedef enum hmll_error_code hmll_error_code_t;
 
 enum hmll_source_kind
 {
@@ -84,6 +102,7 @@ struct hmll_context {
     struct hmll_table table;
     size_t num_tensors;
     enum hmll_file_kind kind;
+    enum hmll_error_code error;
 };
 typedef struct hmll_context hmll_context_t;
 

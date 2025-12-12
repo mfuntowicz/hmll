@@ -21,23 +21,21 @@ extern "C" {
 #endif
 #endif
 
-#include "status.h"
+#define HMLL_SUCCESS 0U
+
 #include "types.h"
 
-HMLL_EXTERN int hmll_success(hmll_status_t);
-HMLL_EXTERN hmll_status_t hmll_open(const char *, hmll_context_t *, hmll_file_kind_t, hmll_flags_t) NO_EXCEPT;
-HMLL_EXTERN hmll_status_t hmll_close(const char *, hmll_context_t *, hmll_flags_t) NO_EXCEPT;
-HMLL_EXTERN void hmll_destroy(const hmll_context_t *) NO_EXCEPT;
-HMLL_EXTERN uint8_t hmll_sizeof(hmll_tensor_data_type_t) NO_EXCEPT;
-HMLL_EXTERN size_t hmll_numel(hmll_tensor_specs_t*) NO_EXCEPT;
+HMLL_EXTERN unsigned int hmll_success(const struct hmll_context *);
+HMLL_EXTERN unsigned int hmll_has_error(const struct hmll_context *);
+HMLL_EXTERN char *hmll_strerr(const struct hmll_context *);
 
-HMLL_EXTERN hmll_status_t hmll_get_tensor_specs(const hmll_context_t *, const char *, hmll_tensor_specs_t **) NO_EXCEPT;
-HMLL_EXTERN void hmll_tensor_specs_free(hmll_tensor_specs_t *) NO_EXCEPT;
+HMLL_EXTERN enum hmll_error_code hmll_open(const char *, hmll_context_t *, hmll_file_kind_t, hmll_flags_t) NO_EXCEPT;
+HMLL_EXTERN void hmll_destroy(struct hmll_context *) NO_EXCEPT;
+HMLL_EXTERN uint8_t hmll_sizeof(enum hmll_tensor_data_type) NO_EXCEPT;
+HMLL_EXTERN size_t hmll_numel(struct hmll_tensor_specs *) NO_EXCEPT;
 
-HMLL_EXTERN hmll_status_t hmll_get_io_buffer(hmll_device_t, void **, size_t) NO_EXCEPT;
-// hmll_fetcher_init()
-// hmll_fetch_status_t hmll_fetch();
-// hmll_fetch_status_t hmll_fetch_range(); -->>>> hmll_fetch_io_uring()
+HMLL_EXTERN hmll_tensor_specs_t hmll_get_tensor_specs(struct hmll_context *, const char *) NO_EXCEPT;
+HMLL_EXTERN void *hmll_get_io_buffer(struct hmll_context *, enum hmll_device, size_t) NO_EXCEPT;
 
 #ifdef __cplusplus
 }
