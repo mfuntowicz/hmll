@@ -106,6 +106,7 @@ hmll_tensor_data_type_t hmll_safetensors_dtype_from_str(const char *dtype, const
 
 int hmll_safetensors_read_table(hmll_context_t *ctx, const hmll_flags_t flags)
 {
+    size_t num_tensors = 0;
     if (hmll_has_error(ctx))
         goto exit;
 
@@ -127,7 +128,7 @@ int hmll_safetensors_read_table(hmll_context_t *ctx, const hmll_flags_t flags)
         goto freeup_and_exit;
     }
 
-    const size_t num_tensors = yyjson_obj_size(root);
+    num_tensors = yyjson_obj_size(root);
     if ((ctx->table.names = calloc(num_tensors, sizeof(char*))) == NULL)
         ctx->error = HMLL_ERR_ALLOCATION_FAILED;
 

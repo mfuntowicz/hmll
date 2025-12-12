@@ -10,7 +10,10 @@
 #define HMLL_IO_URING_DEFAULT_BUFFER_SIZE (512U * 1024U)
 #define HMLL_IO_URING_DEFAULT_READ_SIZE (512U * 1024U)
 
-#define ROUND_UP_ALIGN(x) (((x) + ALIGNMENT - 1) & ~(ALIGNMENT - 1))
+// Alignment for O_DIRECT reads (must match page size, typically 4096 bytes)
+#define ALIGNMENT 4096U
+#define PAGE_ALIGNED_UP(x) (((x) + ALIGNMENT - 1) & ~(ALIGNMENT - 1))
+#define PAGE_ALIGNED_DOWN(x) ((x) & ~(ALIGNMENT - 1))
 
 typedef struct hmll_fetcher_io_uring_buffer hmll_fetcher_io_uring_buffer_t;
 
@@ -19,6 +22,7 @@ struct hmll_fetcher_io_uring_payload
 {
     void* ptr;
     size_t size;
+    size_t discard;  // Number of bytes to skip at the beginning (for O_DIRECT alignment)
     int32_t buffer;
 };
 typedef struct hmll_fetcher_io_uring_payload hmll_fetcher_io_uring_payload_t;
