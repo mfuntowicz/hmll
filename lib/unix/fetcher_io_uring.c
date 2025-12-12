@@ -15,7 +15,7 @@ hmll_fetcher_io_uring_t hmll_fetcher_io_uring_init(struct hmll_context *ctx)
 
     struct io_uring_params params = {0};
     params.flags |= IORING_SETUP_SQPOLL;
-    params.sq_thread_idle = 3000;
+    params.sq_thread_idle = 250;
 
     int iofiles[1];
     iofiles[0] = ctx->source.fd;
@@ -90,124 +90,159 @@ enum hmll_error_code hmll_fetcher_io_uring_fetch_range(
     size_t pages_completed = 0;
     size_t file_offset = range.start;
 
-    // For O_DIRECT: calculate aligned offset and size
-    size_t aligned_offset = PAGE_ALIGNED_DOWN(file_offset);
-    size_t discard = file_offset - aligned_offset;  // Bytes to skip at the start
-    size_t aligned_size = PAGE_ALIGNED_UP(size + discard);
-    size_t npages = (aligned_size + HMLL_IO_URING_DEFAULT_BUFFER_SIZE - 1) / HMLL_IO_URING_DEFAULT_BUFFER_SIZE;
-
-#ifdef DEBUG
-    printf("[DEBUG] fetching [%lu -> %lu] size=%lu, pages=%lu\n", range.start, range.end, size, npages);
-#endif
-
     // 1: Fill the pipeline -> submit up to queue depth operations
-    while (pages_requested < npages && pages_requested < HMLL_IO_URING_DEFAULT_NUM_IO_VECTORS) {
+    while (file_offset < range.end && pages_requested < HMLL_IO_URING_DEFAULT_NUM_IO_VECTORS) {
         // Find a free buffer
         const int32_t slot = hmll_fetcher_io_uring_get_slot(fetcher);
         if (slot == -1) break; // No free buffers
 
-        // Calculate bytes to read (handle last chunk)
-        size_t bytes_to_read = HMLL_IO_URING_DEFAULT_BUFFER_SIZE;
+        // For O_DIRECT: calculate aligned offset and size for THIS chunk
+        size_t chunk_aligned_offset = PAGE_ALIGNED_DOWN(file_offset);
+        size_t chunk_discard = file_offset - chunk_aligned_offset;
+
+        // Calculate bytes to read (account for discard to not overflow buffer)
+        size_t bytes_to_read = HMLL_IO_URING_DEFAULT_BUFFER_SIZE - chunk_discard;
         if (file_offset + bytes_to_read > range.end) {
             bytes_to_read = range.end - file_offset;
         }
 
+        // Calculate aligned size for this chunk
+        size_t chunk_aligned_size = PAGE_ALIGNED_UP(bytes_to_read + chunk_discard);
+
         // Write back in the buffer will happen in the `dst->ptr` which is 0-indexed whereas our read is not, account for it
         void* write_at = (char *)dst->ptr + (file_offset - range.start);
-        hmll_fetcher_io_uring_prepare_payload(fetcher, slot, bytes_to_read, discard, write_at);
+        hmll_fetcher_io_uring_prepare_payload(fetcher, slot, bytes_to_read, chunk_discard, write_at);
 
         // Submit read operation with aligned offset and size
         struct io_uring_sqe *sqe = io_uring_get_sqe(&fetcher->ioring);
-        sqe->flags =IOSQE_FIXED_FILE;
-        io_uring_prep_read_fixed(sqe, 0, fetcher->iovs[slot].iov_base, bytes_to_read, aligned_offset, slot);
+        sqe->flags = IOSQE_FIXED_FILE;
+        io_uring_prep_read_fixed(sqe, 0, fetcher->iovs[slot].iov_base, chunk_aligned_size, chunk_aligned_offset, slot);
         io_uring_sqe_set_data(sqe, fetcher->iopylds + slot);
 
-        aligned_offset += bytes_to_read;
         file_offset += bytes_to_read;
         ++pages_requested;
 #ifdef DEBUG
-        printf("[DEBUG] submitted chunk %zu: buffer=%d, offset=%zu->%zu, size=%zu->%zu, discard=%zu\n",
-               pages_requested, slot, aligned_offset, aligned_offset, bytes_to_read, aligned_size, discard);
+        printf("[DEBUG] submitted chunk %zu: buffer=%d, file_offset_before=%zu, disk_offset=%zu, disk_size=%zu, discard=%zu, useful=%zu, file_offset_after=%zu\n",
+               pages_requested, slot, file_offset - bytes_to_read, chunk_aligned_offset, chunk_aligned_size, chunk_discard, bytes_to_read, file_offset);
 #endif
-
-        discard = 0; // Only the first read needs to discard data from the buffer
     }
 
     // Submit all queued operations
     io_uring_submit(&fetcher->ioring);
 
     // 2. Process completions and submit new reads
-    while (pages_completed < npages) {
+    unsigned int resubmitted = 0;  // Track how many requests we've queued for batch submission
+    while (pages_completed < pages_requested) {
         struct io_uring_cqe *cqe;
+
+        // Wait for at least one completion
         if (io_uring_wait_cqe(&fetcher->ioring, &cqe) < 0){
             ctx->error = HMLL_ERR_IO_ERROR;
             return ctx->error;
         }
 
-        // Check if read succeeded
-        if (cqe->res < 0) {
+        // Process this CQE and drain any other available CQEs (batch processing)
+        do {
+            // Check if read succeeded
+            if (cqe->res < 0) {
 #ifdef DEBUG
-            printf("[ERROR] Read failed: %s\n", strerror(-cqe->res));
+                printf("[ERROR] Read failed: %s\n", strerror(-cqe->res));
 #endif
-            io_uring_cqe_seen(&fetcher->ioring, cqe);
-
-            ctx->error = HMLL_ERR_IO_ERROR;
-            return ctx->error;
-        }
-
-        // Get the buffer that just completed
-        const hmll_fetcher_io_uring_payload_t *payload = io_uring_cqe_get_data(cqe);
-
-#ifdef DEBUG
-        printf("[DEBUG] completed chunk %lu: buffer=%i, bytes=%d, discard=%lu\n", pages_completed + 1, payload->buffer, cqe->res, payload->discard);
-#endif
-
-        // TODO: Handle the memcpy somewhere else (i.e. another thread?)
-        // Skip the discard bytes at the beginning (for O_DIRECT alignment)
-        const char *src = (const char *)fetcher->iovs[payload->buffer].iov_base + payload->discard;
-        memcpy(payload->ptr, src, payload->size);
-
-        io_uring_cqe_seen(&fetcher->ioring, cqe);
-        ++pages_completed;
-
-        // Reuse this buffer for the next chunk if more data to read
-        if (pages_requested < npages) {
-            size_t bytes_to_read = HMLL_IO_URING_DEFAULT_BUFFER_SIZE;
-            if (file_offset + bytes_to_read > range.end) {
-                bytes_to_read = range.end - file_offset;
+                io_uring_cqe_seen(&fetcher->ioring, cqe);
+                ctx->error = HMLL_ERR_IO_ERROR;
+                return ctx->error;
             }
 
-            // TODO: Discard the end (using -discard?)
-            struct io_uring_sqe *sqe = io_uring_get_sqe(&fetcher->ioring);
-            io_uring_prep_read_fixed(
-                sqe, ctx->source.fd,
-                fetcher->iovs[payload->buffer].iov_base,
-                bytes_to_read,
-                aligned_offset,
-                payload->buffer);
+            // Get the buffer that just completed
+            const hmll_fetcher_io_uring_payload_t *payload = io_uring_cqe_get_data(cqe);
 
-            void* write_at = (char *)dst->ptr + (file_offset - range.start);
-            hmll_fetcher_io_uring_prepare_payload(fetcher, payload->buffer, bytes_to_read, 0, write_at);
-            io_uring_sqe_set_data(sqe, fetcher->iopylds + payload->buffer);
-
-            aligned_offset += bytes_to_read;
-            file_offset += bytes_to_read;
-            ++pages_requested;
-
-            io_uring_submit(&fetcher->ioring);
+            // Verify we read enough data
+            size_t bytes_read = (size_t)cqe->res;
+            size_t bytes_needed = payload->discard + payload->size;
 
 #ifdef DEBUG
-            printf("[DEBUG] resubmitted buffer %d for chunk %lu, offset=%lu->%lu, size=%lu->%lu, discard=%lu\n",
-                   payload->buffer, pages_requested, file_offset - bytes_to_read, aligned_offset, bytes_to_read, aligned_size, discard);
+            printf("[DEBUG] completed chunk %lu: buffer=%i, bytes_read=%zu, discard=%lu, useful=%lu, needed=%zu\n",
+                   pages_completed + 1, payload->buffer, bytes_read, payload->discard, payload->size, bytes_needed);
 #endif
-        } else {
-            // No more chunks to read, mark buffer as free
-            fetcher->iobusy[payload->buffer] = 0;
+
+            if (bytes_read < bytes_needed) {
+#ifdef DEBUG
+                printf("[ERROR] Short read: got %zu bytes, needed %zu (discard=%lu + useful=%lu)\n",
+                       bytes_read, bytes_needed, payload->discard, payload->size);
+#endif
+                io_uring_cqe_seen(&fetcher->ioring, cqe);
+                ctx->error = HMLL_ERR_IO_ERROR;
+                return ctx->error;
+            }
+
+            // TODO: Handle the memcpy somewhere else (i.e. another thread?)
+            // Skip the discard bytes at the beginning (for O_DIRECT alignment)
+            const char *src = (const char *)fetcher->iovs[payload->buffer].iov_base + payload->discard;
+            memcpy(payload->ptr, src, payload->size);
+
+            io_uring_cqe_seen(&fetcher->ioring, cqe);
+            ++pages_completed;
+
+            // Reuse this buffer for the next chunk if more data to read
+            if (file_offset < range.end) {
+                // For O_DIRECT: calculate aligned offset and size for THIS chunk
+                size_t chunk_aligned_offset = PAGE_ALIGNED_DOWN(file_offset);
+                size_t chunk_discard = file_offset - chunk_aligned_offset;
+
+                // Calculate bytes to read (account for discard to not overflow buffer)
+                size_t bytes_to_read = HMLL_IO_URING_DEFAULT_BUFFER_SIZE - chunk_discard;
+                if (file_offset + bytes_to_read > range.end) {
+                    bytes_to_read = range.end - file_offset;
+                }
+
+                // Calculate aligned size for this chunk
+                size_t chunk_aligned_size = PAGE_ALIGNED_UP(bytes_to_read + chunk_discard);
+
+                void* write_at = (char *)dst->ptr + (file_offset - range.start);
+                hmll_fetcher_io_uring_prepare_payload(fetcher, payload->buffer, bytes_to_read, chunk_discard, write_at);
+
+                struct io_uring_sqe *sqe = io_uring_get_sqe(&fetcher->ioring);
+                sqe->flags = IOSQE_FIXED_FILE;
+                io_uring_prep_read_fixed(
+                    sqe, 0,
+                    fetcher->iovs[payload->buffer].iov_base,
+                    chunk_aligned_size,
+                    chunk_aligned_offset,
+                    payload->buffer);
+                io_uring_sqe_set_data(sqe, fetcher->iopylds + payload->buffer);
+
+                file_offset += bytes_to_read;
+                ++pages_requested;
+                ++resubmitted;
+
+#ifdef DEBUG
+                printf("[DEBUG] resubmitted chunk %zu: buffer=%d, file_offset_before=%zu, disk_offset=%zu, disk_size=%zu, discard=%zu, useful=%zu, file_offset_after=%zu\n",
+                       pages_requested, payload->buffer, file_offset - bytes_to_read, chunk_aligned_offset, chunk_aligned_size, chunk_discard, bytes_to_read, file_offset);
+#endif
+            } else {
+                // No more chunks to read, mark buffer as free
+                fetcher->iobusy[payload->buffer] = 0;
+            }
+
+            // Try to get another CQE without waiting (batch processing)
+        } while (io_uring_peek_cqe(&fetcher->ioring, &cqe) == 0);
+
+        // Submit all resubmitted requests in one batch
+        if (resubmitted > 0) {
+#ifdef DEBUG
+            printf("[DEBUG] batch submitting %u requests\n", resubmitted);
+#endif
+            io_uring_submit(&fetcher->ioring);
+            resubmitted = 0;
         }
     }
 
 #ifdef DEBUG
-    printf("[DEBUG] fetch complete: %lu chunks read\n", pages_completed);
+    printf("[DEBUG] fetch complete: requested range=[%zu, %zu), size=%zu, chunks=%zu, final_file_offset=%zu\n",
+           range.start, range.end, size, pages_completed, file_offset);
+    if (file_offset < range.end) {
+        printf("[WARNING] Did not read entire range! Missing bytes: %zu\n", range.end - file_offset);
+    }
 #endif
 
     return HMLL_ERR_SUCCESS;

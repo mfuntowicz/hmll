@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include <hmll/hmll.h>
 #include <hmll/unix/fetcher_io_uring.h>
@@ -45,6 +46,9 @@ int main(const int argc, const char** argv)
     printf("Throughput: %.2f MB/s\n", throughput_mbps);
 
     __bf16 *bf16_ptr = ptr;
+    float sum = 0;
+    for (size_t i = 0; i < numel; ++i) sum += bf16_ptr[i];
+
     // hmll_destroy(&ctx);
     if (ptr) free(ptr);
 
