@@ -7,6 +7,7 @@ char *hmll_strerr(const enum hmll_error_code status)
 {
     switch (status)
     {
+    case HMLL_ERR_FILE_NOT_FOUND: return "File not found";
     case HMLL_ERR_ALLOCATION_FAILED: return "Failed to allocate memory";
     case HMLL_ERR_TABLE_EMPTY: return "No tensors found while reading the file";
     case HMLL_ERR_TENSOR_NOT_FOUND: return "Tensor not found in the known tensors table";

@@ -7,19 +7,24 @@
 
 #include "hmll/hmll.h"
 
-unsigned int hmll_success(const struct hmll_context *ctx)
+unsigned int hmll_success(const enum hmll_error_code errno)
 {
-    return ctx->error == HMLL_SUCCESS;
+    return errno == HMLL_SUCCESS;
 }
 
-unsigned int hmll_has_error(const struct hmll_context *ctx)
+unsigned int hmll_has_error(const enum hmll_error_code errno)
 {
-    return ctx->error != HMLL_SUCCESS;
+    return errno != HMLL_SUCCESS;
+}
+
+enum hmll_error_code hmll_get_error(const struct hmll_context *ctx)
+{
+    return ctx->error;
 }
 
 struct hmll_tensor_specs hmll_get_tensor_specs(struct hmll_context *ctx, const char *name)
 {
-    if (hmll_has_error(ctx))
+    if (hmll_has_error(hmll_get_error(ctx)))
         return (struct hmll_tensor_specs){0};
 
     if (ctx->num_tensors == 0) {
