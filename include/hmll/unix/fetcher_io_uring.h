@@ -16,7 +16,6 @@
 
 typedef struct hmll_fetcher_io_uring_buffer hmll_fetcher_io_uring_buffer_t;
 
-
 struct hmll_fetcher_io_uring_payload
 {
     void* ptr;
@@ -34,7 +33,6 @@ struct hmll_fetcher_io_uring {
     unsigned char iobusy[HMLL_URING_NUM_IOVECS];
 };
 typedef struct hmll_fetcher_io_uring hmll_fetcher_io_uring_t;
-
 
 hmll_fetcher_io_uring_t hmll_fetcher_io_uring_init(struct hmll_context *);
 // void hmll_fetcher_io_uring_free(hmll_fetcher_io_uring_t *);

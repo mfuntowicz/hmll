@@ -15,7 +15,6 @@ hmll_fetcher_io_uring_t hmll_fetcher_io_uring_init(struct hmll_context *ctx)
 
     struct io_uring_params params = {0};
     params.flags |= IORING_SETUP_SQPOLL;
-    params.flags |= IORING_SETUP_IOPOLL;
     params.sq_thread_idle = 250;
 
     int iofiles[1];
@@ -179,8 +178,8 @@ enum hmll_error_code hmll_fetcher_io_uring_fetch_range(
 
             // TODO: Handle the memcpy somewhere else (i.e. another thread?)
             // Skip the discard bytes at the beginning (for O_DIRECT alignment)
-            const char *src = (const char *)fetcher->iovs[payload->buffer].iov_base + payload->discard;
-            memcpy(payload->ptr, src, payload->size);
+            // const char *src = (const char *)fetcher->iovs[payload->buffer].iov_base + payload->discard;
+            // memcpy(payload->ptr, src, payload->size);
 
             io_uring_cqe_seen(&fetcher->ioring, cqe);
             ++pages_completed;
