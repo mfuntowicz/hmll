@@ -25,10 +25,13 @@ extern "C" {
 
 #include "types.h"
 
-HMLL_EXTERN unsigned int hmll_success(enum hmll_error_code errn);
-HMLL_EXTERN unsigned int hmll_has_error(enum hmll_error_code errn);
+HMLL_EXTERN unsigned int hmll_success(enum hmll_error_code);
+HMLL_EXTERN unsigned int hmll_has_error(enum hmll_error_code);
 HMLL_EXTERN enum hmll_error_code hmll_get_error(const struct hmll_context *);
 HMLL_EXTERN char *hmll_strerr(enum hmll_error_code);
+
+HMLL_EXTERN struct hmll_probe hmll_get_probe(void) NO_EXCEPT;
+HMLL_EXTERN unsigned char hmll_is_feature_supported(struct hmll_probe, enum hmll_featcode) NO_EXCEPT;
 
 HMLL_EXTERN enum hmll_error_code hmll_open(const char *, hmll_context_t *, hmll_file_kind_t, hmll_flags_t) NO_EXCEPT;
 HMLL_EXTERN void hmll_destroy(struct hmll_context *) NO_EXCEPT;

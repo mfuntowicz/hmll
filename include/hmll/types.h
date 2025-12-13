@@ -31,6 +31,19 @@ enum hmll_source_kind
 };
 typedef enum hmll_source_kind hmll_source_kind_t;
 
+enum hmll_featcode
+{
+    HMLL_FEATCODE_CUDA = 0,
+    HMLL_FEATCODE_IO_URING = 1,
+};
+typedef enum hmll_featcode hmll_featcode_t;
+
+struct hmll_probe
+{
+    unsigned short featmask;
+};
+typedef struct hmll_probe hmll_probe_t;
+
 struct hmll_source
 {
 #if defined(__linux) || defined(__unix) || defined(APPLE)

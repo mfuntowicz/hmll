@@ -14,6 +14,7 @@ int main(const int argc, const char** argv)
 
     // Get the tensors' table
     hmll_context_t ctx = {0};
+    hmll_probe_t probe = hmll_get_probe();
     hmll_open(argv[1], &ctx, HMLL_SAFETENSORS, HMLL_MMAP | HMLL_SKIP_METADATA);
     hmll_fetcher_io_uring_t fetcher = hmll_fetcher_io_uring_init(&ctx);
     hmll_tensor_specs_t specs = hmll_get_tensor_specs(&ctx, "model.embed_tokens.weight");

@@ -46,8 +46,10 @@ endif()
 if(${HMLL_ENABLE_CUDA})
     find_package(CUDAToolkit REQUIRED)
     list(APPEND HMLL_LIBRARIES CUDA::cudart)
+    add_compile_definitions("HMLL_CUDA_ENABLED")
     message(STATUS "Enabling CUDA support")
 endif()
+
 ###########################################################
 # Definition of libhmll
 ###########################################################
@@ -63,12 +65,13 @@ set(LIBHMLL_HEADERS
 )
 set(LIBHMLL_SOURCES
         lib/context.c
+        lib/errors.c
+        lib/probe.c
         lib/tensors.c
         lib/safetensors.c
         lib/sources.c
         lib/unix/mmap.c
         lib/unix/fetcher_io_uring.c
-        lib/errors.c
 )
 add_library(libhmll ${LIBHMLL_HEADERS} ${LIBHMLL_SOURCES})
 target_include_directories(libhmll PUBLIC
