@@ -9,7 +9,7 @@
 
 enum hmll_error_code hmll_open_mmap(const char *path, hmll_context_t *ctx)
 {
-    if (hmll_has_error(ctx))
+    if (hmll_has_error(hmll_get_error(ctx)))
         goto return_error;
 
     const int fd = open(path, O_RDONLY | O_DIRECT);

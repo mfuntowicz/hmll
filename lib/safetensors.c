@@ -107,7 +107,7 @@ hmll_tensor_data_type_t hmll_safetensors_dtype_from_str(const char *dtype, const
 int hmll_safetensors_read_table(hmll_context_t *ctx, const hmll_flags_t flags)
 {
     size_t num_tensors = 0;
-    if (hmll_has_error(ctx))
+    if (hmll_has_error(hmll_get_error(ctx)))
         goto exit;
 
     uint64_t hsize;
@@ -183,6 +183,6 @@ freeup_and_exit:
     yyjson_doc_free(document);
 
 exit:
-    if (hmll_has_error(ctx)) return ctx->error;
+    if (hmll_has_error(hmll_get_error(ctx))) return ctx->error;
     return num_tensors;
 }

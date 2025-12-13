@@ -18,7 +18,7 @@ int main(const int argc, const char** argv)
     hmll_fetcher_io_uring_t fetcher = hmll_fetcher_io_uring_init(&ctx);
     hmll_tensor_specs_t specs = hmll_get_tensor_specs(&ctx, "model.embed_tokens.weight");
 
-    if (hmll_success(&ctx))
+    if (hmll_success(hmll_get_error(&ctx)))
     {
         size_t numel = hmll_numel(&specs);
         size_t elmtsize = hmll_sizeof(specs.dtype);
@@ -53,7 +53,7 @@ int main(const int argc, const char** argv)
         if (ptr) free(ptr);
     }
 
-    if (hmll_has_error(&ctx))
+    if (hmll_has_error(hmll_get_error(&ctx)))
         printf("Got an error while reading the safetensors: %s\n", hmll_strerr(ctx.error));
 
     return ctx.error;

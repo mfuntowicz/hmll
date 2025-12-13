@@ -10,7 +10,7 @@ hmll_fetcher_io_uring_t hmll_fetcher_io_uring_init(struct hmll_context *ctx)
 {
     hmll_fetcher_io_uring_t fetcher = {0};
 
-    if (hmll_has_error(ctx))
+    if (hmll_has_error(hmll_get_error(ctx)))
         return fetcher;
 
     struct io_uring_params params = {0};
@@ -40,7 +40,7 @@ enum hmll_error_code hmll_fetcher_io_uring_fetch(
     const char* name,
     const struct hmll_device_buffer *dst)
 {
-    if (hmll_has_error(ctx))
+    if (hmll_has_error(hmll_get_error(ctx)))
         return ctx->error;
 
 #ifdef DEBUG
@@ -48,7 +48,7 @@ enum hmll_error_code hmll_fetcher_io_uring_fetch(
 #endif
 
     hmll_tensor_specs_t specs = hmll_get_tensor_specs(ctx, name);
-    if (hmll_has_error(ctx))
+    if (hmll_has_error(hmll_get_error(ctx)))
         return ctx->error;
 
     const hmll_fetch_range_t range = (hmll_fetch_range_t){specs.start, specs.end};
