@@ -6,8 +6,8 @@
 #include "hmll/fetcher.h"
 #include "hmll/types.h"
 
-#define HMLL_IO_URING_DEFAULT_NUM_IO_VECTORS 128U
-#define HMLL_IO_URING_DEFAULT_BUFFER_SIZE (256U * 1024U)
+#define HMLL_URING_NUM_IOVECS 128U
+#define HMLL_URING_BUFFER_SIZE (256U * 1024U)
 
 // Alignment for O_DIRECT reads (must match page size, typically 4096 bytes)
 #define ALIGNMENT 4096U
@@ -29,9 +29,9 @@ typedef struct hmll_fetcher_io_uring_payload hmll_fetcher_io_uring_payload_t;
 
 struct hmll_fetcher_io_uring {
     struct io_uring ioring;
-    struct iovec iovs[HMLL_IO_URING_DEFAULT_NUM_IO_VECTORS];
-    struct hmll_fetcher_io_uring_payload iopylds[HMLL_IO_URING_DEFAULT_NUM_IO_VECTORS];
-    unsigned char iobusy[HMLL_IO_URING_DEFAULT_NUM_IO_VECTORS];
+    struct iovec iovs[HMLL_URING_NUM_IOVECS];
+    struct hmll_fetcher_io_uring_payload iopylds[HMLL_URING_NUM_IOVECS];
+    unsigned char iobusy[HMLL_URING_NUM_IOVECS];
 };
 typedef struct hmll_fetcher_io_uring hmll_fetcher_io_uring_t;
 

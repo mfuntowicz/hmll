@@ -21,17 +21,17 @@ hmll_fetcher_io_uring_t hmll_fetcher_io_uring_init(struct hmll_context *ctx)
     int iofiles[1];
     iofiles[0] = ctx->source.fd;
 
-    io_uring_queue_init_params(HMLL_IO_URING_DEFAULT_NUM_IO_VECTORS, &fetcher.ioring, &params);
+    io_uring_queue_init_params(HMLL_URING_NUM_IOVECS, &fetcher.ioring, &params);
     io_uring_register_files(&fetcher.ioring, iofiles, 1);
 
     // Allocate aligned buffer arena for O_DIRECT I/O (mmap returns page-aligned memory)
-    void* arena = hmll_get_io_buffer(ctx, HMLL_DEVICE_CPU, HMLL_IO_URING_DEFAULT_BUFFER_SIZE * HMLL_IO_URING_DEFAULT_NUM_IO_VECTORS);
-    for (unsigned int i = 0; i < HMLL_IO_URING_DEFAULT_NUM_IO_VECTORS; i++) {
-        fetcher.iovs[i].iov_base = (char *)arena + HMLL_IO_URING_DEFAULT_BUFFER_SIZE * i;
-        fetcher.iovs[i].iov_len = HMLL_IO_URING_DEFAULT_BUFFER_SIZE;
+    void* arena = hmll_get_io_buffer(ctx, HMLL_DEVICE_CPU, HMLL_URING_BUFFER_SIZE * HMLL_URING_NUM_IOVECS);
+    for (unsigned int i = 0; i < HMLL_URING_NUM_IOVECS; i++) {
+        fetcher.iovs[i].iov_base = (char *)arena + HMLL_URING_BUFFER_SIZE * i;
+        fetcher.iovs[i].iov_len = HMLL_URING_BUFFER_SIZE;
     }
 
-    io_uring_register_buffers(&fetcher.ioring, fetcher.iovs, HMLL_IO_URING_DEFAULT_NUM_IO_VECTORS);
+    io_uring_register_buffers(&fetcher.ioring, fetcher.iovs, HMLL_URING_NUM_IOVECS);
     return fetcher;
 }
 
@@ -58,7 +58,7 @@ enum hmll_error_code hmll_fetcher_io_uring_fetch(
 
 int32_t hmll_fetcher_io_uring_get_slot(const hmll_fetcher_io_uring_t *fetcher)
 {
-    for (size_t i = 0; i < HMLL_IO_URING_DEFAULT_NUM_IO_VECTORS; ++i) {
+    for (size_t i = 0; i < HMLL_URING_NUM_IOVECS; ++i) {
         if (fetcher->iobusy[i] == 0) return (int32_t)i;
     }
     return -1;
@@ -66,6 +66,7 @@ int32_t hmll_fetcher_io_uring_get_slot(const hmll_fetcher_io_uring_t *fetcher)
 
 void hmll_fetcher_io_uring_prepare_payload(hmll_fetcher_io_uring_t *fetcher, const int32_t slot, const size_t bytes_to_read, const size_t discard, void *ptr)
 {
+    // TODO: discard - we need to account for the discardable byte on the end of the tensor-boundaries to be page-aligned
     fetcher->iopylds[slot].buffer = slot;
     fetcher->iopylds[slot].size = bytes_to_read;
     fetcher->iopylds[slot].discard = discard;
@@ -92,7 +93,7 @@ enum hmll_error_code hmll_fetcher_io_uring_fetch_range(
     size_t file_offset = range.start;
 
     // 1: Fill the pipeline -> submit up to queue depth operations
-    while (file_offset < range.end && pages_requested < HMLL_IO_URING_DEFAULT_NUM_IO_VECTORS) {
+    while (file_offset < range.end && pages_requested < HMLL_URING_NUM_IOVECS) {
         // Find a free buffer
         const int32_t slot = hmll_fetcher_io_uring_get_slot(fetcher);
         if (slot == -1) break; // No free buffers
@@ -102,7 +103,7 @@ enum hmll_error_code hmll_fetcher_io_uring_fetch_range(
         size_t chunk_discard = file_offset - chunk_aligned_offset;
 
         // Calculate bytes to read (account for discard to not overflow buffer)
-        size_t bytes_to_read = HMLL_IO_URING_DEFAULT_BUFFER_SIZE - chunk_discard;
+        size_t bytes_to_read = HMLL_URING_BUFFER_SIZE - chunk_discard;
         if (file_offset + bytes_to_read > range.end) {
             bytes_to_read = range.end - file_offset;
         }
@@ -191,7 +192,7 @@ enum hmll_error_code hmll_fetcher_io_uring_fetch_range(
                 size_t chunk_discard = file_offset - chunk_aligned_offset;
 
                 // Calculate bytes to read (account for discard to not overflow buffer)
-                size_t bytes_to_read = HMLL_IO_URING_DEFAULT_BUFFER_SIZE - chunk_discard;
+                size_t bytes_to_read = HMLL_URING_BUFFER_SIZE - chunk_discard;
                 if (file_offset + bytes_to_read > range.end) {
                     bytes_to_read = range.end - file_offset;
                 }
