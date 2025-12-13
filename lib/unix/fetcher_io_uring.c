@@ -15,6 +15,7 @@ hmll_fetcher_io_uring_t hmll_fetcher_io_uring_init(struct hmll_context *ctx)
 
     struct io_uring_params params = {0};
     params.flags |= IORING_SETUP_SQPOLL;
+    params.flags |= IORING_SETUP_IOPOLL;
     params.sq_thread_idle = 250;
 
     int iofiles[1];

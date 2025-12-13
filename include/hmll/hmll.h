@@ -27,7 +27,7 @@ extern "C" {
 
 HMLL_EXTERN unsigned int hmll_success(const struct hmll_context *);
 HMLL_EXTERN unsigned int hmll_has_error(const struct hmll_context *);
-HMLL_EXTERN char *hmll_strerr(const struct hmll_context *);
+HMLL_EXTERN char *hmll_strerr(enum hmll_error_code);
 
 HMLL_EXTERN enum hmll_error_code hmll_open(const char *, hmll_context_t *, hmll_file_kind_t, hmll_flags_t) NO_EXCEPT;
 HMLL_EXTERN void hmll_destroy(struct hmll_context *) NO_EXCEPT;
