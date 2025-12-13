@@ -128,7 +128,7 @@ enum hmll_error_code hmll_fetcher_io_uring_fetch_range(
 #endif
     }
 
-    // Submit all queued operations
+    // Submit all batched read operations
     io_uring_submit(&fetcher->ioring);
 
     // 2. Process completions and submit new reads

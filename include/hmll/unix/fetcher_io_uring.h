@@ -7,8 +7,7 @@
 #include "hmll/types.h"
 
 #define HMLL_IO_URING_DEFAULT_NUM_IO_VECTORS 128U
-#define HMLL_IO_URING_DEFAULT_BUFFER_SIZE (512U * 1024U)
-#define HMLL_IO_URING_DEFAULT_READ_SIZE (512U * 1024U)
+#define HMLL_IO_URING_DEFAULT_BUFFER_SIZE (256U * 1024U)
 
 // Alignment for O_DIRECT reads (must match page size, typically 4096 bytes)
 #define ALIGNMENT 4096U
