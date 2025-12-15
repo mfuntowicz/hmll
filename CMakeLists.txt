@@ -59,15 +59,16 @@ set(LIBHMLL_HEADERS
         include/hmll/types.h
         include/hmll/unix/mmap.h
         include/hmll/unix/fetcher.h
-        include/hmll/unix/fetcher_io_uring.h
+        include/hmll/unix/iouring.h
 )
 set(LIBHMLL_SOURCES
         lib/context.c
+        lib/fetcher.c
         lib/tensors.c
         lib/safetensors.c
         lib/sources.c
         lib/unix/mmap.c
-        lib/unix/fetcher_io_uring.c
+        lib/unix/iouring.c
         lib/errors.c
 )
 add_library(libhmll ${LIBHMLL_HEADERS} ${LIBHMLL_SOURCES})

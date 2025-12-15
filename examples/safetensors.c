@@ -3,7 +3,6 @@
 #include <string.h>
 #include <time.h>
 #include <hmll/hmll.h>
-#include <hmll/unix/fetcher_io_uring.h>
 
 int main(const int argc, const char** argv)
 {
@@ -15,7 +14,7 @@ int main(const int argc, const char** argv)
     // Get the tensors' table
     hmll_context_t ctx = {0};
     hmll_open(argv[1], &ctx, HMLL_SAFETENSORS, HMLL_MMAP | HMLL_SKIP_METADATA);
-    hmll_fetcher_io_uring_t fetcher = hmll_fetcher_io_uring_init(&ctx);
+    hmll_fetcher_t fetcher = hmll_fetcher_init(&ctx, HMLL_DEVICE_CPU);
     hmll_tensor_specs_t specs = hmll_get_tensor_specs(&ctx, "model.embed_tokens.weight");
 
     if (hmll_success(hmll_get_error(&ctx)))
@@ -29,7 +28,7 @@ int main(const int argc, const char** argv)
         struct timespec start, end;
         clock_gettime(CLOCK_MONOTONIC, &start);
 
-        hmll_fetcher_io_uring_fetch(&ctx, &fetcher, "model.embed_tokens.weight", &buffer);
+        hmll_fetch_tensor(&ctx, fetcher, "model.embed_tokens.weight", &buffer);
 
         // End timing and calculate elapsed time
         clock_gettime(CLOCK_MONOTONIC, &end);
