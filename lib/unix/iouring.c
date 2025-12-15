@@ -87,15 +87,24 @@ struct hmll_fetch_range hmll_io_uring_fetch_range_to_cpu(struct hmll_context *ct
     while (n_submitted > 0)
     {
         struct io_uring_cqe *cqe;
-        if (io_uring_wait_cqe(&fetcher->ioring, &cqe) < 0) {
-            ctx->error = HMLL_ERR_IO_ERROR;
-            return (struct hmll_fetch_range) {0};
-        }
+        if (io_uring_wait_cqe(&fetcher->ioring, &cqe) < 0)
+            goto return_io_error;
 
+        io_uring_cqe_seen(&fetcher->ioring, cqe);
+
+        if (cqe->res <= 0)
+            goto return_io_error;
+
+        const struct hmll_io_uring_user_payload *payload = (struct hmll_io_uring_user_payload*) cqe->user_data;
+        hmll_io_uring_slot_set_available(&fetcher->iobusy, payload->slot);
         n_submitted -= cqe->res;
     }
 
     return (struct hmll_fetch_range){ range.start - a_start, a_start + (range.end - range.start) };
+
+return_io_error:
+    ctx->error = HMLL_ERR_IO_ERROR;
+    return (struct hmll_fetch_range) {0};
 }
 
 struct hmll_fetch_range hmll_io_uring_fetch_range(struct hmll_context *ctx, struct hmll_fetcher_io_uring *fetcher, const struct hmll_range range, const struct hmll_device_buffer dst)
