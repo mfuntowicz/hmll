@@ -20,6 +20,19 @@ void *hmll_get_buffer(struct hmll_context *ctx, const size_t size)
     return ptr;
 }
 
+void *hmll_get_hugepage_buffer(struct hmll_context *ctx, const size_t size)
+{
+    void* ptr = 0;
+    ptr = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGE_2MB, -1, 0);
+
+    if (ptr == MAP_FAILED) {
+        ctx->error = HMLL_ERR_ALLOCATION_FAILED;
+        return NULL;
+    }
+
+    return ptr;
+}
+
 
 void *hmll_get_io_buffer(struct hmll_context *ctx, const enum hmll_device device, const size_t size)
 {

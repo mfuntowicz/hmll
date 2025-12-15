@@ -3,7 +3,8 @@
 
 enum hmll_fetcher_kind
 {
-    HMLL_IO_URING
+    HMLL_FETCHER_AUTO,
+    HMLL_FETCHER_IO_URING
 };
 typedef enum hmll_fetcher_kind hmll_fetcher_kind_t;
 

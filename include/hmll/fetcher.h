@@ -24,7 +24,7 @@ struct hmll_fetcher
 {
     enum hmll_fetcher_kind kind;
     void *backend_impl_;
-    size_t (*fetch_range_impl_)(struct hmll_context *, void *, struct hmll_range, const struct hmll_device_buffer *);
+    struct hmll_fetch_range (*fetch_range_impl_)(struct hmll_context *, void *, struct hmll_range, struct hmll_device_buffer);
 };
 typedef struct hmll_fetcher hmll_fetcher_t;
 
