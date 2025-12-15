@@ -17,12 +17,12 @@ int hmll_io_uring_slot_find_available(const long mask)
     return pos == 0 ? -1 : pos - 1;
 }
 
-void hmll_io_uring_set_slot_busy(long *mask, const unsigned int slot)
+void hmll_io_uring_slot_set_busy(long *mask, const unsigned int slot)
 {
     *mask |= 1 << slot;
 }
 
-void hmll_io_uring_set_slot_available(long *mask, const unsigned int slot)
+void hmll_io_uring_slot_set_available(long *mask, const unsigned int slot)
 {
     *mask &= ~(1 << slot);
 }
@@ -62,7 +62,7 @@ struct hmll_fetch_range hmll_io_uring_fetch_range_to_cpu(struct hmll_context *ct
     while ((slot = hmll_io_uring_slot_find_available(fetcher->iobusy)) != -1 && n_submitted < a_size) {
         struct io_uring_sqe *sqe;
         if ((sqe = io_uring_get_sqe(&fetcher->ioring)) != NULL) {
-            hmll_io_uring_set_slot_busy(&fetcher->iobusy, slot);
+            hmll_io_uring_slot_set_busy(&fetcher->iobusy, slot);
 
             const size_t remaining = a_size - n_submitted;
             const size_t to_read = remaining < HMLL_URING_BUFFER_SIZE ? remaining : HMLL_URING_BUFFER_SIZE;
