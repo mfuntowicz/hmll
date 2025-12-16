@@ -1,36 +1,7 @@
 #include "hmll/unix/iouring.h"
 
-#include <limits.h>
 #include <stdlib.h>
-
 #include "hmll/hmll.h"
-
-static int hmll_io_uring_is_aligned(const uintptr_t addr)
-{
-    return (addr & 4095) == 0;
-}
-
-static int hmll_io_uring_slot_find_available(const long long mask)
-{
-    const int pos = __builtin_ffsll(~mask);
-    return pos == 0 ? -1 : pos - 1;
-}
-
-static void hmll_io_uring_slot_set_busy(long long *mask, const unsigned int slot)
-{
-    *mask |= 1LL << slot;
-}
-
-static void hmll_io_uring_slot_set_available(long long *mask, const unsigned int slot)
-{
-    *mask &= ~(1LL << slot);
-}
-
-void hmll_io_uring_clear_payload(struct hmll_io_uring_user_payload *pyld)
-{
-    pyld->discard = 0;
-    pyld->slot = UINT_MAX;
-}
 
 static struct hmll_fetch_range hmll_io_uring_fetch_range_to_cpu(struct hmll_context *ctx, struct hmll_fetcher_io_uring *fetcher, struct hmll_range range, const struct hmll_device_buffer dst)
 {

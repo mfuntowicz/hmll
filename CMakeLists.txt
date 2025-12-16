@@ -110,10 +110,16 @@ if(${HMLL_BUILD_TESTS})
     include(CTest)
     include(Catch)
 
-    add_executable(libhmll_tests
+    set(HMLL_TESTS_SRC
             tests/tests_hmll_status.cpp
-            tests/test_hmll_dtype.cpp
-            tests/test_hmll_tensor_specs.cpp)
+            tests/tests_hmll_dtype.cpp
+            tests/tests_hmll_tensor_specs.cpp)
+
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND ${HMLL_ENABLE_IO_URING})
+        list(APPEND HMLL_TESTS_SRC tests/tests_hmll_io_uring.cpp)
+    endif()
+
+    add_executable(libhmll_tests ${HMLL_TESTS_SRC})
     target_link_libraries(libhmll_tests PRIVATE Catch2::Catch2WithMain libhmll)
     catch_discover_tests(libhmll_tests)
 endif()

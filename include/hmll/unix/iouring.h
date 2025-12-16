@@ -9,17 +9,30 @@
 #define PAGE_ALIGNED_UP(x) (((x) + ALIGNMENT - 1) & ~(ALIGNMENT - 1))
 #define PAGE_ALIGNED_DOWN(x) ((x) & ~(ALIGNMENT - 1))
 
-#include <hmll/types.h>
-#include <hmll/fetcher.h>
 #include <liburing.h>
+#include "hmll/types.h"
+#include "hmll/fetcher.h"
 
-struct hmll_io_uring_user_payload
+static inline int hmll_io_uring_is_aligned(const uintptr_t addr)
 {
-    // Positive is from the start, negative is from the end
-    ssize_t discard;
-    unsigned int slot;
-};
-typedef struct hmll_io_uring_user_payload hmll_io_uring_user_payload_t;
+    return (addr & 4095) == 0;
+}
+
+static inline int hmll_io_uring_slot_find_available(const long long mask)
+{
+    const int pos = __builtin_ffsll(~mask);
+    return pos == 0 ? -1 : pos - 1;
+}
+
+static inline void hmll_io_uring_slot_set_busy(long long *mask, const unsigned int slot)
+{
+    *mask |= 1LL << slot;
+}
+
+static inline void hmll_io_uring_slot_set_available(long long *mask, const unsigned int slot)
+{
+    *mask &= ~(1LL << slot);
+}
 
 struct hmll_fetcher_io_uring {
     struct io_uring ioring;
