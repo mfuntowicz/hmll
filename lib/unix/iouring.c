@@ -48,6 +48,8 @@ static struct hmll_fetch_range hmll_io_uring_fetch_range_to_cpu(struct hmll_cont
 
     size_t b_read      = 0;
     size_t b_submitted = 0;
+    int    inflight    = 0;
+
     while (b_read < a_size) {
         while (b_submitted < a_size) {
             const int slot = hmll_io_uring_slot_find_available(fetcher->iobusy);
@@ -69,6 +71,15 @@ static struct hmll_fetch_range hmll_io_uring_fetch_range_to_cpu(struct hmll_cont
             io_uring_prep_read(sqe, 0, req_addr, to_read, file_offset);
 
             b_submitted += to_read;
+            ++inflight;
+        }
+
+        if (inflight > 0) {
+            const int to_wait = (inflight < 8) ? inflight : 8;
+
+            // Use submit_and_wait to flush the SQEs we just added AND wait in one syscall.
+            const int ret = io_uring_submit_and_wait(&fetcher->ioring, to_wait);
+            if (ret < 0) goto return_io_error;
         }
 
         struct io_uring_cqe *cqe;
@@ -79,6 +90,7 @@ static struct hmll_fetch_range hmll_io_uring_fetch_range_to_cpu(struct hmll_cont
         unsigned head, count = 0;
         io_uring_for_each_cqe(&fetcher->ioring, head, cqe) {
             count++;
+            --inflight;
 
             if (cqe->res < 0) goto return_io_error;
             b_read += cqe->res;

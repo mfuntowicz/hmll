@@ -3,7 +3,7 @@
 
 // The queue-depth matchs the number of slot (bits) allocable through iobusy var
 #define HMLL_URING_QUEUE_DEPTH sizeof(long long) * 8
-#define HMLL_URING_BUFFER_SIZE (256U * 1024)
+#define HMLL_URING_BUFFER_SIZE (128U * 1024)
 
 #define ALIGNMENT 4096U
 #define PAGE_ALIGNED_UP(x) (((x) + ALIGNMENT - 1) & ~(ALIGNMENT - 1))
