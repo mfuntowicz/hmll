@@ -8,7 +8,6 @@
 
 TEST_CASE("success", "[status]")
 {
-    REQUIRE(hmll_success(HMLL_SUCCEEDED));
-    REQUIRE(hmll_success({HMLL_SUCCESS, nullptr}));
-    REQUIRE(hmll_success({HMLL_SUCCESS, "With a message"}));
+    REQUIRE(hmll_success(HMLL_ERR_SUCCESS));
+    REQUIRE_FALSE(hmll_has_error(HMLL_ERR_SUCCESS));
 }
