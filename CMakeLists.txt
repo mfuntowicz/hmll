@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20.0)
+cmake_minimum_required(VERSION 3.16.0)
 
 project(hmll LANGUAGES C CXX)
 set(CMAKE_C_STANDARD 11)
