@@ -79,7 +79,7 @@ target_include_directories(libhmll PUBLIC
 target_compile_options(libhmll PRIVATE $<$<COMPILE_LANGUAGE:C>:-Wall -Werror -Wextra -Wpedantic>)
 target_link_libraries(libhmll ${HMLL_LIBRARIES})
 
-if(${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     target_compile_definitions(libhmll PUBLIC DEBUG=1)
 endif()
 
