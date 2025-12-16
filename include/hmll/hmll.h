@@ -21,6 +21,7 @@ extern "C" {
 #endif
 #endif
 
+#define HMLL_FALSE   0u
 #define HMLL_SUCCESS 0U
 
 #include "fetcher.h"

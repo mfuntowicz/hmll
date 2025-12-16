@@ -49,7 +49,7 @@ int main(const int argc, const char** argv)
         float sum = 0;
         for (size_t i = 0; i < numel; ++i) sum += bf16_ptr[i];
 
-        printf("Sum: %f", sum);
+        printf("Sum: %f\n", sum);
     }
 
     if (hmll_has_error(hmll_get_error(&ctx)))

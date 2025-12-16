@@ -6,32 +6,25 @@
 
 #include "hmll/hmll.h"
 
-bool hmll_io_uring_is_aligned(const uintptr_t addr)
+int hmll_io_uring_is_aligned(const uintptr_t addr)
 {
     return (addr & 4095) == 0;
 }
 
-int hmll_io_uring_slot_find_available(const long mask)
+int hmll_io_uring_slot_find_available(const long long mask)
 {
-    const int pos = __builtin_ffsl(~mask);
+    const int pos = __builtin_ffsll(~mask);
     return pos == 0 ? -1 : pos - 1;
 }
 
-void hmll_io_uring_slot_set_busy(long *mask, const unsigned int slot)
+void hmll_io_uring_slot_set_busy(long long *mask, const unsigned int slot)
 {
-    *mask |= 1 << slot;
+    *mask |= 1LL << slot;
 }
 
-void hmll_io_uring_slot_set_available(long *mask, const unsigned int slot)
+void hmll_io_uring_slot_set_available(long long *mask, const unsigned int slot)
 {
-    *mask &= ~(1 << slot);
-}
-
-void hmll_io_uring_set_payload(struct hmll_io_uring_user_payload *pyld, const unsigned int slot, const unsigned int discard, const hmll_io_uring_discard_direction_t direction)
-{
-    const ssize_t to_discard = direction == HMLL_DISCARD_FROM_START ? (ssize_t)discard : -discard;
-    pyld->discard = to_discard;
-    pyld->slot = slot;
+    *mask &= ~(1LL << slot);
 }
 
 void hmll_io_uring_clear_payload(struct hmll_io_uring_user_payload *pyld)
@@ -54,28 +47,28 @@ struct hmll_fetch_range hmll_io_uring_fetch_range_to_cpu(struct hmll_context *ct
     const size_t a_end = PAGE_ALIGNED_UP(range.end);
     const size_t a_size = a_end - a_start;
 
-    // size_t n_read = 0;
-    size_t n_submitted = 0;
+    const size_t n_bytes = range.end - range.start;
+    char *ptr = dst.ptr;
+    size_t b_read = 0;
+    size_t b_submitted = 0;
 
     // Initial submission: fill the queue
     int slot;
-    while ((slot = hmll_io_uring_slot_find_available(fetcher->iobusy)) != -1 && n_submitted < a_size) {
+    while ((slot = hmll_io_uring_slot_find_available(fetcher->iobusy)) != -1 && b_submitted < a_size) {
         struct io_uring_sqe *sqe;
         if ((sqe = io_uring_get_sqe(&fetcher->ioring)) != NULL) {
             hmll_io_uring_slot_set_busy(&fetcher->iobusy, slot);
 
-            const size_t remaining = a_size - n_submitted;
-            const size_t to_read = remaining < HMLL_URING_BUFFER_SIZE ? remaining : HMLL_URING_BUFFER_SIZE;
-            const size_t offset = a_start + n_submitted;
-
-            struct hmll_io_uring_user_payload *payload = fetcher->iopylds + slot;
-            hmll_io_uring_set_payload(payload, slot, 0, HMLL_DISCARD_FROM_START);
+            const size_t remaining = a_size - b_submitted;
+            const size_t to_read = remaining < HMLL_URING_BUFFER_SIZE ? PAGE_ALIGNED_UP(remaining) : HMLL_URING_BUFFER_SIZE;
+            const size_t offset = a_start + b_submitted;
 
             io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
-            io_uring_sqe_set_data(sqe, payload);
-            io_uring_prep_read(sqe, 0, (char *)dst.ptr + n_submitted, to_read, offset);
+            io_uring_sqe_set_data64(sqe, slot);
+            io_uring_prep_read(sqe, 0, ptr, to_read, offset);
 
-            n_submitted += to_read;
+            ptr += to_read;
+            b_submitted += to_read;
         } else {
             break;
         }
@@ -84,7 +77,7 @@ struct hmll_fetch_range hmll_io_uring_fetch_range_to_cpu(struct hmll_context *ct
     io_uring_submit(&fetcher->ioring);
 
     // Process completions and resubmit as slots become available
-    while (n_submitted > 0)
+    while (b_read < n_bytes)
     {
         struct io_uring_cqe *cqe;
         if (io_uring_wait_cqe(&fetcher->ioring, &cqe) < 0)
@@ -92,12 +85,45 @@ struct hmll_fetch_range hmll_io_uring_fetch_range_to_cpu(struct hmll_context *ct
 
         io_uring_cqe_seen(&fetcher->ioring, cqe);
 
-        if (cqe->res <= 0)
+        if (cqe->res <= 0) {
+#ifdef DEBUG
+            printf("Error reading %i -> %s\n", cqe->res, strerror(-cqe->res));
+#endif
             goto return_io_error;
+        }
 
-        const struct hmll_io_uring_user_payload *payload = (struct hmll_io_uring_user_payload*) cqe->user_data;
-        hmll_io_uring_slot_set_available(&fetcher->iobusy, payload->slot);
-        n_submitted -= cqe->res;
+        const __u64 cb_slot = cqe->user_data;
+        b_read += cqe->res;
+
+        // Resubmit a new chunk directly
+        if (b_submitted < n_bytes) {
+            struct io_uring_sqe *sqe;
+            if ((sqe = io_uring_get_sqe(&fetcher->ioring)) != NULL) {
+                hmll_io_uring_slot_set_busy(&fetcher->iobusy, slot);
+
+                const size_t remaining = a_size - b_submitted;
+                const size_t to_read = remaining < HMLL_URING_BUFFER_SIZE ? PAGE_ALIGNED_UP(remaining) : HMLL_URING_BUFFER_SIZE;
+                const size_t offset = a_start + b_submitted;
+
+                io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
+                io_uring_sqe_set_data64(sqe, cb_slot);
+                io_uring_prep_read(sqe, 0, ptr, to_read, offset);
+
+                ptr += to_read;
+                b_submitted += to_read;
+
+                io_uring_submit(&fetcher->ioring);
+            } else {
+                // Should not happen, we just released a slot?
+                break;
+            }
+        } else {
+            hmll_io_uring_slot_set_available(&fetcher->iobusy, cb_slot);
+        }
+
+#ifdef DEBUG
+        printf("Read %zu / %zu (%f)\n", b_read, n_bytes, (float)b_read / n_bytes * 100.0f);
+#endif
     }
 
     return (struct hmll_fetch_range){ range.start - a_start, a_start + (range.end - range.start) };
@@ -143,7 +169,7 @@ enum hmll_error_code hmll_io_uring_init(struct hmll_context *ctx, struct hmll_fe
 
     struct io_uring_params params = {0};
     params.flags |= IORING_SETUP_SQPOLL;
-    params.sq_thread_idle = 250;
+    params.sq_thread_idle = 500;
 
     int iofiles[1];
     iofiles[0] = ctx->source.fd;
