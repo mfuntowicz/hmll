@@ -2,8 +2,8 @@
 #define HMLL_FETCHER_IOURING_H
 
 // The queue-depth matchs the number of slot (bits) allocable through iobusy var
-#define HMLL_URING_QUEUE_DEPTH 64U
-#define HMLL_URING_BUFFER_SIZE (512U * 1024U)
+#define HMLL_URING_QUEUE_DEPTH sizeof(long long) * 8
+#define HMLL_URING_BUFFER_SIZE (256U * 1024)
 
 #define ALIGNMENT 4096U
 #define PAGE_ALIGNED_UP(x) (((x) + ALIGNMENT - 1) & ~(ALIGNMENT - 1))
@@ -23,7 +23,6 @@ typedef struct hmll_io_uring_user_payload hmll_io_uring_user_payload_t;
 
 struct hmll_fetcher_io_uring {
     struct io_uring ioring;
-    struct hmll_io_uring_user_payload iopylds[HMLL_URING_QUEUE_DEPTH];
     long long iobusy;
 };
 typedef struct hmll_fetcher_io_uring hmll_fetcher_io_uring_t;

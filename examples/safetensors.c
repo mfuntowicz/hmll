@@ -5,6 +5,10 @@
 #include <hmll/hmll.h>
 #include <sys/mman.h>
 
+#define ALIGNMENT 4096U
+#define PAGE_ALIGNED_UP(x) (((x) + ALIGNMENT - 1) & ~(ALIGNMENT - 1))
+#define PAGE_ALIGNED_DOWN(x) ((x) & ~(ALIGNMENT - 1))
+
 int main(const int argc, const char** argv)
 {
     if (argc < 2) {
@@ -20,10 +24,13 @@ int main(const int argc, const char** argv)
 
     if (hmll_success(hmll_get_error(&ctx)))
     {
-        size_t numel = hmll_numel(&specs);
-        size_t elmtsize = hmll_sizeof(specs.dtype);
-        void *ptr = hmll_get_hugepage_buffer(&ctx, numel * elmtsize);
-        hmll_device_buffer_t buffer = {ptr, numel * elmtsize, HMLL_DEVICE_CPU};
+
+        const size_t alstart = PAGE_ALIGNED_DOWN(specs.start);
+        const size_t alend = PAGE_ALIGNED_UP(specs.end);
+        const size_t alsize = alend - alstart;
+
+        void *ptr = hmll_get_hugepage_buffer(&ctx, alsize);
+        hmll_device_buffer_t buffer = {ptr, alsize, HMLL_DEVICE_CPU};
 
         // Start timing
         struct timespec start, end;
@@ -37,23 +44,24 @@ int main(const int argc, const char** argv)
         double elapsed_ms = elapsed_ns / 1e6;
         double elapsed_s = elapsed_ns / 1e9;
 
-        // Calculate throughput
-        double size_mb = (double)(numel * hmll_sizeof(specs.dtype)) / (1024.0 * 1024.0);
-        double throughput_mbps = size_mb / elapsed_s;
+        if (hmll_success(hmll_get_error(&ctx))) {
+            // Calculate throughput
+            double size_mb = (double)(alsize) / (1024.0 * 1024.0);
+            double throughput_mbps = size_mb / elapsed_s;
 
-        printf("Fetch completed in %.3f ms (%.6f s)\n", elapsed_ms, elapsed_s);
-        printf("Tensor size: %.2f MB\n", size_mb);
-        printf("Throughput: %.2f MB/s\n", throughput_mbps);
+            printf("Fetch completed in %.3f ms (%.6f s)\n", elapsed_ms, elapsed_s);
+            printf("Tensor size: %.2f MB\n", size_mb);
+            printf("Throughput: %.2f MB/s\n", throughput_mbps);
 
-        __bf16 *bf16_ptr = ptr + offsets.start;
-        float sum = 0;
-        for (size_t i = 0; i < numel; ++i) sum += bf16_ptr[i];
+            __bf16 *bf16_ptr = ptr + offsets.start;
+            float sum = 0;
+            for (size_t i = 0; i < hmll_numel(&specs); ++i) sum += bf16_ptr[i];
 
-        printf("Sum: %f\n", sum);
+            printf("Sum: %f\n", sum);
+        } else {
+            printf("Got an error while reading the safetensors: %s\n", hmll_strerr(ctx.error));
+        }
     }
-
-    if (hmll_has_error(hmll_get_error(&ctx)))
-        printf("Got an error while reading the safetensors: %s\n", hmll_strerr(ctx.error));
 
     return ctx.error;
 }
