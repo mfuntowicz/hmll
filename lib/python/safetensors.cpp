@@ -11,7 +11,7 @@ namespace nb = nanobind;
 
 void init_safetensors(nb::module_& m)
 {
-    m.def("open_safetensors", [](const std::string& path) -> HmllContext
+    m.def("safetensors", [](const std::string& path) -> HmllContext
     {
         return HmllContext::open(path, HMLL_SAFETENSORS, HMLL_MMAP | HMLL_SKIP_METADATA);
     });
