@@ -9,6 +9,12 @@ class HmllFetcher
 
 public:
     explicit HmllFetcher(hmll_fetcher fetcher): fetcher_(fetcher) {}
+
+    [[nodiscard]]
+    hmll_device_t device() const;
+
+    [[nodiscard]]
+    hmll_fetcher_kind_t kind() const;
 };
 
 #endif // PYHMLL_FETCHER_HPP

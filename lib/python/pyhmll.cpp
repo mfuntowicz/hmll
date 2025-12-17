@@ -3,7 +3,6 @@
 
 namespace nb = nanobind;
 
-
 void init_context(const nb::module_&);
 void init_fetcher(const nb::module_&);
 void init_safetensors(nb::module_&);

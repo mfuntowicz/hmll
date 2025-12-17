@@ -23,6 +23,7 @@ typedef struct hmll_range hmll_range_t;
 struct hmll_fetcher
 {
     enum hmll_fetcher_kind kind;
+    enum hmll_device device;
     void *backend_impl_;
     struct hmll_fetch_range (*fetch_range_impl_)(struct hmll_context *, void *, struct hmll_range, struct hmll_device_buffer);
 };
