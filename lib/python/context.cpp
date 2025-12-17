@@ -25,6 +25,12 @@ HmllTensorSpecs HmllContext::tensor(const std::string& name) const
     }
 }
 
+HmllFetcher HmllContext::fetcher(const hmll_device_t device, hmll_fetcher_kind_t kind) const
+{
+    auto fetcher = hmll_fetcher_init(ctx_, device, kind);
+    return HmllFetcher(fetcher);
+}
+
 HmllContext HmllContext::open(const std::string& path, const hmll_file_kind kind, const int flags)
 {
     const auto ctx = new hmll_context_t();
@@ -38,10 +44,19 @@ HmllContext HmllContext::open(const std::string& path, const hmll_file_kind kind
 
 void init_context(const nb::module_& m)
 {
+    nb::enum_<hmll_device_t>(m, "HmllDevice",
+        R"pbdoc(Define all the targettable devices)pbdoc"
+    ).value("CPU", HMLL_DEVICE_CPU, "Target CPU device");
+
+    nb::enum_<hmll_fetcher_kind_t>(m, "HmllFetcherKind",
+        R"pbdoc(Define all the available fetcher)pbdoc"
+    ).value("AUTO", HMLL_FETCHER_AUTO, "Automatically choose the most appropriate fetcher");
+
     nb::class_<HmllContext>(m, "HmllContext",
         R"pbdoc(Hold all the information about the current state of the HMLL lib)pbdoc"
     )
     .def_prop_ro("num_tensors", &HmllContext::num_tensors)
+    .def("fetcher", &HmllContext::fetcher, "device"_a.sig("HmllDevice"), "kind"_a.sig("HmllFetcherKind"))
     .def("__contains__", &HmllContext::contains, "name"_a.sig("string"))
     .def("__getitem__", &HmllContext::tensor, "name"_a.sig("string"))
     .def("__enter__", [](const HmllContext& self) { return self; })

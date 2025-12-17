@@ -6,7 +6,7 @@ fetchcontent_declare(
 )
 fetchcontent_makeavailable(nanobind)
 
-nanobind_add_module(_pyhmll_impl context.cpp specs.cpp safetensors.cpp pyhmll.cpp)
+nanobind_add_module(_pyhmll_impl context.cpp fetcher.cpp specs.cpp safetensors.cpp pyhmll.cpp)
 target_link_libraries(_pyhmll_impl PRIVATE libhmll)
 set_target_properties(_pyhmll_impl PROPERTIES CXX_STANDARD 17)
 

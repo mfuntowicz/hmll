@@ -2,9 +2,10 @@
 #define PYHMLL_CONTEXT_H
 
 #include <memory>
-#include <optional>
+#include <hmll/fetcher.h>
 #include <hmll/types.h>
 
+#include "fetcher.hpp"
 #include "specs.hpp"
 
 class HmllContext
@@ -39,6 +40,11 @@ public:
     [[nodiscard]]
     HmllTensorSpecs tensor(const std::string& name) const;
 
-    void fetcher() const;
+    /// Create the specified fetcher to efficiently retrieve data from stored tensors
+    /// @param device Target device to write data to
+    /// @param kind Target fetcher type or AUTO to select the most efficient one depending on the system
+    /// @return
+    [[nodiscard]]
+    HmllFetcher fetcher(hmll_device_t device, hmll_fetcher_kind_t kind) const;
 };
 #endif // PYHMLL_CONTEXT_H
