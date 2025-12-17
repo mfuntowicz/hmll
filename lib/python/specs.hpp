@@ -1,6 +1,7 @@
 #ifndef PYHMLL_SPECS_HPP
 #define PYHMLL_SPECS_HPP
 
+#include <tuple>
 #include <vector>
 #include <hmll/types.h>
 
@@ -17,6 +18,15 @@ public:
 
     [[nodiscard]]
     size_t rank() const;
+
+    [[nodiscard]]
+    size_t start() const;
+
+    [[nodiscard]]
+    size_t end() const;
+
+    [[nodiscard]]
+    std::tuple<size_t, size_t> offsets() const;
 
     [[nodiscard]]
     std::vector<size_t> shape() const;

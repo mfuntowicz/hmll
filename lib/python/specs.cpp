@@ -4,6 +4,7 @@
 
 #include "specs.hpp"
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/tuple.h>
 #include <nanobind/stl/vector.h>
 
 namespace nb = nanobind;
@@ -11,6 +12,10 @@ namespace nb = nanobind;
 hmll_tensor_data_type_t HmllTensorSpecs::dtype() const { return specs.dtype; }
 
 size_t HmllTensorSpecs::rank() const { return specs.rank; }
+
+size_t HmllTensorSpecs::start() const { return specs.start; }
+size_t HmllTensorSpecs::end() const { return specs.end; }
+std::tuple<size_t, size_t> HmllTensorSpecs::offsets() const { return { specs.start, specs.end }; }
 
 std::vector<size_t> HmllTensorSpecs::shape() const
 {
@@ -39,6 +44,33 @@ void init_specs(const nb::module_& m)
 
           Returns:
             int: The rank of the tensor.
+        )pbdoc")
+    .def_prop_ro(
+    "start", &HmllTensorSpecs::start,
+    nb::sig("def start(self) -> int"),
+      R"pbdoc(
+          Retrieve the tensor's start offset.
+
+          Returns:
+            int: The start offset of the tensor.
+        )pbdoc")
+    .def_prop_ro(
+    "end", &HmllTensorSpecs::end,
+    nb::sig("def end(self) -> int"),
+      R"pbdoc(
+          Retrieve the tensor's end offset.
+
+          Returns:
+            int: The end offset of the tensor.
+        )pbdoc")
+    .def_prop_ro(
+    "offsets", &HmllTensorSpecs::offsets,
+    nb::sig("def offsets(self) -> tuple(int, int)"),
+      R"pbdoc(
+          Retrieve the tensor' start and end offsets as a tuple.
+
+          Returns:
+            int: The start and end offsets of the tensor.
         )pbdoc")
     .def_prop_ro(
         "shape", [](const HmllTensorSpecs& specs) { return nb::cast(specs.shape()); },
