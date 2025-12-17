@@ -5,6 +5,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 set(CMAKE_C_VISIBILITY_PRESET hidden)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 include(FetchContent)
 
@@ -12,6 +13,7 @@ include(FetchContent)
 # Build Arguments
 ###########################################################
 option(HMLL_ENABLE_CUDA "Flag to build with CUDA capabilities" OFF)
+option(HMLL_ENABLE_PYTHON "Flag to build Python binding" OFF)
 option(HMLL_BUILD_STATIC "Flag indicating if cmake should generate a static build for libhmll" OFF)
 option(HMLL_BUILD_EXAMPLES "Flag indicating if cmake should build examples" OFF)
 option(HMLL_BUILD_TESTS "Flag indicating if cmake should build unit-tests" OFF)
@@ -48,6 +50,12 @@ if(${HMLL_ENABLE_CUDA})
     list(APPEND HMLL_LIBRARIES CUDA::cudart)
     message(STATUS "Enabling CUDA support")
 endif()
+
+
+if(${HMLL_ENABLE_PYTHON})
+    add_subdirectory(lib/python)
+endif()
+
 ###########################################################
 # Definition of libhmll
 ###########################################################
