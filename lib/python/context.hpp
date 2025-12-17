@@ -38,5 +38,7 @@ public:
     /// @return
     [[nodiscard]]
     HmllTensorSpecs tensor(const std::string& name) const;
+
+    void fetcher() const;
 };
 #endif // PYHMLL_CONTEXT_H

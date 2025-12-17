@@ -4,12 +4,16 @@
 #include <vector>
 #include <hmll/types.h>
 
+
 class HmllTensorSpecs
 {
     hmll_tensor_specs_t specs;
 
 public:
     explicit HmllTensorSpecs(hmll_tensor_specs_t specs) : specs(specs) {}
+
+    [[nodiscard]]
+    hmll_tensor_data_type_t dtype() const;
 
     [[nodiscard]]
     size_t rank() const;

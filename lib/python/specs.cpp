@@ -8,6 +8,8 @@
 
 namespace nb = nanobind;
 
+hmll_tensor_data_type_t HmllTensorSpecs::dtype() const { return specs.dtype; }
+
 size_t HmllTensorSpecs::rank() const { return specs.rank; }
 
 std::vector<size_t> HmllTensorSpecs::shape() const
@@ -19,8 +21,16 @@ std::vector<size_t> HmllTensorSpecs::shape() const
 
 void init_specs(const nb::module_& m)
 {
+    nb::enum_<hmll_tensor_data_type_t>(m, "HmllDataType",
+        R"pbdoc(Describe the underlying element type for each value stored in a tensor)pbdoc")
+        .value("BFLOAT16", HMLL_DTYPE_BFLOAT16)
+        .value("FLOAT32", HMLL_DTYPE_FLOAT32)
+        .value("FLOAT16", HMLL_DTYPE_FLOAT16);
+
     nb::class_<HmllTensorSpecs>(m, "HmllTensorSpecs",
         R"pbdoc(Contains all the information about a tensor)pbdoc")
+    .def_prop_ro("dtype", &HmllTensorSpecs::dtype,
+        nb::sig("def dtype(self) -> HmllDataType"))
     .def_prop_ro(
         "rank", &HmllTensorSpecs::rank,
         nb::sig("def rank(self) -> int"),
