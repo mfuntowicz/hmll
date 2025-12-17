@@ -19,9 +19,9 @@ bool HmllContext::contains(const std::string &name) const { return hmll_contains
 HmllTensorSpecs HmllContext::tensor(const std::string& name) const
 {
     if (const auto lookup = hmll_get_tensor_specs(ctx_, name.c_str()); !lookup.found) {
-        throw nb::key_error();
+        throw nb::key_error(name.c_str());
     } else {
-        return HmllTensorSpecs(std::move(lookup.specs));
+        return HmllTensorSpecs(lookup.specs);
     }
 }
 

@@ -10,7 +10,6 @@ class HmllTensorSpecs
 
 public:
     explicit HmllTensorSpecs(hmll_tensor_specs_t specs) : specs(specs) {}
-    explicit HmllTensorSpecs(hmll_tensor_specs_t&& specs) : specs(specs) {}
 
     [[nodiscard]]
     size_t rank() const;
