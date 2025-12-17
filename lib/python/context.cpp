@@ -1,4 +1,4 @@
-#include "context.h"
+#include "context.hpp"
 #include <memory>
 #include <optional>
 #include <hmll/hmll.h>
@@ -11,14 +11,19 @@ using namespace nb::literals;
 
 
 bool HmllContext::has_error() const { return hmll_has_error(hmll_get_error(ctx_)); }
-size_t HmllContext::num_tensors() const { return ctx_->num_tensors; }
-bool HmllContext::contains(const std::string &name) const
-{
-    // TODO(mfuntowicz): Change that because it would put the ctx in error, while it's recoverable error
-    hmll_get_tensor_specs(ctx_, name.c_str());
-    return hmll_success(hmll_get_error(ctx_));
-}
 
+size_t HmllContext::num_tensors() const { return ctx_->num_tensors; }
+
+bool HmllContext::contains(const std::string &name) const { return hmll_contains(ctx_, name.c_str()) == 1; }
+
+HmllTensorSpecs HmllContext::tensor(const std::string& name) const
+{
+    if (const auto lookup = hmll_get_tensor_specs(ctx_, name.c_str()); !lookup.found) {
+        throw nb::key_error();
+    } else {
+        return HmllTensorSpecs(std::move(lookup.specs));
+    }
+}
 
 HmllContext HmllContext::open(const std::string& path, const hmll_file_kind kind, const int flags)
 {
@@ -38,6 +43,7 @@ void init_context(const nb::module_& m)
     )
     .def_prop_ro("num_tensors", &HmllContext::num_tensors)
     .def("__contains__", &HmllContext::contains, "name"_a.sig("string"))
+    .def("__getitem__", &HmllContext::tensor, "name"_a.sig("string"))
     .def("__enter__", [](const HmllContext& self) { return self; })
     .def("__exit__", [](
             const HmllContext& self,

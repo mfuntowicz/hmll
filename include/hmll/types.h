@@ -82,6 +82,14 @@ struct hmll_tensor_specs
 };
 typedef struct hmll_tensor_specs hmll_tensor_specs_t;
 
+struct hmll_tensor_lookup_result
+{
+    struct hmll_tensor_specs specs;
+    size_t index;
+    int found;
+};
+typedef struct hmll_tensor_lookup_result hmll_tensor_lookup_result_t;
+
 struct hmll_table
 {
     struct hmll_tensor_specs *tensors;

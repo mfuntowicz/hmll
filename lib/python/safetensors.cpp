@@ -5,7 +5,7 @@
 #include <hmll/hmll.h>
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
-#include "context.h"
+#include "context.hpp"
 
 namespace nb = nanobind;
 
