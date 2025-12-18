@@ -3,6 +3,11 @@
 
 #include "hmll/types.h"
 
+
+#define PAGE_ALIGNED_UP(x, align) (((x) + align - 1) & ~(align - 1))
+#define PAGE_ALIGNED_DOWN(x, align) ((x) & ~(align - 1))
+
+
 struct hmll_fetch_range {
     size_t start;
     size_t end;

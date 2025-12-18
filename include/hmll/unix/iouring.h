@@ -6,8 +6,6 @@
 #define HMLL_URING_BUFFER_SIZE (128U * 1024)
 
 #define ALIGNMENT 4096U
-#define PAGE_ALIGNED_UP(x) (((x) + ALIGNMENT - 1) & ~(ALIGNMENT - 1))
-#define PAGE_ALIGNED_DOWN(x) ((x) & ~(ALIGNMENT - 1))
 
 #include <liburing.h>
 #include "hmll/types.h"

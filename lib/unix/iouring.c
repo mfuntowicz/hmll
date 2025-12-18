@@ -8,8 +8,8 @@ static struct hmll_fetch_range hmll_io_uring_fetch_range_to_cpu(struct hmll_cont
     if (hmll_has_error(hmll_get_error(ctx)))
         return (struct hmll_fetch_range) {0};
 
-    const size_t a_start = PAGE_ALIGNED_DOWN(range.start);
-    const size_t a_end = PAGE_ALIGNED_UP(range.end);
+    const size_t a_start = PAGE_ALIGNED_DOWN(range.start, ALIGNMENT);
+    const size_t a_end = PAGE_ALIGNED_UP(range.end, ALIGNMENT);
     const size_t a_size = a_end - a_start;
 
     if (!hmll_io_uring_is_aligned((uintptr_t)dst.ptr)) {
@@ -50,7 +50,8 @@ static struct hmll_fetch_range hmll_io_uring_fetch_range_to_cpu(struct hmll_cont
 
             // Use submit_and_wait to flush the SQEs we just added AND wait in one syscall.
             const int ret = io_uring_submit_and_wait(&fetcher->ioring, to_wait);
-            if (ret < 0) goto return_io_error;
+            if (ret < 0)
+                goto return_io_error;
         }
 
         struct io_uring_cqe *cqe;
@@ -63,7 +64,13 @@ static struct hmll_fetch_range hmll_io_uring_fetch_range_to_cpu(struct hmll_cont
             count++;
             --inflight;
 
-            if (cqe->res < 0) goto return_io_error;
+            if (cqe->res < 0)
+            {
+#include <string.h>
+                const char *err = strerror(-cqe->res);
+                printf("Error: %s", err);
+                goto return_io_error;
+            }
             b_read += cqe->res;
 
             const uint64_t cb_slot = cqe->user_data;
@@ -120,6 +127,7 @@ enum hmll_error_code hmll_io_uring_init(struct hmll_context *ctx, struct hmll_fe
     io_uring_queue_init_params(HMLL_URING_QUEUE_DEPTH, &backend->ioring, &params);
     io_uring_register_files(&backend->ioring, iofiles, 1);
 
+    fetcher->device = device;
     fetcher->backend_impl_ = backend;
     fetcher->fetch_range_impl_ = hmll_io_uring_fetch_range_impl_;
 

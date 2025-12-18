@@ -5,6 +5,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
+#include "fetcher.hpp"
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -27,8 +28,10 @@ HmllTensorSpecs HmllContext::tensor(const std::string& name) const
 
 HmllFetcher HmllContext::fetcher(const hmll_device_t device, hmll_fetcher_kind_t kind) const
 {
-    auto fetcher = hmll_fetcher_init(ctx_, device, kind);
-    return HmllFetcher(fetcher);
+    auto fetcher_obj = hmll_fetcher_init(ctx_, device, kind);
+    // Cast 'this' to get the Python object wrapper
+    nb::object py_self = nb::cast(this, nb::rv_policy::reference);
+    return HmllFetcher(fetcher_obj, py_self, ctx_);
 }
 
 HmllContext HmllContext::open(const std::string& path, const hmll_file_kind kind, const int flags)
