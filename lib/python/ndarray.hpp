@@ -6,6 +6,9 @@
 
 namespace nb = nanobind;
 
+
+constexpr int kDLPACK_DEVICE_CPU = 1;
+
 // DLPack Dtype Codes
 constexpr nb::dlpack::dtype kBF16_DTYPE = {4, 16, 1};
 constexpr nb::dlpack::dtype kF16_DTYPE  = {2, 16, 1};
@@ -28,7 +31,7 @@ static nb::ndarray<> hmll_to_ndarray(
 
     // 2. Resolve Device (Runtime)
     // You need to map your internal hmll device enum to DLPack codes
-    int32_t device_type = kDLCPU;
+    int32_t device_type = kDLPACK_DEVICE_CPU;
     int32_t device_id = 0;
 
     // Example mapping logic (Adjust to your actual hmll struct!)

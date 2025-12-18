@@ -8,15 +8,6 @@ fetchcontent_declare(
 )
 fetchcontent_makeavailable(nanobind)
 
-### DLPack to exchange tensor in a zero-copy way
-fetchcontent_declare(
-    dlpack
-    GIT_REPOSITORY https://github.com/dmlc/dlpack
-    GIT_TAG v1.2
-)
-
-fetchcontent_makeavailable(dlpack)
-
 nanobind_add_module(_pyhmll_impl NB_STATIC STABLE_ABI LTO context.cpp fetcher.cpp specs.cpp safetensors.cpp pyhmll.cpp)
 nanobind_add_stub(
         _pyhmll_impl_stub
@@ -25,7 +16,7 @@ nanobind_add_stub(
         PYTHON_PATH $<TARGET_FILE_DIR:_pyhmll_impl>
         DEPENDS _pyhmll_impl
 )
-target_link_libraries(_pyhmll_impl PRIVATE libhmll dlpack)
+target_link_libraries(_pyhmll_impl PRIVATE libhmll)
 set_target_properties(_pyhmll_impl PROPERTIES CXX_STANDARD 20)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
