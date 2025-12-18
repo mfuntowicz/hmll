@@ -22,27 +22,37 @@ enum hmll_error_code hmll_get_error(const struct hmll_context *ctx)
     return ctx->error;
 }
 
-struct hmll_tensor_specs hmll_get_tensor_specs(struct hmll_context *ctx, const char *name)
+int hmll_find_by_name(const struct hmll_context *ctx, const char *name)
 {
-    if (hmll_has_error(hmll_get_error(ctx)))
-        return (struct hmll_tensor_specs){0};
-
-    if (ctx->num_tensors == 0) {
-        ctx->error = HMLL_ERR_ALLOCATION_FAILED;
-        return (struct hmll_tensor_specs){0};
-    }
-
     char **names = ctx->table.names;
     for (size_t i = 0; i < ctx->num_tensors; ++i) {
         if (strcmp(name, names[i]) == 0) {
-            return *(ctx->table.tensors + i);
+            return (int)i;
         }
     }
 
-    ctx->error = HMLL_ERR_TENSOR_NOT_FOUND;
-    return (struct hmll_tensor_specs){0};
+    return -1;
 }
 
+int hmll_contains(const struct hmll_context *ctx, const char *name)
+{
+    return hmll_find_by_name(ctx, name) >= 0;
+}
+
+struct hmll_tensor_lookup_result hmll_get_tensor_specs(const struct hmll_context *ctx, const char *name)
+{
+    struct hmll_tensor_lookup_result result = {{0}, 0, HMLL_FALSE };
+    if (!hmll_has_error(hmll_get_error(ctx))) {
+        const int index = hmll_find_by_name(ctx, name);
+        if (index >= 0) {
+            result.found = 1;
+            result.index = index;
+            result.specs = ctx->table.tensors[index];
+        }
+    }
+
+    return result;
+}
 
 // void hmll_destroy(const hmll_context_t *ctx)
 // {

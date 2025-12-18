@@ -3,6 +3,11 @@
 
 #include "hmll/types.h"
 
+
+#define PAGE_ALIGNED_UP(x, align) (((x) + align - 1) & ~(align - 1))
+#define PAGE_ALIGNED_DOWN(x, align) ((x) & ~(align - 1))
+
+
 struct hmll_fetch_range {
     size_t start;
     size_t end;
@@ -23,6 +28,7 @@ typedef struct hmll_range hmll_range_t;
 struct hmll_fetcher
 {
     enum hmll_fetcher_kind kind;
+    enum hmll_device device;
     void *backend_impl_;
     struct hmll_fetch_range (*fetch_range_impl_)(struct hmll_context *, void *, struct hmll_range, struct hmll_device_buffer);
 };

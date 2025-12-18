@@ -50,7 +50,13 @@ struct hmll_fetch_range hmll_fetch_tensor(struct hmll_context *ctx, struct hmll_
     if (hmll_has_error(hmll_get_error(ctx)))
         return (struct hmll_fetch_range){0};
 
-    const struct hmll_tensor_specs specs = hmll_get_tensor_specs(ctx, name);
+    const struct hmll_tensor_lookup_result lookup = hmll_get_tensor_specs(ctx, name);
+    if (lookup.found == HMLL_FALSE) {
+        ctx->error = HMLL_ERR_TENSOR_NOT_FOUND;
+        return (struct hmll_fetch_range){0};
+    }
+
+    const struct hmll_tensor_specs specs = lookup.specs;
     const struct hmll_range range = (struct hmll_range){specs.start, specs.end};
     return hmll_fetch_range(ctx, fetcher, range, dst);
 }

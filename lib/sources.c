@@ -6,7 +6,7 @@
 #endif
 
 
-enum hmll_error_code hmll_open(const char *path, hmll_context_t *ctx, const hmll_file_kind_t kind, const hmll_flags_t flags)
+int hmll_open(const char *path, hmll_context_t *ctx, const hmll_file_kind_t kind, const hmll_flags_t flags)
 {
     hmll_open_mmap(path, ctx);
     if (kind == HMLL_SAFETENSORS)
