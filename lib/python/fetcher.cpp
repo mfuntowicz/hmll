@@ -48,9 +48,8 @@ nb::ndarray<> HmllFetcher::fetch_contiguous(const std::string& name) const
     }
 
     // Let's make sure we are not deleting the buffer before PyTorch releases it
-    nb::capsule deleter(buffer, [](void* p) noexcept {
-        auto* b = static_cast<hmll_device_buffer_t*>(p);
-        if (b) {
+    const nb::capsule deleter(buffer, [](void* p) noexcept {
+        if (const auto* b = static_cast<hmll_device_buffer_t*>(p)) {
             munmap(b->ptr, b->size);
             delete b;
         }
