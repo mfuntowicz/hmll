@@ -47,10 +47,5 @@ public:
     /// @return
     [[nodiscard]]
     HmllFetcher fetcher(hmll_device_t device, hmll_fetcher_kind_t kind) const;
-
-    /// Get the raw context pointer
-    /// @return
-    [[nodiscard]]
-    hmll_context_t* get() const { return ctx_; }
 };
 #endif // PYHMLL_CONTEXT_H
