@@ -1,4 +1,4 @@
-name: Build hmll library
+name: Build pyhmll library
 
 on:
   push:
@@ -32,14 +32,8 @@ jobs:
       - name: Configure CMake
         # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
         # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
-        run: CC=${{ matrix.compiler.cc }} CXX=${{ matrix.compiler.cxx }} cmake -B ${{ github.workspace }}/build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DHMLL_BUILD_STATIC=${{ matrix.static }} -DHMLL_BUILD_TESTS=ON -DHMLL_ENABLE_SANITIZERS=ON
+        run: CC=${{ matrix.compiler.cc }} CXX=${{ matrix.compiler.cxx }} cmake -B ${{ github.workspace }}/build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DHMLL_BUILD_STATIC=${{ matrix.static }} -DHMLL_ENABLE_PYTHON=ON -DHMLL_BUILD_TESTS=ON -DHMLL_ENABLE_SANITIZERS=ON
 
       - name: Build
         # Build your program with the given configuration
         run:  cmake --build ${{ github.workspace }}/build --config ${{env.BUILD_TYPE}}
-
-      - name: Test
-        working-directory: ${{ github.workspace }}/build
-        # Execute tests defined by the CMake configuration.
-        # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
-        run: ctest -C ${{ env.BUILD_TYPE }}
