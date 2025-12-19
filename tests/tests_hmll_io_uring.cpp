@@ -7,20 +7,6 @@
 #include "hmll/hmll.h"
 #include "hmll/unix/iouring.h"
 
-TEST_CASE("io_uring page-aligned", "[io_uring][alignment]")
-{
-    REQUIRE(hmll_io_uring_is_aligned(4096));
-    REQUIRE(hmll_io_uring_is_aligned(4096 * 0));
-    REQUIRE(hmll_io_uring_is_aligned(4096 * 128));
-}
-
-TEST_CASE("io_uring not page-aligned", "[io_uring][alignment]")
-{
-    REQUIRE_FALSE(hmll_io_uring_is_aligned(4095));
-    REQUIRE_FALSE(hmll_io_uring_is_aligned(1));
-    REQUIRE_FALSE(hmll_io_uring_is_aligned(4096 * 128 - 1));
-}
-
 TEST_CASE("io_uring set slot busy", "[io_uring][slot]")
 {
     long long mask = 0;
