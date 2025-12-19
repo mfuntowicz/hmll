@@ -61,7 +61,6 @@ endif()
 # Definition of libhmll
 ###########################################################
 set(LIBHMLL_HEADERS
-        lib/memory.c
         include/hmll/fetcher.h
         include/hmll/hmll.h
         include/hmll/safetensors.h
@@ -72,19 +71,19 @@ set(LIBHMLL_HEADERS
 )
 set(LIBHMLL_SOURCES
         lib/context.c
+        lib/errors.c
         lib/fetcher.c
+        lib/memory.c
         lib/tensors.c
         lib/safetensors.c
         lib/sources.c
         lib/unix/mmap.c
         lib/unix/iouring.c
-        lib/errors.c
-        lib/cuda.c
 )
 
 if(HMLL_ENABLE_CUDA)
     list(APPEND LIBHMLL_HEADERS include/hmll/cuda.h)
-    list(APPEND LIBHMLL_SOURCE include/hmll/cuda.c)
+    list(APPEND LIBHMLL_SOURCE lib/cuda.c)
 endif()
 
 add_library(libhmll ${LIBHMLL_HEADERS} ${LIBHMLL_SOURCES})
