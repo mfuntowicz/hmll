@@ -81,9 +81,9 @@ set(LIBHMLL_SOURCES
         lib/unix/iouring.c
 )
 
-if(HMLL_ENABLE_CUDA)
+if(${HMLL_ENABLE_CUDA})
     list(APPEND LIBHMLL_HEADERS include/hmll/cuda.h)
-    list(APPEND LIBHMLL_SOURCE lib/cuda.c)
+    list(APPEND LIBHMLL_SOURCES lib/cuda.c)
 endif()
 
 add_library(libhmll ${LIBHMLL_HEADERS} ${LIBHMLL_SOURCES})
@@ -128,7 +128,8 @@ if(${HMLL_BUILD_TESTS})
     set(HMLL_TESTS_SRC
             tests/tests_hmll_status.cpp
             tests/tests_hmll_dtype.cpp
-            tests/tests_hmll_tensor_specs.cpp)
+            tests/tests_hmll_tensor_specs.cpp
+            tests/tests_hmll_memory.cpp)
 
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND ${HMLL_ENABLE_IO_URING})
         list(APPEND HMLL_TESTS_SRC tests/tests_hmll_io_uring.cpp)
