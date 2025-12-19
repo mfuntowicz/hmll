@@ -1,10 +1,49 @@
 #include "hmll/unix/iouring.h"
 
 #include <stdlib.h>
+#include <sys/resource.h>
 #include "hmll/hmll.h"
 
-static struct hmll_fetch_range hmll_io_uring_fetch_range_to_cpu(struct hmll_context *ctx, struct hmll_fetcher_io_uring *fetcher, struct hmll_range range, const struct hmll_device_buffer dst)
-{
+static enum hmll_error_code hmll_io_uring_register_staging_buffers(
+    struct hmll_context *ctx,
+    struct hmll_fetcher_io_uring *fetcher,
+    const enum hmll_device device,
+    const size_t nmemb
+) {
+    fetcher->iovecs = hmll_get_io_buffer(ctx, HMLL_DEVICE_CPU, nmemb * sizeof(struct iovec));
+    if (hmll_has_error(hmll_get_error(ctx))) return ctx->error;
+
+#ifdef DEBUG
+    printf("Registering %zu IO staging buffers for io_uring\n", nmemb);
+#endif
+
+    void *arena = hmll_get_io_buffer(ctx, device, nmemb * HMLL_URING_BUFFER_SIZE);
+    if (hmll_has_error(hmll_get_error(ctx))) return ctx->error;
+
+    for (size_t i = 0; i < nmemb; ++i) {
+        fetcher->iovecs[i].iov_base = (char *)arena + i * HMLL_URING_BUFFER_SIZE;
+        fetcher->iovecs[i].iov_len = HMLL_URING_BUFFER_SIZE;
+    }
+
+    int err = 0;
+    if ((err = io_uring_register_buffers(&fetcher->ioring, fetcher->iovecs, nmemb)) != 0) {
+#ifdef DEBUG
+#include <string.h>
+        printf("Failed to register IO buffer for io_uring: %s", strerror(-err));
+#endif
+        return ctx->error = HMLL_ERR_IO_BUFFER_REGISTRATION_FAILED;
+    }
+
+    return HMLL_ERR_SUCCESS;
+}
+
+
+static struct hmll_fetch_range hmll_io_uring_fetch_range_to_cpu(
+    struct hmll_context *ctx,
+    struct hmll_fetcher_io_uring *fetcher,
+    const struct hmll_range range,
+    const struct hmll_device_buffer dst
+){
     if (hmll_has_error(hmll_get_error(ctx)))
         return (struct hmll_fetch_range) {0};
 
@@ -84,8 +123,24 @@ return_io_error:
     return (struct hmll_fetch_range) {0};
 }
 
-struct hmll_fetch_range hmll_io_uring_fetch_range(struct hmll_context *ctx, struct hmll_fetcher_io_uring *fetcher, const struct hmll_range range, const struct hmll_device_buffer dst)
-{
+
+// static struct hmll_fetch_range hmll_io_uring_fetch_range_to_cuda(
+//     struct hmll_context *ctx,
+//     struct hmll_fetcher_io_uring *fetcher,
+//     const struct hmll_range range,
+//     const struct hmll_device_buffer dst
+// ) {
+//     if (hmll_has_error(hmll_get_error(ctx)))
+//         return (struct hmll_fetch_range) {0};
+// }
+
+
+struct hmll_fetch_range hmll_io_uring_fetch_range(
+    struct hmll_context *ctx,
+    struct hmll_fetcher_io_uring *fetcher,
+    const struct hmll_range range,
+    const struct hmll_device_buffer dst
+) {
     if (hmll_has_error(hmll_get_error(ctx)))
         return (struct hmll_fetch_range){0};
 
@@ -97,15 +152,31 @@ struct hmll_fetch_range hmll_io_uring_fetch_range(struct hmll_context *ctx, stru
     return hmll_io_uring_fetch_range_to_cpu(ctx, fetcher, range, dst);
 }
 
-struct hmll_fetch_range hmll_io_uring_fetch_range_impl_(struct hmll_context *ctx, void *fetcher, struct hmll_range range, const struct hmll_device_buffer dst)
-{
+struct hmll_fetch_range hmll_io_uring_fetch_range_impl_(
+    struct hmll_context *ctx,
+    void *fetcher,
+    const struct hmll_range range,
+    const struct hmll_device_buffer dst
+) {
     return hmll_io_uring_fetch_range(ctx, fetcher, range, dst);
 }
 
-enum hmll_error_code hmll_io_uring_init(struct hmll_context *ctx, struct hmll_fetcher *fetcher, const enum hmll_device device)
-{
+enum hmll_error_code hmll_io_uring_init(
+    struct hmll_context *ctx,
+    struct hmll_fetcher *fetcher,
+    const enum hmll_device device
+) {
     if (hmll_has_error(hmll_get_error(ctx)))
         return ctx->error;
+
+    struct rlimit limit;
+    if (getrlimit(RLIMIT_MEMLOCK, &limit) == 0) {
+        if (limit.rlim_max <= HMLL_URING_BUFFER_SIZE * HMLL_URING_QUEUE_DEPTH) {
+            limit.rlim_max = HMLL_URING_BUFFER_SIZE * HMLL_URING_QUEUE_DEPTH * 2;
+            setrlimit(RLIMIT_MEMLOCK, &limit);
+        }
+    }
+
 
     struct hmll_fetcher_io_uring *backend = calloc(1, sizeof(struct hmll_fetcher_io_uring));
     struct io_uring_params params = {0};
@@ -117,6 +188,9 @@ enum hmll_error_code hmll_io_uring_init(struct hmll_context *ctx, struct hmll_fe
 
     io_uring_queue_init_params(HMLL_URING_QUEUE_DEPTH, &backend->ioring, &params);
     io_uring_register_files(&backend->ioring, iofiles, 1);
+
+    if (device == HMLL_DEVICE_CUDA)
+        hmll_io_uring_register_staging_buffers(ctx, backend, device, HMLL_URING_QUEUE_DEPTH);
 
     fetcher->device = device;
     fetcher->backend_impl_ = backend;

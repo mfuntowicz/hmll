@@ -27,6 +27,7 @@ static inline void hmll_io_uring_slot_set_available(long long *mask, const unsig
 
 struct hmll_fetcher_io_uring {
     struct io_uring ioring;
+    struct iovec *iovecs;
     long long iobusy;
 };
 typedef struct hmll_fetcher_io_uring hmll_fetcher_io_uring_t;

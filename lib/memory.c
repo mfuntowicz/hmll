@@ -23,7 +23,6 @@ void *hmll_get_buffer(struct hmll_context *ctx, const enum hmll_device device, c
     {
     case HMLL_DEVICE_CPU:
         ptr = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-
         if (ptr == MAP_FAILED) {
             ctx->error = HMLL_ERR_ALLOCATION_FAILED;
             return NULL;
@@ -55,22 +54,24 @@ void *hmll_get_io_buffer(struct hmll_context *ctx, const enum hmll_device device
     switch (device)
     {
     case HMLL_DEVICE_CPU:
-        // Try to allocate with 2MB huge pages first
-        ptr = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB | MAP_HUGE_2MB, -1, 0);
+        ;
+        // MAP_POPULATE to avoid page fault on the first IO wri
+        int flags = MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE;
+        if (size > 2U * 1024 * 1024)  flags |= MAP_HUGETLB | MAP_HUGE_2MB;
 
-        // If huge pages fail, fall back to regular anonymous mmap
-        if (ptr == MAP_FAILED)
-            ptr = hmll_get_buffer(ctx, device, size);
+        ptr = mmap(0, size, PROT_READ | PROT_WRITE, flags, -1, 0);
+        if (ptr == MAP_FAILED) ptr = hmll_get_buffer(ctx, device, size);
+        return ptr;
 
 #if defined(__HMLL_CUDA_ENABLED__)
     case HMLL_DEVICE_CUDA:
         ;
-        enum cudaError error = {0};
-        if ((error = cudaHostAlloc(&ptr, size, cudaHostAllocMapped | cudaHostAllocWriteCombined) == cudaSuccess))
+        enum cudaError error = 0;
+        if ((error = cudaHostAlloc(&ptr, size, cudaHostAllocMapped | cudaHostAllocWriteCombined)) != cudaSuccess)
 #if defined(DEBUG)
             printf("Failed to allocate CUDA paged-locked memory: %s", cudaGetErrorString(error));
 #endif
-
+        return ptr;
 #endif
     }
 
