@@ -25,11 +25,11 @@ nb::ndarray<> HmllFetcher::fetch_contiguous(const std::string& name) const
     }
 
     const auto specs = lookup.specs;
-    const size_t nbytes = PAGE_ALIGNED_UP(specs.end, 4096) - PAGE_ALIGNED_DOWN(specs.start, 4096);
+    const size_t nbytes = ALIGN_UP(specs.end, 4096) - ALIGN_DOWN(specs.start, 4096);
 
     // Allocate buffer for the tensor
     auto* buffer = new hmll_device_buffer_t();
-    buffer->ptr = hmll_get_hugepage_buffer(ctx_ptr_, nbytes);
+    buffer->ptr = hmll_get_buffer(ctx_ptr_, fetcher_.device, nbytes);
     buffer->size = nbytes;
     buffer->device = fetcher_.device;
 

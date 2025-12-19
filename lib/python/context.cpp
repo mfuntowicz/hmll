@@ -49,7 +49,11 @@ void init_context(const nb::module_& m)
 {
     nb::enum_<hmll_device_t>(m, "HmllDevice",
         R"pbdoc(Define all the targettable devices)pbdoc"
-    ).value("CPU", HMLL_DEVICE_CPU, "Target CPU device");
+    ).value("CPU", HMLL_DEVICE_CPU, "Target CPU device")
+#if defined(__HMLL_CUDA_ENABLED__)
+    .value("CUDA", HMLL_DEVICE_CUDA, "Target CUDA device")
+#endif
+    ;
 
     nb::enum_<hmll_fetcher_kind_t>(m, "HmllFetcherKind",
         R"pbdoc(Define all the available fetcher)pbdoc"
