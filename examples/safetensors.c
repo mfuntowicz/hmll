@@ -3,9 +3,8 @@
 #include <string.h>
 #include <time.h>
 #include <hmll/hmll.h>
+#include <hmll/memory.h>
 #include <sys/mman.h>
-
-#define ALIGNMENT 4096U
 
 int main(const int argc, const char** argv)
 {
@@ -23,41 +22,43 @@ int main(const int argc, const char** argv)
     if (hmll_success(hmll_get_error(&ctx) && lookup.found))
     {
 
-        const size_t alstart = PAGE_ALIGNED_DOWN(lookup.specs.start, ALIGNMENT);
-        const size_t alend = PAGE_ALIGNED_UP(lookup.specs.end, ALIGNMENT);
+        const size_t alstart = ALIGN_DOWN(lookup.specs.start, ALIGN_PAGE);
+        const size_t alend = ALIGN_UP(lookup.specs.end, ALIGN_PAGE);
         const size_t alsize = alend - alstart;
 
         void *ptr = hmll_get_buffer(&ctx, HMLL_DEVICE_CUDA, alsize);
         hmll_device_buffer_t buffer = {ptr, alsize, HMLL_DEVICE_CUDA};
 
-        // Start timing
-        struct timespec start, end;
-        clock_gettime(CLOCK_MONOTONIC, &start);
-
-        struct hmll_fetch_range offsets = hmll_fetch_tensor(&ctx, fetcher, "model.embed_tokens.weight", buffer);
-
-        // End timing and calculate elapsed time
-        clock_gettime(CLOCK_MONOTONIC, &end);
-        double elapsed_ns = (end.tv_sec - start.tv_sec) * 1e9 + (end.tv_nsec - start.tv_nsec);
-        double elapsed_ms = elapsed_ns / 1e6;
-        double elapsed_s = elapsed_ns / 1e9;
-
         if (hmll_success(hmll_get_error(&ctx))) {
-            // Calculate throughput
-            double size_mb = (double)(alsize) / (1024.0 * 1024.0);
-            double throughput_mbps = size_mb / elapsed_s;
+            // Start timing
+            struct timespec start, end;
+            clock_gettime(CLOCK_MONOTONIC, &start);
 
-            printf("Fetch completed in %.3f ms (%.6f s)\n", elapsed_ms, elapsed_s);
-            printf("Tensor size: %.2f MB\n", size_mb);
-            printf("Throughput: %.2f MB/s\n", throughput_mbps);
+            struct hmll_fetch_range offsets = hmll_fetch_tensor(&ctx, fetcher, "model.embed_tokens.weight", buffer);
 
-            __bf16 *bf16_ptr = ptr + offsets.start;
-            float sum = 0;
-            for (size_t i = 0; i < hmll_numel(&lookup.specs); ++i) sum += bf16_ptr[i];
+            // End timing and calculate elapsed time
+            clock_gettime(CLOCK_MONOTONIC, &end);
+            double elapsed_ns = (end.tv_sec - start.tv_sec) * 1e9 + (end.tv_nsec - start.tv_nsec);
+            double elapsed_ms = elapsed_ns / 1e6;
+            double elapsed_s = elapsed_ns / 1e9;
 
-            printf("Sum: %f\n", sum);
-        } else {
-            printf("Got an error while reading the safetensors: %s\n", hmll_strerr(ctx.error));
+            if (hmll_success(hmll_get_error(&ctx))) {
+                // Calculate throughput
+                double size_mb = (double)(alsize) / (1024.0 * 1024.0);
+                double throughput_mbps = size_mb / elapsed_s;
+
+                printf("Fetch completed in %.3f ms (%.6f s)\n", elapsed_ms, elapsed_s);
+                printf("Tensor size: %.2f MB\n", size_mb);
+                printf("Throughput: %.2f MB/s\n", throughput_mbps);
+
+                __bf16 *bf16_ptr = ptr + offsets.start;
+                float sum = 0;
+                for (size_t i = 0; i < hmll_numel(&lookup.specs); ++i) sum += bf16_ptr[i];
+
+                printf("Sum: %f\n", sum);
+            } else {
+                printf("Got an error while reading the safetensors: %s\n", hmll_strerr(ctx.error));
+            }
         }
     }
 

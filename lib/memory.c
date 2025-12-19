@@ -8,9 +8,11 @@
 
 #if defined(__HMLL_CUDA_ENABLED__)
 #include <cuda_runtime_api.h>
+
+// We use Write Combined as we don't want the CPU tready of these bytes at any time
+#define CUDA_HOST_ALLOC_FLAGS (cudaHostAllocMapped | cudaHostAllocPortable | cudaHostAllocWriteCombined)
+
 #endif
-
-
 
 void *hmll_get_buffer(struct hmll_context *ctx, const enum hmll_device device, const size_t size)
 {
@@ -32,7 +34,7 @@ void *hmll_get_buffer(struct hmll_context *ctx, const enum hmll_device device, c
     case HMLL_DEVICE_CUDA:
         ;
         enum cudaError error = {0};
-        if ((error = cudaHostAlloc(&ptr, size, cudaHostAllocDefault)) != cudaSuccess)
+        if ((error = cudaHostAlloc(&ptr, size, CUDA_HOST_ALLOC_FLAGS)) != cudaSuccess)
 #if defined(DEBUG)
             printf("Failed to allocate CUDA paged-locked memory: %s\n", cudaGetErrorString(error));
 #endif

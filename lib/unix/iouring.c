@@ -8,11 +8,11 @@ static struct hmll_fetch_range hmll_io_uring_fetch_range_to_cpu(struct hmll_cont
     if (hmll_has_error(hmll_get_error(ctx)))
         return (struct hmll_fetch_range) {0};
 
-    const size_t a_start = PAGE_ALIGNED_DOWN(range.start, ALIGNMENT);
-    const size_t a_end = PAGE_ALIGNED_UP(range.end, ALIGNMENT);
+    const size_t a_start = ALIGN_DOWN(range.start, ALIGN_PAGE);
+    const size_t a_end = ALIGN_UP(range.end, ALIGN_PAGE);
     const size_t a_size = a_end - a_start;
 
-    if (!hmll_io_uring_is_aligned((uintptr_t)dst.ptr)) {
+    if (!hmll_is_aligned((uintptr_t)dst.ptr, ALIGN_PAGE)) {
          ctx->error = HMLL_ERR_BUFFER_ADDR_NOT_ALIGNED;
          return (struct hmll_fetch_range){0};
     }

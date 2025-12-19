@@ -5,16 +5,9 @@
 #define HMLL_URING_QUEUE_DEPTH sizeof(long long) * 8
 #define HMLL_URING_BUFFER_SIZE (128U * 1024)
 
-#define ALIGNMENT 4096U
-
 #include <liburing.h>
-#include "hmll/types.h"
 #include "hmll/fetcher.h"
-
-static inline int hmll_io_uring_is_aligned(const uintptr_t addr)
-{
-    return (addr & 4095) == 0;
-}
+#include "hmll/types.h"
 
 static inline int hmll_io_uring_slot_find_available(const long long mask)
 {
