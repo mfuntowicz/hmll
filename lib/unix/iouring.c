@@ -64,11 +64,7 @@ static struct hmll_fetch_range hmll_io_uring_fetch_range_to_cpu(struct hmll_cont
             count++;
             --inflight;
 
-            if (cqe->res < 0)
-            {
-#include <string.h>
-                const char *err = strerror(-cqe->res);
-                printf("Error: %s", err);
+            if (cqe->res < 0) {
                 goto return_io_error;
             }
             b_read += cqe->res;
@@ -110,11 +106,6 @@ enum hmll_error_code hmll_io_uring_init(struct hmll_context *ctx, struct hmll_fe
 {
     if (hmll_has_error(hmll_get_error(ctx)))
         return ctx->error;
-
-    if (device != HMLL_DEVICE_CPU) {
-        ctx->error = HMLL_ERR_UNSUPPORTED_DEVICE;
-        return ctx->error;
-    }
 
     struct hmll_fetcher_io_uring *backend = calloc(1, sizeof(struct hmll_fetcher_io_uring));
     struct io_uring_params params = {0};

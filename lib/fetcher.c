@@ -8,6 +8,10 @@
 #include "hmll/unix/iouring.h"
 #endif
 
+#if defined(__HMLL_CUDA_ENABLED__)
+#include "hmll/cuda.h"
+#endif
+
 struct hmll_fetcher hmll_fetcher_init(struct hmll_context *ctx, const enum hmll_device device, const enum hmll_fetcher_kind kind)
 {
     struct hmll_fetcher fetcher = {0};
@@ -15,14 +19,24 @@ struct hmll_fetcher hmll_fetcher_init(struct hmll_context *ctx, const enum hmll_
     if (hmll_has_error(hmll_get_error(ctx)))
         return fetcher;
 
-#if defined(__linux)
-    if (kind == HMLL_FETCHER_AUTO || kind == HMLL_FETCHER_IO_URING)
-    {
-        hmll_io_uring_init(ctx, &fetcher, device);
-        if (hmll_has_error(hmll_get_error(ctx)))
-            return fetcher;
+#if defined(__HMLL_CUDA_ENABLED__)
+    int device_count = 0;
+    if (device == HMLL_DEVICE_CUDA && (device_count = hmll_cuda_device_count()) == 0) {
+        ctx->error = HMLL_ERR_CUDA_NO_DEVICE;
+        return fetcher;
     }
 
+    const int cudaAllocFlags = hmll_cuda_allocation_flags();
+    if (hmll_has_error(hmll_get_error(ctx)))
+        return fetcher;
+
+    const struct hmll_fetcher_cuda_meta meta = {device_count, cudaAllocFlags};
+    fetcher.meta.cuda = meta;
+#endif
+
+#if defined(__linux)
+    if (kind == HMLL_FETCHER_AUTO || kind == HMLL_FETCHER_IO_URING)
+        hmll_io_uring_init(ctx, &fetcher, device);
 #endif
     return fetcher;
 }

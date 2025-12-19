@@ -37,18 +37,19 @@ fetchcontent_declare(
 fetchcontent_makeavailable(yyjson)
 list(APPEND HMLL_LIBRARIES yyjson)
 
+if(${HMLL_ENABLE_CUDA})
+    find_package(CUDAToolkit REQUIRED)
+    list(APPEND HMLL_LIBRARIES CUDA::cudart CUDA::cuda_driver)
+    add_compile_definitions(libhmll PUBLIC __HMLL_CUDA_ENABLED__=1)
+    message(STATUS "Enabling CUDA support")
+endif()
+
+
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND ${HMLL_ENABLE_IO_URING})
     include(cmake/liburing.cmake)
     list(APPEND HMLL_LIBRARIES liburing_static)
     add_compile_definitions("_GNU_SOURCE")
     message(STATUS "Enabling io_uring backend")
-endif()
-
-
-if(${HMLL_ENABLE_CUDA})
-    find_package(CUDAToolkit REQUIRED)
-    list(APPEND HMLL_LIBRARIES CUDA::cudart)
-    message(STATUS "Enabling CUDA support")
 endif()
 
 
@@ -78,7 +79,14 @@ set(LIBHMLL_SOURCES
         lib/unix/mmap.c
         lib/unix/iouring.c
         lib/errors.c
+        lib/cuda.c
 )
+
+if(HMLL_ENABLE_CUDA)
+    list(APPEND LIBHMLL_HEADERS include/hmll/cuda.h)
+    list(APPEND LIBHMLL_SOURCE include/hmll/cuda.c)
+endif()
+
 add_library(libhmll ${LIBHMLL_HEADERS} ${LIBHMLL_SOURCES})
 target_include_directories(libhmll PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

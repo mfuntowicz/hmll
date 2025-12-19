@@ -40,8 +40,7 @@ HMLL_EXTERN uint8_t hmll_sizeof(enum hmll_tensor_data_type) NO_EXCEPT;
 HMLL_EXTERN size_t hmll_numel(const struct hmll_tensor_specs *) NO_EXCEPT;
 HMLL_EXTERN struct hmll_tensor_lookup_result hmll_get_tensor_specs(const struct hmll_context *, const char *) NO_EXCEPT;
 
-void *hmll_get_buffer(struct hmll_context *, size_t) NO_EXCEPT;
-void *hmll_get_hugepage_buffer(struct hmll_context *ctx, size_t size) NO_EXCEPT;
+void *hmll_get_buffer(struct hmll_context *, enum hmll_device, size_t) NO_EXCEPT;
 void *hmll_get_io_buffer(struct hmll_context *, enum hmll_device, size_t) NO_EXCEPT;
 
 HMLL_EXTERN struct hmll_fetcher hmll_fetcher_init(struct hmll_context *, enum hmll_device, enum hmll_fetcher_kind kind);

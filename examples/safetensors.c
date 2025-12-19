@@ -6,8 +6,6 @@
 #include <sys/mman.h>
 
 #define ALIGNMENT 4096U
-#define PAGE_ALIGNED_UP(x) (((x) + ALIGNMENT - 1) & ~(ALIGNMENT - 1))
-#define PAGE_ALIGNED_DOWN(x) ((x) & ~(ALIGNMENT - 1))
 
 int main(const int argc, const char** argv)
 {
@@ -19,18 +17,18 @@ int main(const int argc, const char** argv)
     // Get the tensors' table
     hmll_context_t ctx = {0};
     hmll_open(argv[1], &ctx, HMLL_SAFETENSORS, HMLL_MMAP | HMLL_SKIP_METADATA);
-    hmll_fetcher_t fetcher = hmll_fetcher_init(&ctx, HMLL_DEVICE_CPU, HMLL_FETCHER_AUTO);
-    hmll_tensor_specs_t specs = hmll_get_tensor_specs(&ctx, "model.embed_tokens.weight");
+    hmll_fetcher_t fetcher = hmll_fetcher_init(&ctx, HMLL_DEVICE_CUDA, HMLL_FETCHER_AUTO);
+    hmll_tensor_lookup_result_t lookup = hmll_get_tensor_specs(&ctx, "model.embed_tokens.weight");
 
-    if (hmll_success(hmll_get_error(&ctx)))
+    if (hmll_success(hmll_get_error(&ctx) && lookup.found))
     {
 
-        const size_t alstart = PAGE_ALIGNED_DOWN(specs.start);
-        const size_t alend = PAGE_ALIGNED_UP(specs.end);
+        const size_t alstart = PAGE_ALIGNED_DOWN(lookup.specs.start, ALIGNMENT);
+        const size_t alend = PAGE_ALIGNED_UP(lookup.specs.end, ALIGNMENT);
         const size_t alsize = alend - alstart;
 
-        void *ptr = hmll_get_hugepage_buffer(&ctx, alsize);
-        hmll_device_buffer_t buffer = {ptr, alsize, HMLL_DEVICE_CPU};
+        void *ptr = hmll_get_buffer(&ctx, HMLL_DEVICE_CUDA, alsize);
+        hmll_device_buffer_t buffer = {ptr, alsize, HMLL_DEVICE_CUDA};
 
         // Start timing
         struct timespec start, end;
@@ -55,7 +53,7 @@ int main(const int argc, const char** argv)
 
             __bf16 *bf16_ptr = ptr + offsets.start;
             float sum = 0;
-            for (size_t i = 0; i < hmll_numel(&specs); ++i) sum += bf16_ptr[i];
+            for (size_t i = 0; i < hmll_numel(&lookup.specs); ++i) sum += bf16_ptr[i];
 
             printf("Sum: %f\n", sum);
         } else {

@@ -25,12 +25,29 @@ struct hmll_range {
 };
 typedef struct hmll_range hmll_range_t;
 
+
+#if defined(__HMLL_CUDA_ENABLED__)
+struct hmll_fetcher_cuda_meta
+{
+    int device_count;
+    int alloc_flags;
+};
+typedef struct hmll_fetcher_cuda_meta hmll_fetcher_cuda_meta_t;
+#endif
+
 struct hmll_fetcher
 {
     enum hmll_fetcher_kind kind;
     enum hmll_device device;
     void *backend_impl_;
     struct hmll_fetch_range (*fetch_range_impl_)(struct hmll_context *, void *, struct hmll_range, struct hmll_device_buffer);
+
+#if defined(__HMLL_CUDA_ENABLED__)
+    union
+    {
+        hmll_fetcher_cuda_meta_t cuda;
+    } meta;
+#endif
 };
 typedef struct hmll_fetcher hmll_fetcher_t;
 
