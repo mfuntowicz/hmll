@@ -28,7 +28,8 @@ enum hmll_error_code
     HMLL_ERR_SAFETENSORS_JSON_INVALID_HEADER = -30,
     HMLL_ERR_SAFETENSORS_JSON_MALFORMED_HEADER = -31,
 
-    HMLL_ERR_CUDA_NO_DEVICE = -40,
+    HMLL_ERR_CUDA_NOT_ENABLED = -40,
+    HMLL_ERR_CUDA_NO_DEVICE = -41,
 
     HMLL_ERR_UNKNOWN_DTYPE = -100,
 };
@@ -104,9 +105,7 @@ typedef struct hmll_table hmll_table_t;
 enum hmll_device
 {
     HMLL_DEVICE_CPU,
-#if defined(__HMLL_CUDA_ENABLED__)
     HMLL_DEVICE_CUDA
-#endif
 };
 typedef enum hmll_device hmll_device_t;
 
