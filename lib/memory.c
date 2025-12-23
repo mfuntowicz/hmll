@@ -1,9 +1,13 @@
 //
 // Created by mfuntowicz on 12/2/25.
 //
+#include "hmll/memory.h"
+#include "hmll/types.h"
 #include <linux/mman.h>
 #include <sys/mman.h>
 #include <stdlib.h>
+
+#include "hmll/hmll.h"
 #include "hmll/types.h"
 
 #if defined(__HMLL_CUDA_ENABLED__)
@@ -46,6 +50,22 @@ void *hmll_get_buffer(struct hmll_context *ctx, const enum hmll_device device, c
 #endif
 
     return ptr;
+}
+
+struct hmll_device_buffer hmll_get_buffer_for_range(struct hmll_context *ctx, const enum hmll_device device, const struct hmll_range range)
+{
+    if (hmll_has_error(hmll_get_error(ctx)))
+        return (struct hmll_device_buffer) {0, 0, device};
+
+    const size_t alstart = ALIGN_DOWN(range.start, ALIGN_PAGE);
+    const size_t alend = ALIGN_UP(range.end, ALIGN_PAGE);
+    const size_t alsize = alend - alstart;
+
+    void *ptr = hmll_get_buffer(ctx, device, alsize);
+    if (hmll_has_error(hmll_get_error(ctx)))
+        return (struct hmll_device_buffer) {0, 0, device};
+
+    return (struct hmll_device_buffer) {ptr, alsize, device};
 }
 
 void *hmll_get_io_buffer(struct hmll_context *ctx, const enum hmll_device device, const size_t size)

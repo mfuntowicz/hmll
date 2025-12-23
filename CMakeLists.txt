@@ -103,7 +103,12 @@ endif()
 ###########################################################
 if(${HMLL_BUILD_EXAMPLES})
     add_executable(hmll_safetensors_ex examples/safetensors.c)
-    target_link_libraries(hmll_safetensors_ex PRIVATE libhmll)
+
+    if(${HMLL_ENABLE_CUDA})
+        target_link_libraries(hmll_safetensors_ex PRIVATE libhmll CUDA::cudart)
+    else()
+        target_link_libraries(hmll_safetensors_ex PRIVATE libhmll)
+    endif()
 endif()
 
 ###########################################################

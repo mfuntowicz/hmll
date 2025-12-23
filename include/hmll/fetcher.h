@@ -4,22 +4,15 @@
 #include "hmll/memory.h"
 #include "hmll/types.h"
 
-struct hmll_fetch_range {
-    size_t start;
-    size_t end;
-};
-typedef struct hmll_fetch_range hmll_fetch_range_t;
-
-#if defined(__linux) || defined(__unix__) || defined(__APPLE__)
-#include "hmll/unix/fetcher.h"
-#endif
-
-
 struct hmll_range {
     size_t start;
     size_t end;
 };
-typedef struct hmll_range hmll_range_t;
+typedef struct hmll_range hmll_fetch_range_t;
+
+#if defined(__linux) || defined(__unix__) || defined(__APPLE__)
+#include "hmll/unix/fetcher.h"
+#endif
 
 
 #if defined(__HMLL_CUDA_ENABLED__)
@@ -36,7 +29,7 @@ struct hmll_fetcher
     enum hmll_fetcher_kind kind;
     enum hmll_device device;
     void *backend_impl_;
-    struct hmll_fetch_range (*fetch_range_impl_)(struct hmll_context *, void *, struct hmll_range, struct hmll_device_buffer);
+    struct hmll_range (*fetch_range_impl_)(struct hmll_context *, void *, struct hmll_range, struct hmll_device_buffer);
 
 #if defined(__HMLL_CUDA_ENABLED__)
     union

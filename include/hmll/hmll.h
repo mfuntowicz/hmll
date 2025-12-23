@@ -41,11 +41,12 @@ HMLL_EXTERN size_t hmll_numel(const struct hmll_tensor_specs *) NO_EXCEPT;
 HMLL_EXTERN struct hmll_tensor_lookup_result hmll_get_tensor_specs(const struct hmll_context *, const char *) NO_EXCEPT;
 
 void *hmll_get_buffer(struct hmll_context *, enum hmll_device, size_t) NO_EXCEPT;
+struct hmll_device_buffer hmll_get_buffer_for_range(struct hmll_context *, enum hmll_device, struct hmll_range) NO_EXCEPT;
 void *hmll_get_io_buffer(struct hmll_context *, enum hmll_device, size_t) NO_EXCEPT;
 
 HMLL_EXTERN struct hmll_fetcher hmll_fetcher_init(struct hmll_context *, enum hmll_device, enum hmll_fetcher_kind kind);
-HMLL_EXTERN struct hmll_fetch_range hmll_fetch_tensor(struct hmll_context *, struct hmll_fetcher, const char *, struct hmll_device_buffer);
-HMLL_EXTERN struct hmll_fetch_range hmll_fetch_range(struct hmll_context *, struct hmll_fetcher, struct hmll_range, struct hmll_device_buffer);
+HMLL_EXTERN struct hmll_range hmll_fetch_tensor(struct hmll_context *, struct hmll_fetcher, const char *, struct hmll_device_buffer);
+HMLL_EXTERN struct hmll_range hmll_fetch_range(struct hmll_context *, struct hmll_fetcher, struct hmll_range, struct hmll_device_buffer);
 
 #ifdef __cplusplus
 }
