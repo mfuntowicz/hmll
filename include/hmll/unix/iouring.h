@@ -3,14 +3,14 @@
 
 // The queue-depth matchs the number of slot (bits) allocable through iobusy var
 #define HMLL_URING_QUEUE_DEPTH 128U
-#define HMLL_URING_BUFFER_SIZE (128U * 1024)
+#define HMLL_URING_BUFFER_SIZE (64U * 1024)
 
-#include <driver_types.h>
 #include <liburing.h>
 #include "hmll/fetcher.h"
 #include "hmll/types.h"
 
 #if defined(__HMLL_CUDA_ENABLED__)
+#include <driver_types.h>
 
 enum hmll_iouring_cuda_state {
     HMLL_CUDA_STREAM_IDLE = 0,

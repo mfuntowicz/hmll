@@ -184,8 +184,7 @@ static struct hmll_range hmll_iouring_fetch_range_cuda(
             if (cqe->res < 0)
                 goto return_io_error;
 
-            if (cqe->res > 0)
-            {
+            if (cqe->res > 0) {
                 b_read += cqe->res;
 
                 struct hmll_iouring_cuda_context *cctx = (struct hmll_iouring_cuda_context *) cqe->user_data;
