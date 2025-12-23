@@ -1,10 +1,13 @@
 #include "hmll/unix/iouring.h"
 
 #include <stdlib.h>
+#include "hmll/hmll.h"
+
+#if defined(__HMLL_CUDA_ENABLED__)
 #include <cuda_runtime_api.h>
 #include <driver_types.h>
 #include "hmll/cuda.h"
-#include "hmll/hmll.h"
+#endif
 
 static enum hmll_error_code hmll_iouring_register_staging_buffers(
     struct hmll_context *ctx,
