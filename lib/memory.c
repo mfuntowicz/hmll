@@ -13,7 +13,7 @@
 #if defined(__HMLL_CUDA_ENABLED__)
 #include <cuda_runtime_api.h>
 
-// We use Write Combined as we don't want the CPU tready of these bytes at any time
+// We use Write Combined as we don't want the CPU to read any of these bytes
 #define CUDA_HOST_ALLOC_FLAGS (cudaHostAllocMapped | cudaHostAllocPortable | cudaHostAllocWriteCombined)
 
 #endif
@@ -36,8 +36,8 @@ void *hmll_get_buffer(struct hmll_context *ctx, const enum hmll_device device, c
     case HMLL_DEVICE_CUDA:
 #if defined(__HMLL_CUDA_ENABLED__)
         ;
-        enum cudaError error = {0};
-        if ((error = cudaHostAlloc(&ptr, size, CUDA_HOST_ALLOC_FLAGS)) != cudaSuccess)
+        const enum cudaError error = cudaHostAlloc(&ptr, size, CUDA_HOST_ALLOC_FLAGS);
+        if (error != cudaSuccess)
 #if defined(DEBUG)
             printf("Failed to allocate CUDA paged-locked memory: %s\n", cudaGetErrorString(error));
 #endif
@@ -84,12 +84,9 @@ void *hmll_get_io_buffer(struct hmll_context *ctx, const enum hmll_device device
     case HMLL_DEVICE_CUDA:
 #if defined(__HMLL_CUDA_ENABLED__)
         ;
-        enum cudaError error = 0;
-        if ((error = cudaHostAlloc(&ptr, size, cudaHostAllocMapped | cudaHostAllocWriteCombined)) != cudaSuccess)
-#if defined(DEBUG)
-            printf("Failed to allocate CUDA paged-locked memory: %s", cudaGetErrorString(error));
-#endif
-        return ptr;
+        enum cudaError error = cudaHostAlloc(&ptr, size, cudaHostAllocMapped);
+        if (error == cudaSuccess)
+            return ptr;
 
 #else
         ctx->error = HMLL_ERR_CUDA_NOT_ENABLED;
