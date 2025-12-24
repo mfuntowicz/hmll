@@ -83,14 +83,18 @@ void *hmll_get_io_buffer(struct hmll_context *ctx, const enum hmll_device device
         if (ptr == MAP_FAILED) ptr = hmll_get_buffer(ctx, device, size);
         return ptr;
 
-#if defined(__HMLL_CUDA_ENABLED__)
     case HMLL_DEVICE_CUDA:
+#if defined(__HMLL_CUDA_ENABLED__)
         ;
         enum cudaError error = 0;
         if ((error = cudaHostAlloc(&ptr, size, cudaHostAllocMapped | cudaHostAllocWriteCombined)) != cudaSuccess)
 #if defined(DEBUG)
             printf("Failed to allocate CUDA paged-locked memory: %s", cudaGetErrorString(error));
 #endif
+        return ptr;
+
+#else
+        ctx->error = HMLL_ERR_CUDA_NOT_ENABLED;
         return ptr;
 #endif
     }
