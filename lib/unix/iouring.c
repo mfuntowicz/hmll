@@ -50,7 +50,6 @@ static inline void hmll_iouring_reclaim_slots(
     // TODO(mfuntowicz): Should we directly store `slots` which are doing memcpy currently to avoid full scan?
     for (size_t i = 0; i < HMLL_URING_QUEUE_DEPTH; ++i) {
         struct hmll_iouring_cuda_context *cd = dctx + i;
-        // Check if `slot` is busy, in memcpy state, and the GPU event is recorded
         if (hmll_iouring_slot_is_busy(fetcher->iobusy, i)) {
             if (cd->state == HMLL_CUDA_STREAM_MEMCPY && cudaEventQuery(cd->done) == cudaSuccess) {
                 hmll_iouring_cuda_stream_set_idle(&cd->state);
@@ -114,11 +113,9 @@ static inline void hmll_iouring_handle_completion(
     else if (dst->device == HMLL_DEVICE_CUDA) {
         struct hmll_iouring_cuda_context *cctx = (struct hmll_iouring_cuda_context *)cqe->user_data;
 
-        // Calculate destination address on GPU
         void *to = (char *)dst->ptr + (cctx->offset - offset);
         void *from = fetcher->iovecs[cctx->slot].iov_base;
 
-        // Dispatch copy and record event
         cudaMemcpyAsync(to, from, len, cudaMemcpyHostToDevice, cctx->stream);
         cudaEventRecord(cctx->done, cctx->stream);
         hmll_iouring_cuda_stream_set_memcpy(&cctx->state);
@@ -136,12 +133,10 @@ static struct hmll_range hmll_iouring_fetch_range_impl(
 ) {
     if (hmll_has_error(hmll_get_error(ctx))) return (struct hmll_range) {0};
 
-    // 1. Calculate Aligned Range
     const size_t a_start = ALIGN_DOWN(range.start, ALIGN_PAGE);
     const size_t a_end = ALIGN_UP(range.end, ALIGN_PAGE);
     const size_t a_size = a_end - a_start;
 
-    // 2. CPU Alignment Validation
     if (dst.device == HMLL_DEVICE_CPU && !hmll_is_aligned((uintptr_t)dst.ptr, ALIGN_PAGE)) {
         ctx->error = HMLL_ERR_BUFFER_ADDR_NOT_ALIGNED;
         return (struct hmll_range){0};
@@ -151,16 +146,15 @@ static struct hmll_range hmll_iouring_fetch_range_impl(
     size_t b_submitted = 0;
     unsigned int n_dma = 0;
 
-    // 3. Main IO Loop
     while (b_read < a_size) {
         hmll_iouring_reclaim_slots(fetcher, dst.device);
 
         while (b_submitted < a_size) {
             const int slot = hmll_iouring_slot_find_available(fetcher->iobusy);
-            if (slot == -1) break; // Ring/Slots full
+            if (slot == -1) break;
 
             struct io_uring_sqe *sqe = io_uring_get_sqe(&fetcher->ioring);
-            if (!sqe) break; // Kernel queue full
+            if (!sqe) break;
 
             hmll_iouring_slot_set_busy(&fetcher->iobusy, slot);
 
@@ -175,9 +169,7 @@ static struct hmll_range hmll_iouring_fetch_range_impl(
         }
 
         if (n_dma > 0) {
-            // Heuristic: Batch CPU waits to reduce syscall overhead, check CUDA more frequently
             const int to_wait = (dst.device == HMLL_DEVICE_CPU && n_dma >= 8) ? 8 : 1;
-
             if (io_uring_submit_and_wait(&fetcher->ioring, to_wait) < 0) {
                 ctx->error = HMLL_ERR_IO_ERROR;
                 return (struct hmll_range) {0};
@@ -197,15 +189,12 @@ static struct hmll_range hmll_iouring_fetch_range_impl(
             }
 
             b_read += cqe->res;
-
-            // Delegate device-specific completion handling
             hmll_iouring_handle_completion(fetcher, cqe, &dst, a_start, cqe->res);
         }
 
         io_uring_cq_advance(&fetcher->ioring, count);
     }
 
-    // Success: Return the offset mapping relative to the aligned chunk
     return (struct hmll_range){ range.start - a_start, a_start + (range.end - range.start) };
 }
 
@@ -258,7 +247,6 @@ enum hmll_error_code hmll_iouring_init(
         io_uring_queue_init_params(HMLL_URING_QUEUE_DEPTH, &backend->ioring, &params);
     }
 
-    // register file descriptors to avoid lookups
     int iofiles[1];
     iofiles[0] = ctx->source.fd;
     HMLL_IOURING_BAIL(io_uring_register_files(&backend->ioring, iofiles, 1), HMLL_ERR_IO_ERROR);
@@ -270,13 +258,11 @@ enum hmll_error_code hmll_iouring_init(
     return HMLL_ERR_SUCCESS;
 
 cleanup:
-    // Implement a teardown function to reuse here, or manually free:
     if (backend->ioring.ring_fd > 0) io_uring_queue_exit(&backend->ioring);
 #if defined(__HMLL_CUDA_ENABLED__)
-    if (backend->device_ctx) {
-        // cleanup streams/events...
+    if (backend->device_ctx)
         free(backend->device_ctx);
-    }
+
 #endif
     free(backend);
     return ctx->error;
