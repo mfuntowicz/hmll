@@ -267,6 +267,7 @@ enum hmll_error_code hmll_iouring_init(
     params.sq_thread_idle = 500;
 
     if (device == HMLL_DEVICE_CUDA) {
+#if defined(__HMLL_CUDA_ENABLED__)
         struct hmll_iouring_cuda_context *data = calloc(HMLL_URING_QUEUE_DEPTH, sizeof(struct hmll_iouring_cuda_context));
         backend->device_ctx = (void *)data;
 
@@ -278,6 +279,10 @@ enum hmll_error_code hmll_iouring_init(
 
         io_uring_queue_init_params(HMLL_URING_QUEUE_DEPTH, &backend->ioring, &params);
         hmll_iouring_register_staging_buffers(ctx, backend, device);
+#else
+        ctx->error = HMLL_ERR_CUDA_NOT_ENABLED;
+        return ctx->error;
+#endif
     } else {
         io_uring_queue_init_params(HMLL_URING_QUEUE_DEPTH, &backend->ioring, &params);
     }
