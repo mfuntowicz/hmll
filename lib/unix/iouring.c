@@ -216,6 +216,9 @@ return_io_error:
     return (struct hmll_range) {0};
 
 #else
+    HMLL_UNUSED(fetcher);
+    HMLL_UNUSED(range);
+    HMLL_UNUSED(dst);
     ctx->error = HMLL_ERR_CUDA_NOT_ENABLED;
     return (struct hmll_range) {0};
 #endif

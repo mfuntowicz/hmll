@@ -23,6 +23,7 @@ extern "C" {
 
 #define HMLL_FALSE   0u
 #define HMLL_SUCCESS 0U
+#define HMLL_UNUSED(expr) (void)(expr);
 
 #include "fetcher.h"
 #include "types.h"
