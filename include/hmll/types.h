@@ -4,6 +4,10 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#ifndef HMLL_MAX_TENSOR_RANK
+#define HMLL_MAX_TENSOR_RANK 5
+#endif
+
 enum hmll_error_code
 {
     HMLL_ERR_SUCCESS = 0,
@@ -79,9 +83,9 @@ typedef enum hmll_tensor_data_type hmll_tensor_data_type_t;
 
 struct hmll_tensor_specs
 {
+    size_t shape[HMLL_MAX_TENSOR_RANK];
     size_t start;
     size_t end;
-    size_t *shape;
     uint8_t rank;
     enum hmll_tensor_data_type dtype;
 };

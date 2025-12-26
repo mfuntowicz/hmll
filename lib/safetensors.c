@@ -54,10 +54,6 @@ enum hmll_error_code hmll_safetensors_header_parse_shape(yyjson_val *shape, stru
         tensor->rank = (uint8_t)rank;
 
         if (rank > 0) {
-            //TODO : Add malloc checking
-            if ((tensor->shape = calloc(rank, sizeof(size_t))) == NULL)
-                return HMLL_ERR_ALLOCATION_FAILED;
-
             size_t shape_idx = 0, shape_max = 0;
             yyjson_val* dim_val;
             yyjson_arr_foreach(shape, shape_idx, shape_max, dim_val) {
@@ -67,7 +63,6 @@ enum hmll_error_code hmll_safetensors_header_parse_shape(yyjson_val *shape, stru
             return HMLL_ERR_SUCCESS;
         }
 
-        tensor->shape = 0;
         return HMLL_ERR_SUCCESS;
     }
 

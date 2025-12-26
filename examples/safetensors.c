@@ -45,18 +45,18 @@ int main(const int argc, const char** argv)
                 printf("Tensor size: %.2f MB\n", size_mb);
                 printf("Throughput: %.2f MB/s\n", throughput_mbps);
 
-                // __bf16 *bf16_ptr;
-                // if (fetcher.device == HMLL_DEVICE_CUDA) {
-                //     bf16_ptr = malloc(buffer.size);
-                //     cudaMemcpy(bf16_ptr, buffer.ptr + offsets.start, hmll_numel(&lookup.specs) * sizeof(__bf16), cudaMemcpyDeviceToHost);
-                // } else {
-                //     bf16_ptr = buffer.ptr + offsets.start;
-                // }
+                __bf16 *bf16_ptr;
+                if (fetcher.device == HMLL_DEVICE_CUDA) {
+                    bf16_ptr = malloc(buffer.size);
+                    cudaMemcpy(bf16_ptr, buffer.ptr + offsets.start, hmll_numel(&lookup.specs) * sizeof(__bf16), cudaMemcpyDeviceToHost);
+                } else {
+                    bf16_ptr = buffer.ptr + offsets.start;
+                }
 
-                // float sum = 0;
-                // for (size_t i = 0; i < hmll_numel(&lookup.specs); ++i) sum += bf16_ptr[i];
+                float sum = 0;
+                for (size_t i = 0; i < hmll_numel(&lookup.specs); ++i) sum += bf16_ptr[i];
 
-                // printf("Sum: %f\n", sum);
+                printf("Sum: %f\n", sum);
             } else {
                 printf("Got an error while reading the safetensors: %s\n", hmll_strerr(ctx.error));
             }
