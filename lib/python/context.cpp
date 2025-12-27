@@ -48,12 +48,9 @@ HmllContext HmllContext::open(const std::string& path, const hmll_file_kind kind
 void init_context(const nb::module_& m)
 {
     nb::enum_<hmll_device_t>(m, "HmllDevice",
-        R"pbdoc(Define all the targettable devices)pbdoc"
+        R"pbdoc(Define all the targetable devices)pbdoc"
     ).value("CPU", HMLL_DEVICE_CPU, "Target CPU device")
-#if defined(__HMLL_CUDA_ENABLED__)
-    .value("CUDA", HMLL_DEVICE_CUDA, "Target CUDA device")
-#endif
-    ;
+    .value("CUDA", HMLL_DEVICE_CUDA, "Target CUDA device");
 
     nb::enum_<hmll_fetcher_kind_t>(m, "HmllFetcherKind",
         R"pbdoc(Define all the available fetcher)pbdoc"
