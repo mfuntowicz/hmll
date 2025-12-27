@@ -4,16 +4,19 @@
 #include "hmll/safetensors.h"
 
 #include "hmll/hmll.h"
+#include "hmll/tracing.h"
 #include "hmll/types.h"
 #include <yyjson.h>
 
 enum hmll_error_code hmll_safetensors_header_parse_dtype(yyjson_val *dtype, struct hmll_tensor_specs *tensor)
 {
+    HMLL_ZONE_START( hmll_safetensors_parse_dtype)
     if (dtype && yyjson_is_str(dtype)) {
         const char* dtype_str = yyjson_get_str(dtype);
         const size_t dtype_len = yyjson_get_len(dtype);
         tensor->dtype = hmll_safetensors_dtype_from_str(dtype_str, dtype_len);
     } else {
+
         tensor->dtype = HMLL_DTYPE_UNKNOWN;
     }
 
@@ -21,11 +24,13 @@ enum hmll_error_code hmll_safetensors_header_parse_dtype(yyjson_val *dtype, stru
         return HMLL_ERR_UNKNOWN_DTYPE;
     }
 
+    HMLL_ZONE_END(hmll_safetensors_parse_dtype)
     return HMLL_ERR_SUCCESS;
 }
 
 enum hmll_error_code hmll_safetensors_header_parse_offsets(yyjson_val *offsets, struct hmll_tensor_specs *tensor)
 {
+    HMLL_ZONE_START( hmll_safetensors_parse_offset)
     if (offsets && yyjson_is_arr(offsets)) {
         const size_t length = yyjson_arr_size(offsets);
         if (length >= 2) {
@@ -38,17 +43,21 @@ enum hmll_error_code hmll_safetensors_header_parse_offsets(yyjson_val *offsets, 
             if (yyjson_is_uint(end_val))
                 tensor->end = yyjson_get_uint(end_val);
 
+            HMLL_ZONE_END_SUCCESS(hmll_safetensors_parse_offset)
             return HMLL_ERR_SUCCESS;
         }
 
+        HMLL_ZONE_END_ERROR(hmll_safetensors_parse_offset)
         return HMLL_ERR_SAFETENSORS_JSON_MALFORMED_HEADER;
     }
 
+    HMLL_ZONE_END_ERROR(hmll_safetensors_parse_offset)
     return HMLL_ERR_SAFETENSORS_JSON_MALFORMED_HEADER;
 }
 
 enum hmll_error_code hmll_safetensors_header_parse_shape(yyjson_val *shape, struct hmll_tensor_specs *tensor)
 {
+    HMLL_ZONE_START( hmll_safetensors_parse_shape)
     if (shape && yyjson_is_arr(shape)) {
         const size_t rank = yyjson_arr_size(shape);
         tensor->rank = (uint8_t)rank;
@@ -60,33 +69,44 @@ enum hmll_error_code hmll_safetensors_header_parse_shape(yyjson_val *shape, stru
                 if (yyjson_is_uint(dim_val))
                     tensor->shape[shape_idx] = yyjson_get_uint(dim_val);
             }
+            HMLL_ZONE_END_SUCCESS(hmll_safetensors_parse_shape)
             return HMLL_ERR_SUCCESS;
         }
 
+        HMLL_ZONE_END_SUCCESS(hmll_safetensors_parse_shape)
         return HMLL_ERR_SUCCESS;
     }
 
+    HMLL_ZONE_END_ERROR(hmll_safetensors_parse_shape)
     return HMLL_ERR_SAFETENSORS_JSON_MALFORMED_HEADER;
 }
 
 enum hmll_error_code hmll_safetensors_header_parse_tensor(yyjson_val *specs, hmll_tensor_specs_t *tensor)
 {
+    HMLL_ZONE_START( hmll_safetensors_parse_tensor)
     enum hmll_error_code error = HMLL_ERR_SUCCESS;
 
     // Parse dtype
     yyjson_val* dtype_val = yyjson_obj_get(specs, "dtype");
     error = hmll_safetensors_header_parse_dtype(dtype_val, tensor);
 
-    if (error != HMLL_ERR_SUCCESS) return error;
+    if (error != HMLL_ERR_SUCCESS) {
+        HMLL_ZONE_END_ERROR(hmll_safetensors_parse_tensor)
+        return error;
+    }
 
     // Parse shape
     yyjson_val* shape_val = yyjson_obj_get(specs, "shape");
     error = hmll_safetensors_header_parse_shape(shape_val, tensor);
 
-    if (error != HMLL_ERR_SUCCESS) return error;
+    if (error != HMLL_ERR_SUCCESS) {
+        HMLL_ZONE_END_ERROR(hmll_safetensors_parse_tensor)
+        return error;
+    }
 
     // Parse offsets
     yyjson_val* data_offsets_val = yyjson_obj_get(specs, "data_offsets");
+    HMLL_ZONE_END_SUCCESS(hmll_safetensors_parse_tensor)
     return hmll_safetensors_header_parse_offsets(data_offsets_val, tensor);
 }
 
@@ -101,6 +121,7 @@ hmll_tensor_data_type_t hmll_safetensors_dtype_from_str(const char *dtype, const
 
 int hmll_safetensors_read_table(hmll_context_t *ctx, const hmll_flags_t flags)
 {
+    HMLL_ZONE_START( hmll_safetensors_read_table)
     size_t num_tensors = 0;
     if (hmll_has_error(hmll_get_error(ctx)))
         goto exit;
@@ -124,12 +145,16 @@ int hmll_safetensors_read_table(hmll_context_t *ctx, const hmll_flags_t flags)
     }
 
     num_tensors = yyjson_obj_size(root);
-    if ((ctx->table.names = calloc(num_tensors, sizeof(char*))) == NULL)
+    if ((ctx->table.names = calloc(num_tensors, sizeof(char*))) == NULL) {
         ctx->error = HMLL_ERR_ALLOCATION_FAILED;
+        goto freeup_and_exit;
+    }
 
 
-    if ((ctx->table.tensors = calloc(num_tensors, sizeof(struct hmll_tensor_specs))) == NULL)
+    if ((ctx->table.tensors = calloc(num_tensors, sizeof(struct hmll_tensor_specs))) == NULL) {
         ctx->error = HMLL_ERR_ALLOCATION_FAILED;
+        goto freeup_and_exit;
+    }
 
     char **names = ctx->table.names;
     hmll_tensor_specs_t *tensors = ctx->table.tensors;
@@ -178,6 +203,11 @@ freeup_and_exit:
     yyjson_doc_free(document);
 
 exit:
-    if (hmll_has_error(hmll_get_error(ctx))) return ctx->error;
+    if (hmll_has_error(hmll_get_error(ctx))) {
+        HMLL_ZONE_END_ERROR(hmll_safetensors_read_table)
+        return ctx->error;
+    }
+
+    HMLL_ZONE_END_SUCCESS(hmll_safetensors_read_table)
     return num_tensors;
 }
