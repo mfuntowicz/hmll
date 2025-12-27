@@ -7,12 +7,20 @@
 #include <cuda_runtime.h>
 #endif
 
+#if defined(__HMLL_PROFILE_ENABLED__)
+#include "tracy/TracyC.h"
+#endif
+
 int main(const int argc, const char** argv)
 {
     if (argc < 2) {
         printf("No file specified.\nInvoke through hmll_safetensors_ex <path/to/safetensors/file>");
         return 1;
     }
+
+#if defined(__HMLL_PROFILE_ENABLED__)
+    while (!TracyCIsConnected){}
+#endif
 
     // Get the tensors' table
     hmll_context_t ctx = {0};
@@ -28,7 +36,7 @@ int main(const int argc, const char** argv)
             struct timespec start, end;
             clock_gettime(CLOCK_MONOTONIC, &start);
 
-            const hmll_fetch_range_t offsets = hmll_fetch_tensor(&ctx, fetcher, "model.embed_tokens.weight", buffer);
+            const hmll_range_t offsets = hmll_fetch_tensor(&ctx, fetcher, "model.embed_tokens.weight", buffer);
 
             // End timing and calculate elapsed time
             clock_gettime(CLOCK_MONOTONIC, &end);

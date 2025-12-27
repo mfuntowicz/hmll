@@ -20,6 +20,7 @@ option(HMLL_BUILD_STATIC "Flag indicating if cmake should generate a static buil
 option(HMLL_BUILD_EXAMPLES "Flag indicating if cmake should build examples" OFF)
 option(HMLL_BUILD_TESTS "Flag indicating if cmake should build unit-tests" OFF)
 option(HMLL_ENABLE_SANITIZERS "Flag indicating if cmake should enable sanitizers" OFF)
+option(HMLL_ENABLE_PROFILING "Flag indicating if cmake should enable profiling through tracy" OFF)
 option(HMLL_ENABLE_IO_URING "Flag to include io_uring backend (only on Linux)" ON)
 
 if(${HMLL_BUILD_STATIC})
@@ -52,6 +53,12 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND ${HMLL_ENABLE_IO_URING})
     list(APPEND HMLL_LIBRARIES liburing_static)
     add_compile_definitions("_GNU_SOURCE")
     message(STATUS "Enabling io_uring backend")
+endif()
+
+if(${HMLL_ENABLE_PROFILING})
+    message(STATUS "Enabling tracy profiling")
+    include(cmake/tracy.cmake)
+    list(APPEND HMLL_LIBRARIES Tracy::TracyClient)
 endif()
 
 
@@ -106,11 +113,16 @@ endif()
 if(${HMLL_BUILD_EXAMPLES})
     add_executable(hmll_safetensors_ex examples/safetensors.c)
 
+    set(HMLL_EXAMPLES_LIBS libhmll)
     if(${HMLL_ENABLE_CUDA})
-        target_link_libraries(hmll_safetensors_ex PRIVATE libhmll CUDA::cudart)
-    else()
-        target_link_libraries(hmll_safetensors_ex PRIVATE libhmll)
+        list(APPEND HMLL_EXAMPLES_LIBS CUDA::cudart)
     endif()
+
+    if(${HMLL_ENABLE_PROFILING})
+        list(APPEND HMLL_EXAMPLES_LIBS Tracy::TracyClient)
+    endif()
+
+    target_link_libraries(hmll_safetensors_ex PRIVATE ${HMLL_EXAMPLES_LIBS})
 endif()
 
 ###########################################################

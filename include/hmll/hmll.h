@@ -25,6 +25,15 @@ extern "C" {
 #define HMLL_SUCCESS 0U
 #define HMLL_UNUSED(expr) (void)(expr);
 
+#ifdef __HMLL_PROFILE_ENABLED__
+#include <tracy/TracyC.h>
+#define HMLL_MARK_ZONE_ENTER(name) TracyCZone(ctx_##name, 1); TracyCZoneName(ctx_##name, #name, strlen(#name))
+#define HMLL_MARK_ZONE_EXIT(name) TracyCZoneEnd(ctx_##name)
+#else
+#define HMLL_MARK_ZONE_ENTER(name)
+#define HMLL_MARK_ZONE_EXIT(name)
+#endif
+
 #include "fetcher.h"
 #include "types.h"
 
