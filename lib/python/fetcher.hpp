@@ -27,7 +27,7 @@ public:
     hmll_fetcher_kind_t kind() const;
 
     [[nodiscard]]
-    nb::ndarray<> fetch_contiguous(const std::string& name) const;
+    nb::ndarray<> fetch(const std::string& name) const;
 };
 
 #endif // PYHMLL_FETCHER_HPP

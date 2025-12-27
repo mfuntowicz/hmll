@@ -2,45 +2,96 @@
 #define HMLL_FETCHER_IOURING_H
 
 // The queue-depth matchs the number of slot (bits) allocable through iobusy var
-#define HMLL_URING_QUEUE_DEPTH sizeof(long long) * 8
-#define HMLL_URING_BUFFER_SIZE (128U * 1024)
-
-#define ALIGNMENT 4096U
+#define HMLL_URING_QUEUE_DEPTH 128U
+#define HMLL_URING_BUFFER_SIZE (64U * 1024)
 
 #include <liburing.h>
-#include "hmll/types.h"
 #include "hmll/fetcher.h"
+#include "hmll/types.h"
 
-static inline int hmll_io_uring_is_aligned(const uintptr_t addr)
-{
-    return (addr & 4095) == 0;
-}
+#if defined(__HMLL_CUDA_ENABLED__)
+#include <driver_types.h>
 
-static inline int hmll_io_uring_slot_find_available(const long long mask)
-{
-    const int pos = __builtin_ffsll(~mask);
-    return pos == 0 ? -1 : pos - 1;
-}
-
-static inline void hmll_io_uring_slot_set_busy(long long *mask, const unsigned int slot)
-{
-    *mask |= 1LL << slot;
-}
-
-static inline void hmll_io_uring_slot_set_available(long long *mask, const unsigned int slot)
-{
-    *mask &= ~(1LL << slot);
-}
-
-struct hmll_fetcher_io_uring {
-    struct io_uring ioring;
-    long long iobusy;
+enum hmll_iouring_cuda_state {
+    HMLL_CUDA_STREAM_IDLE = 0,
+    HMLL_CUDA_STREAM_MEMCPY = 1,
 };
-typedef struct hmll_fetcher_io_uring hmll_fetcher_io_uring_t;
 
+struct hmll_iouring_cuda_context
+{
+    cudaStream_t stream;
+    cudaEvent_t done;
+    size_t offset;
+    int slot;
+    enum hmll_iouring_cuda_state state;
+};
 
-enum hmll_error_code hmll_io_uring_init(struct hmll_context *, struct hmll_fetcher *, enum hmll_device);
-struct hmll_fetch_range hmll_io_uring_fetch_range(struct hmll_context *, struct hmll_fetcher_io_uring *, struct hmll_range, struct hmll_device_buffer);
-int hmll_io_uring_slot_available(long);
+static inline void hmll_iouring_cuda_stream_set_idle(enum hmll_iouring_cuda_state *state)
+{
+    *state = HMLL_CUDA_STREAM_IDLE;
+}
 
+static inline void hmll_iouring_cuda_stream_set_memcpy(enum hmll_iouring_cuda_state *state)
+{
+    *state = HMLL_CUDA_STREAM_MEMCPY;
+}
+
+#endif
+
+struct hmll_iouring_iobusy
+{
+    long long msb;
+    long long lsb;
+};
+
+struct hmll_iouring {
+    struct io_uring ioring;
+    struct iovec *iovecs;
+    struct hmll_iouring_iobusy iobusy;
+
+    // Store optional device data
+    void *device_ctx;
+};
+
+static inline unsigned int hmll_iouring_slot_is_busy(const struct hmll_iouring_iobusy iobusy, const unsigned int slot)
+{
+    if (slot < 64)
+        return iobusy.lsb & (1LL << slot);
+    return iobusy.msb & (1LL << (slot - 64));
+}
+
+static inline int hmll_iouring_slot_find_available(const struct hmll_iouring_iobusy iobusy)
+{
+    // First check LSB
+    const int pos_lsb = __builtin_ffsll(~iobusy.lsb);
+    if (pos_lsb > 0)
+        return pos_lsb - 1;
+
+    // Then check MSB
+    const int pos_msb = __builtin_ffsll(~iobusy.msb);
+    if (pos_msb > 0)
+        return 64 + pos_msb - 1;
+
+    return -1;
+}
+
+static inline void hmll_iouring_slot_set_busy(struct hmll_iouring_iobusy *iobusy, const unsigned int slot)
+{
+    if (slot < 64) {
+        iobusy->lsb |= 1LL << slot;
+    } else {
+        iobusy->msb |= 1LL << (slot - 64);
+    }
+}
+
+static inline void hmll_iouring_slot_set_available(struct hmll_iouring_iobusy *iobusy, const unsigned int slot)
+{
+    if (slot < 64) {
+        iobusy->lsb &= ~(1LL << slot);
+    } else {
+        iobusy->msb &= ~(1LL << (slot - 64));
+    }
+}
+
+enum hmll_error_code hmll_iouring_init(struct hmll_context *, struct hmll_fetcher *, enum hmll_device);
 #endif // HMLL_FETCHER_IOURING_H

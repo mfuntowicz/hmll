@@ -15,7 +15,7 @@ uint8_t hmll_sizeof(const hmll_tensor_data_type_t dtype)
 
 size_t hmll_numel(const hmll_tensor_specs_t *specs)
 {
-    if (!specs || specs->rank == 0) return 0;
+    if (specs->rank > HMLL_MAX_TENSOR_RANK) __builtin_unreachable();
 
     size_t numel = 1;
     for (size_t i = 0; i < specs->rank; ++i)

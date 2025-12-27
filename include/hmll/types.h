@@ -4,16 +4,21 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#ifndef HMLL_MAX_TENSOR_RANK
+#define HMLL_MAX_TENSOR_RANK 5
+#endif
+
 enum hmll_error_code
 {
     HMLL_ERR_SUCCESS = 0,
 
-    HMLL_ERR_UNSUPPORTED_FILE_FORMAT = -1,
-    HMLL_ERR_UNSUPPORTED_DEVICE = -2,
-    HMLL_ERR_ALLOCATION_FAILED = -3,
-    HMLL_ERR_TABLE_EMPTY = -4,
-    HMLL_ERR_TENSOR_NOT_FOUND = -5,
-    HMLL_ERR_INVALID_RANGE = -6,
+    HMLL_ERR_UNSUPPORTED_PLATFORM = -1,
+    HMLL_ERR_UNSUPPORTED_FILE_FORMAT = -2,
+    HMLL_ERR_UNSUPPORTED_DEVICE = -3,
+    HMLL_ERR_ALLOCATION_FAILED = -4,
+    HMLL_ERR_TABLE_EMPTY = -5,
+    HMLL_ERR_TENSOR_NOT_FOUND = -6,
+    HMLL_ERR_INVALID_RANGE = -7,
 
     HMLL_ERR_BUFFER_ADDR_NOT_ALIGNED = -10,
     HMLL_ERR_BUFFER_TOO_SMALL = -11,
@@ -22,11 +27,15 @@ enum hmll_error_code
     HMLL_ERR_FILE_NOT_FOUND = -21,
     HMLL_ERR_FILE_EMPTY = -22,
     HMLL_ERR_MMAP_FAILED = -23,
+    HMLL_ERR_IO_BUFFER_REGISTRATION_FAILED = -24,
 
-    HMLL_ERR_SAFETENSORS_JSON_INVALID_HEADER = -22,
-    HMLL_ERR_SAFETENSORS_JSON_MALFORMED_HEADER = -23,
+    HMLL_ERR_SAFETENSORS_JSON_INVALID_HEADER = -30,
+    HMLL_ERR_SAFETENSORS_JSON_MALFORMED_HEADER = -31,
 
-    HMLL_ERR_UNKNOWN_DTYPE = -20,
+    HMLL_ERR_CUDA_NOT_ENABLED = -40,
+    HMLL_ERR_CUDA_NO_DEVICE = -41,
+
+    HMLL_ERR_UNKNOWN_DTYPE = -100,
 };
 typedef enum hmll_error_code hmll_error_code_t;
 
@@ -74,9 +83,9 @@ typedef enum hmll_tensor_data_type hmll_tensor_data_type_t;
 
 struct hmll_tensor_specs
 {
+    size_t shape[HMLL_MAX_TENSOR_RANK];
     size_t start;
     size_t end;
-    size_t *shape;
     uint8_t rank;
     enum hmll_tensor_data_type dtype;
 };
@@ -100,6 +109,7 @@ typedef struct hmll_table hmll_table_t;
 enum hmll_device
 {
     HMLL_DEVICE_CPU,
+    HMLL_DEVICE_CUDA
 };
 typedef enum hmll_device hmll_device_t;
 

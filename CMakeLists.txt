@@ -5,6 +5,8 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 set(CMAKE_C_VISIBILITY_PRESET hidden)
+set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O3 -g ")
+set(CMAKE_C_FLAGS "-Wno-unused-function")
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 include(FetchContent)
@@ -37,18 +39,19 @@ fetchcontent_declare(
 fetchcontent_makeavailable(yyjson)
 list(APPEND HMLL_LIBRARIES yyjson)
 
+if(${HMLL_ENABLE_CUDA})
+    find_package(CUDAToolkit REQUIRED)
+    list(APPEND HMLL_LIBRARIES CUDA::cudart CUDA::cuda_driver)
+    add_compile_definitions(libhmll PUBLIC __HMLL_CUDA_ENABLED__=1)
+    message(STATUS "Enabling CUDA support")
+endif()
+
+
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND ${HMLL_ENABLE_IO_URING})
     include(cmake/liburing.cmake)
     list(APPEND HMLL_LIBRARIES liburing_static)
     add_compile_definitions("_GNU_SOURCE")
     message(STATUS "Enabling io_uring backend")
-endif()
-
-
-if(${HMLL_ENABLE_CUDA})
-    find_package(CUDAToolkit REQUIRED)
-    list(APPEND HMLL_LIBRARIES CUDA::cudart)
-    message(STATUS "Enabling CUDA support")
 endif()
 
 
@@ -60,7 +63,6 @@ endif()
 # Definition of libhmll
 ###########################################################
 set(LIBHMLL_HEADERS
-        lib/memory.c
         include/hmll/fetcher.h
         include/hmll/hmll.h
         include/hmll/safetensors.h
@@ -71,14 +73,21 @@ set(LIBHMLL_HEADERS
 )
 set(LIBHMLL_SOURCES
         lib/context.c
+        lib/errors.c
         lib/fetcher.c
+        lib/memory.c
         lib/tensors.c
         lib/safetensors.c
         lib/sources.c
         lib/unix/mmap.c
         lib/unix/iouring.c
-        lib/errors.c
 )
+
+if(${HMLL_ENABLE_CUDA})
+    list(APPEND LIBHMLL_HEADERS include/hmll/cuda.h)
+    list(APPEND LIBHMLL_SOURCES lib/cuda.c)
+endif()
+
 add_library(libhmll ${LIBHMLL_HEADERS} ${LIBHMLL_SOURCES})
 target_include_directories(libhmll PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -96,7 +105,12 @@ endif()
 ###########################################################
 if(${HMLL_BUILD_EXAMPLES})
     add_executable(hmll_safetensors_ex examples/safetensors.c)
-    target_link_libraries(hmll_safetensors_ex PRIVATE libhmll)
+
+    if(${HMLL_ENABLE_CUDA})
+        target_link_libraries(hmll_safetensors_ex PRIVATE libhmll CUDA::cudart)
+    else()
+        target_link_libraries(hmll_safetensors_ex PRIVATE libhmll)
+    endif()
 endif()
 
 ###########################################################
@@ -121,7 +135,8 @@ if(${HMLL_BUILD_TESTS})
     set(HMLL_TESTS_SRC
             tests/tests_hmll_status.cpp
             tests/tests_hmll_dtype.cpp
-            tests/tests_hmll_tensor_specs.cpp)
+            tests/tests_hmll_tensor_specs.cpp
+            tests/tests_hmll_memory.cpp)
 
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND ${HMLL_ENABLE_IO_URING})
         list(APPEND HMLL_TESTS_SRC tests/tests_hmll_io_uring.cpp)

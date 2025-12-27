@@ -7,8 +7,10 @@
 
 TEST_CASE("Number of elements in a tensor", "[tensor]")
 {
-    std::vector<size_t> shape = {128, 4096};
-    hmll_tensor_specs_t specs = {0, 10, shape.data(), 2, HMLL_DTYPE_BFLOAT16};
-
+    hmll_tensor_specs_t specs;
+    specs.dtype = HMLL_DTYPE_FLOAT32;
+    specs.shape[0] = 4096;
+    specs.shape[1] = 128;
+    specs.rank = 2;
     REQUIRE(hmll_numel(&specs) == (128 * 4096));
 }
