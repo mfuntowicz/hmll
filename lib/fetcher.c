@@ -41,7 +41,13 @@ struct hmll_fetcher hmll_fetcher_init(struct hmll_context *ctx, const enum hmll_
     return fetcher;
 }
 
-struct hmll_range hmll_fetch_range(struct hmll_context *ctx, struct hmll_fetcher fetcher, struct hmll_range range, const struct hmll_device_buffer dst)
+struct hmll_range hmll_fetch_range(
+    struct hmll_context *ctx,
+    struct hmll_fetcher fetcher,
+    const struct hmll_device_buffer dst,
+    const struct hmll_range range,
+    const unsigned short iofile
+    )
 {
     if (hmll_has_error(hmll_get_error(ctx)))
         return (struct hmll_range){0};
@@ -56,7 +62,7 @@ struct hmll_range hmll_fetch_range(struct hmll_context *ctx, struct hmll_fetcher
         return (struct hmll_range){0};
     }
 
-    return fetcher.fetch_range_impl_(ctx, fetcher.backend_impl_, range, dst);
+    return fetcher.fetch_range_impl_(ctx, fetcher.backend_impl_, dst, range, iofile);
 }
 
 struct hmll_range hmll_fetch_tensor(struct hmll_context *ctx, struct hmll_fetcher fetcher, const char *name, const struct hmll_device_buffer dst)
@@ -72,5 +78,5 @@ struct hmll_range hmll_fetch_tensor(struct hmll_context *ctx, struct hmll_fetche
 
     const struct hmll_tensor_specs specs = lookup.specs;
     const struct hmll_range range = (struct hmll_range){specs.start, specs.end};
-    return hmll_fetch_range(ctx, fetcher, range, dst);
+    return hmll_fetch_range(ctx, fetcher, dst, range, lookup.fidx);
 }

@@ -1,11 +1,15 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include <hmll/hmll.h>
 
 #if defined(__HMLL_CUDA_ENABLED__)
 #include <cuda_runtime.h>
 #endif
+
+#define TENSOR_NAME "language_model.model.layers.15.mlp.gate_proj.weight"
+// #define TENSOR_NAME "model.embed_tokens.weight"
 
 int main(const int argc, const char** argv)
 {
@@ -14,11 +18,13 @@ int main(const int argc, const char** argv)
         return 1;
     }
 
+    enum hmll_file_kind kind = HMLL_SAFETENSORS_CHUNKED;
+
     // Get the tensors' table
     hmll_context_t ctx = {0};
-    hmll_open(argv[1], &ctx, HMLL_SAFETENSORS, HMLL_MMAP | HMLL_SKIP_METADATA);
+    hmll_open(&ctx, argv[1], kind, HMLL_MMAP | HMLL_SKIP_METADATA);
     hmll_fetcher_t fetcher = hmll_fetcher_init(&ctx, HMLL_DEVICE_CUDA, HMLL_FETCHER_AUTO);
-    hmll_tensor_lookup_result_t lookup = hmll_get_tensor_specs(&ctx, "model.embed_tokens.weight");
+    hmll_tensor_lookup_result_t lookup = hmll_get_tensor_specs(&ctx, TENSOR_NAME);
 
     if (hmll_success(hmll_get_error(&ctx) && lookup.found))
     {
@@ -28,7 +34,7 @@ int main(const int argc, const char** argv)
             struct timespec start, end;
             clock_gettime(CLOCK_MONOTONIC, &start);
 
-            const hmll_fetch_range_t offsets = hmll_fetch_tensor(&ctx, fetcher, "model.embed_tokens.weight", buffer);
+            const hmll_range_t offsets = hmll_fetch_tensor(&ctx, fetcher, TENSOR_NAME, buffer);
 
             // End timing and calculate elapsed time
             clock_gettime(CLOCK_MONOTONIC, &end);

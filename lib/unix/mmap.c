@@ -1,5 +1,3 @@
-#include "hmll/unix/mmap.h"
-
 #include <sys/file.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -7,15 +5,15 @@
 
 #include "hmll/hmll.h"
 
-enum hmll_error_code hmll_open_mmap(const char *path, hmll_context_t *ctx)
+struct hmll_source hmll_open_mapped(hmll_context_t *ctx, const char *path)
 {
     if (hmll_has_error(hmll_get_error(ctx)))
-        goto return_error;
+        goto return_null;
 
-    const int fd = open(path, O_RDONLY | O_DIRECT);
-    if (fd == -1) {
+    int fd;
+    if ((fd = open(path, O_RDONLY | O_DIRECT)) == -1) {
         ctx->error = HMLL_ERR_FILE_NOT_FOUND;
-        goto return_error;
+        goto return_null;
     }
 
     struct stat sb;
@@ -37,26 +35,21 @@ enum hmll_error_code hmll_open_mmap(const char *path, hmll_context_t *ctx)
         goto close_fd_and_return_error;
     }
 
-    ctx->source.fd = fd;
-    ctx->source.kind = HMLL_SOURCE_MMAP;
-    ctx->source.content = content;
-    ctx->source.size = sb.st_size;
-
-    return HMLL_ERR_SUCCESS;
+    return (struct hmll_source) {fd, content, sb.st_size, HMLL_SOURCE_MMAP};
 
 close_fd_and_return_error:
     close(fd);
 
-return_error:
-    return ctx->error;
+return_null:
+    return (struct hmll_source) {0};
 }
 
-void hmll_close_mmap(hmll_context_t *ctx)
+void hmll_close_mapped(struct hmll_source src)
 {
-    if (ctx && ctx->source.kind == HMLL_SOURCE_MMAP && ctx->source.size > 0) {
-        munmap(ctx->source.content, ctx->source.size);
-        ctx->source.kind = HMLL_SOURCE_UNDEFINED;
-        ctx->source.size = 0;
+    if (src.kind == HMLL_SOURCE_MMAP &&src.size > 0) {
+        munmap(src.content, src.size);
+        src.kind = HMLL_SOURCE_UNDEFINED;
+        src.size = 0;
     }
 }
 

@@ -71,6 +71,7 @@ static inline void hmll_iouring_prep_sqe(
     void *dst,
     const size_t offset,
     const size_t len,
+    const unsigned short iofile,
     const int slot
 ) {
     io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
@@ -78,7 +79,7 @@ static inline void hmll_iouring_prep_sqe(
     if (device == HMLL_DEVICE_CPU) {
         // CPU: Read directly into user memory
         io_uring_sqe_set_data64(sqe, slot);
-        io_uring_prep_read(sqe, 0, dst, len, offset);
+        io_uring_prep_read(sqe, iofile, dst, len, offset);
     }
 #if defined(__HMLL_CUDA_ENABLED__)
     else if (device == HMLL_DEVICE_CUDA) {
@@ -88,7 +89,7 @@ static inline void hmll_iouring_prep_sqe(
 
         dctx[slot].offset = offset;
         io_uring_sqe_set_data(sqe, dctx + slot);
-        io_uring_prep_read_fixed(sqe, 0, buf, len, offset, slot);
+        io_uring_prep_read_fixed(sqe, iofile, buf, len, offset, slot);
     }
 #endif
 }
@@ -128,8 +129,9 @@ static inline void hmll_iouring_handle_completion(
 static struct hmll_range hmll_iouring_fetch_range_impl(
     struct hmll_context *ctx,
     struct hmll_iouring *fetcher,
+    const struct hmll_device_buffer dst,
     const struct hmll_range range,
-    const struct hmll_device_buffer dst
+    const unsigned short iofile
 ) {
     if (hmll_has_error(hmll_get_error(ctx))) return (struct hmll_range) {0};
 
@@ -162,7 +164,8 @@ static struct hmll_range hmll_iouring_fetch_range_impl(
             const size_t to_read = (remaining < HMLL_URING_BUFFER_SIZE) ? remaining : HMLL_URING_BUFFER_SIZE;
             const size_t file_offset = a_start + b_submitted;
 
-            hmll_iouring_prep_sqe(fetcher, dst.device, sqe, (char *)dst.ptr + b_submitted, file_offset, to_read, slot);
+            hmll_iouring_prep_sqe(
+                fetcher, dst.device, sqe, (char *)dst.ptr + b_submitted, file_offset, to_read, iofile, slot);
 
             b_submitted += to_read;
             ++n_dma;
@@ -202,13 +205,14 @@ static struct hmll_range hmll_iouring_fetch_range_impl(
 static struct hmll_range hmll_iouring_fetch_range(
     struct hmll_context *ctx,
     void *fetcher,
+    const struct hmll_device_buffer dst,
     const struct hmll_range range,
-    const struct hmll_device_buffer dst
+    const unsigned short iofile
 ) {
     if (hmll_has_error(hmll_get_error(ctx)))
         return (struct hmll_range){0};
 
-    return hmll_iouring_fetch_range_impl(ctx, fetcher, range, dst);
+    return hmll_iouring_fetch_range_impl(ctx, fetcher, dst, range, iofile);
 }
 
 enum hmll_error_code hmll_iouring_init(
@@ -247,9 +251,10 @@ enum hmll_error_code hmll_iouring_init(
         io_uring_queue_init_params(HMLL_URING_QUEUE_DEPTH, &backend->ioring, &params);
     }
 
-    int iofiles[1];
-    iofiles[0] = ctx->source.fd;
-    HMLL_IOURING_BAIL(io_uring_register_files(&backend->ioring, iofiles, 1), HMLL_ERR_IO_ERROR);
+    int *iofiles = calloc(ctx->num_sources, sizeof(int));
+    for (size_t i = 0; i < ctx->num_sources; ++i)
+        iofiles[i] = ctx->sources[i].fd;
+    HMLL_IOURING_BAIL(io_uring_register_files(&backend->ioring, iofiles, ctx->num_sources), HMLL_ERR_IO_ERROR);
 
     fetcher->device = device;
     fetcher->backend_impl_ = backend;

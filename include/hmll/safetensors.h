@@ -7,7 +7,8 @@
 
 #include "hmll/types.h"
 
-hmll_tensor_data_type_t hmll_safetensors_dtype_from_str(const char *dtype, size_t size);
-int hmll_safetensors_read_table(hmll_context_t *ctx, hmll_flags_t flags);
+int hmll_safetensors_populate_table(
+    hmll_context_t *ctx, struct hmll_source source, hmll_flags_t flags, size_t fid, size_t offset);
+int hmll_safetensors_open(struct hmll_context *ctx, const char *path, enum hmll_file_kind kind, enum hmll_flags flags);
 
 #endif //HMLL_HMLL_SAFETENSORS_H

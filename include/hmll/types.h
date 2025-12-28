@@ -31,6 +31,7 @@ enum hmll_error_code
 
     HMLL_ERR_SAFETENSORS_JSON_INVALID_HEADER = -30,
     HMLL_ERR_SAFETENSORS_JSON_MALFORMED_HEADER = -31,
+    HMLL_ERR_SAFETENSORS_JSON_MALFORMED_INDEX = -32,
 
     HMLL_ERR_CUDA_NOT_ENABLED = -40,
     HMLL_ERR_CUDA_NO_DEVICE = -41,
@@ -68,6 +69,7 @@ typedef enum hmll_flags hmll_flags_t;
 enum hmll_file_kind
 {
     HMLL_SAFETENSORS,
+    HMLL_SAFETENSORS_CHUNKED,
     HMLL_GGUF
 };
 typedef enum hmll_file_kind hmll_file_kind_t;
@@ -95,13 +97,15 @@ struct hmll_tensor_lookup_result
 {
     struct hmll_tensor_specs specs;
     size_t index;
-    int found;
+    unsigned short fidx;
+    unsigned char found;
 };
 typedef struct hmll_tensor_lookup_result hmll_tensor_lookup_result_t;
 
 struct hmll_table
 {
     struct hmll_tensor_specs *tensors;
+    unsigned short *indexes;
     char **names;
 };
 typedef struct hmll_table hmll_table_t;
@@ -123,8 +127,9 @@ struct hmll_device_buffer
 typedef struct hmll_device_buffer hmll_device_buffer_t;
 
 struct hmll_context {
-    struct hmll_source source;
     struct hmll_table table;
+    struct hmll_source *sources;
+    size_t num_sources;
     size_t num_tensors;
     enum hmll_file_kind kind;
     enum hmll_error_code error;

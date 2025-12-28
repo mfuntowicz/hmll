@@ -29,7 +29,7 @@ struct hmll_fetcher
     enum hmll_fetcher_kind kind;
     enum hmll_device device;
     void *backend_impl_;
-    struct hmll_range (*fetch_range_impl_)(struct hmll_context *, void *, struct hmll_range, struct hmll_device_buffer);
+    struct hmll_range (*fetch_range_impl_)(struct hmll_context *, void *, struct hmll_device_buffer, struct hmll_range, unsigned short);
 
 #if defined(__HMLL_CUDA_ENABLED__)
     union

@@ -41,12 +41,13 @@ int hmll_contains(const struct hmll_context *ctx, const char *name)
 
 struct hmll_tensor_lookup_result hmll_get_tensor_specs(const struct hmll_context *ctx, const char *name)
 {
-    struct hmll_tensor_lookup_result result = {{0}, 0, HMLL_FALSE };
+    struct hmll_tensor_lookup_result result = {{0}, 0,  0,HMLL_FALSE };
     if (!hmll_has_error(hmll_get_error(ctx))) {
         const int index = hmll_find_by_name(ctx, name);
         if (index >= 0) {
             result.found = 1;
             result.index = index;
+            result.fidx = ctx->table.indexes[index];
             result.specs = ctx->table.tensors[index];
         }
     }

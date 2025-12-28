@@ -67,7 +67,6 @@ set(LIBHMLL_HEADERS
         include/hmll/hmll.h
         include/hmll/safetensors.h
         include/hmll/types.h
-        include/hmll/unix/mmap.h
         include/hmll/unix/fetcher.h
         include/hmll/unix/iouring.h
 )
