@@ -254,7 +254,13 @@ enum hmll_error_code hmll_iouring_init(
     int *iofiles = calloc(ctx->num_sources, sizeof(int));
     for (size_t i = 0; i < ctx->num_sources; ++i)
         iofiles[i] = ctx->sources[i].fd;
-    HMLL_IOURING_BAIL(io_uring_register_files(&backend->ioring, iofiles, ctx->num_sources), HMLL_ERR_IO_ERROR);
+
+    int res = io_uring_register_files(&backend->ioring, iofiles, ctx->num_sources);
+    free(iofiles);
+    if (res != 0) {
+        ctx->error = HMLL_ERR_IO_BUFFER_REGISTRATION_FAILED;
+        goto cleanup;
+    }
 
     fetcher->device = device;
     fetcher->backend_impl_ = backend;
@@ -265,9 +271,9 @@ enum hmll_error_code hmll_iouring_init(
 cleanup:
     if (backend->ioring.ring_fd > 0) io_uring_queue_exit(&backend->ioring);
 #if defined(__HMLL_CUDA_ENABLED__)
-    if (backend->device_ctx)
+    if (backend->device_ctx) {
         free(backend->device_ctx);
-
+    }
 #endif
     free(backend);
     return ctx->error;
