@@ -251,15 +251,17 @@ enum hmll_error_code hmll_iouring_init(
         io_uring_queue_init_params(HMLL_URING_QUEUE_DEPTH, &backend->ioring, &params);
     }
 
-    int *iofiles = calloc(ctx->num_sources, sizeof(int));
-    for (size_t i = 0; i < ctx->num_sources; ++i)
-        iofiles[i] = ctx->sources[i].fd;
+    {
+        int *iofiles = calloc(ctx->num_sources, sizeof(int));
+        for (size_t i = 0; i < ctx->num_sources; ++i)
+            iofiles[i] = ctx->sources[i].fd;
 
-    int res = io_uring_register_files(&backend->ioring, iofiles, ctx->num_sources);
-    free(iofiles);
-    if (res != 0) {
-        ctx->error = HMLL_ERR_IO_BUFFER_REGISTRATION_FAILED;
-        goto cleanup;
+        int res = io_uring_register_files(&backend->ioring, iofiles, ctx->num_sources);
+        free(iofiles);
+        if (res != 0) {
+            ctx->error = HMLL_ERR_IO_BUFFER_REGISTRATION_FAILED;
+            goto cleanup;
+        }
     }
 
     fetcher->device = device;
