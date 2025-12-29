@@ -37,7 +37,7 @@ HmllFetcher HmllContext::fetcher(const hmll_device_t device, hmll_fetcher_kind_t
 HmllContext HmllContext::open(const std::string& path, const hmll_file_kind kind, const int flags)
 {
     const auto ctx = new hmll_context_t();
-    if (const int result = hmll_open(path.c_str(), ctx, kind, static_cast<hmll_flags_t>(flags)); result < 0) {
+    if (const int result = hmll_open(ctx, path.c_str(), kind, static_cast<hmll_flags_t>(flags)); result < 0) {
         throw std::runtime_error(
             "Failed to open safetensors file " + path + ": " + hmll_strerr(hmll_get_error(ctx)));
     }
