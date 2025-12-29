@@ -2,6 +2,7 @@
 // Created by mfuntowicz on 12/17/25.
 //
 
+#include <hmll/hmll.h>
 #include "specs.hpp"
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/tuple.h>
@@ -28,9 +29,29 @@ void init_specs(const nb::module_& m)
 {
     nb::enum_<hmll_tensor_data_type_t>(m, "HmllDataType",
         R"pbdoc(Describe the underlying element type for each value stored in a tensor)pbdoc")
+        .value("BOOLEAN", HMLL_DTYPE_BOOL)
         .value("BFLOAT16", HMLL_DTYPE_BFLOAT16)
+        .value("COMPLEX64", HMLL_DTYPE_COMPLEX)
         .value("FLOAT32", HMLL_DTYPE_FLOAT32)
-        .value("FLOAT16", HMLL_DTYPE_FLOAT16);
+        .value("FLOAT16", HMLL_DTYPE_FLOAT16)
+        .value("FLOAT8_E4M3", HMLL_DTYPE_FLOAT8_E4M3)
+        .value("FLOAT8_E5M2", HMLL_DTYPE_FLOAT8_E5M2)
+        .value("FLOAT8_E8M0", HMLL_DTYPE_FLOAT8_E8M0)
+        .value("FLOAT4", HMLL_DTYPE_FLOAT4)
+        .value("FLOAT6_E2M3", HMLL_DTYPE_FLOAT6_E2M3)
+        .value("FLOAT6_E3M2", HMLL_DTYPE_FLOAT6_E3M2)
+        .value("SIGNED_INT4", HMLL_DTYPE_SIGNED_INT4)
+        .value("SIGNED_INT8", HMLL_DTYPE_SIGNED_INT8)
+        .value("SIGNED_INT16", HMLL_DTYPE_SIGNED_INT16)
+        .value("SIGNED_INT32", HMLL_DTYPE_SIGNED_INT32)
+        .value("SIGNED_INT64", HMLL_DTYPE_SIGNED_INT64)
+        .value("UNSIGNED_INT4", HMLL_DTYPE_UNSIGNED_INT4)
+        .value("UNSIGNED_INT8", HMLL_DTYPE_UNSIGNED_INT8)
+        .value("UNSIGNED_INT16", HMLL_DTYPE_UNSIGNED_INT16)
+        .value("UNSIGNED_INT32", HMLL_DTYPE_UNSIGNED_INT32)
+        .value("UNSIGNED_INT64", HMLL_DTYPE_UNSIGNED_INT64)
+        .value("UNKNOWN", HMLL_DTYPE_UNKNOWN)
+    .def_prop_ro("nbits", [](const hmll_tensor_data_type dtype) -> size_t { return hmll_nbits(dtype); });
 
     nb::class_<HmllTensorSpecs>(m, "HmllTensorSpecs",
         R"pbdoc(Contains all the information about a tensor)pbdoc")

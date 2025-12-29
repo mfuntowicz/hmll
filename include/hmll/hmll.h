@@ -38,7 +38,7 @@ HMLL_EXTERN void hmll_destroy(struct hmll_context *) NO_EXCEPT;
 
 HMLL_EXTERN int hmll_find_by_name(const struct hmll_context *, const char *) NO_EXCEPT;
 HMLL_EXTERN int hmll_contains(const struct hmll_context *, const char *) NO_EXCEPT;
-HMLL_EXTERN uint8_t hmll_sizeof(enum hmll_tensor_data_type) NO_EXCEPT;
+HMLL_EXTERN uint8_t hmll_nbits(enum hmll_tensor_data_type) NO_EXCEPT;
 HMLL_EXTERN size_t hmll_numel(const struct hmll_tensor_specs *) NO_EXCEPT;
 HMLL_EXTERN struct hmll_tensor_lookup_result hmll_get_tensor_specs(const struct hmll_context *, const char *) NO_EXCEPT;
 
