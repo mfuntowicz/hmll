@@ -37,7 +37,7 @@ jobs:
           { cc: clang, cxx: clang++ }
         ]
         static: [ OFF, ON ]
-        cuda: [ 12.9.0, 13.1.0 ]
+        cuda: [ 12.9.0, 13.0.0 ]
 
     uses: ./.github/workflows/build.yml
     with:
