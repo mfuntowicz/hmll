@@ -9,7 +9,7 @@ on:
 jobs:
   cpu:
     strategy:
-      matrix: &setup
+      matrix:
         os: [ ubuntu-latest, ubuntu-24.04-arm ]
         compiler: [
           { cc: gcc, cxx: g++ },
@@ -30,8 +30,13 @@ jobs:
   cuda:
     strategy:
       matrix:
-       <<: *setup
-       cuda: [ 12.9.0, 13.0.0, 13.1.0 ]
+        os: [ ubuntu-latest, ubuntu-24.04-arm ]
+        compiler: [
+          { cc: gcc, cxx: g++ },
+          { cc: clang, cxx: clang++ }
+        ]
+        static: [ OFF, ON ]
+        cuda: [ 12.9.0, 13.0.0, 13.1.0 ]
 
     uses: .github/workflows/build.yml
     with:
