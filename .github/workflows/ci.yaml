@@ -17,7 +17,7 @@ jobs:
         ]
         static: [OFF, ON]
 
-    uses: .github/workflows/build.yml
+    uses: ./.github/workflows/build.yml
     with:
       build_type: "Debug"
       tests: true
@@ -38,7 +38,7 @@ jobs:
         static: [ OFF, ON ]
         cuda: [ 12.9.0, 13.0.0, 13.1.0 ]
 
-    uses: .github/workflows/build.yml
+    uses: ./.github/workflows/build.yml
     with:
       build_type: "Debug"
       tests: false
