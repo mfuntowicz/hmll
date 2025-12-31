@@ -63,7 +63,7 @@ jobs:
       # --- Setup CUDA (Conditional) ---
       - name: Setup CUDA
         if: inputs.cuda == 'ON'
-        uses: Jimver/cuda-toolkit@v0.2.30
+        uses: Jimver/cuda-toolkit@v0.2.29
         with:
           cuda: ${{ inputs.cuda_version }}
           use-local-cache: 'false'
