@@ -1,0 +1,90 @@
+name: HMLL Build Reusable Workflow
+
+on:
+  workflow_call:
+    inputs:
+      os:
+        required: true
+        type: string
+      cc:
+        required: true
+        type: string
+      cxx:
+        required: true
+        type: string
+      build_type:
+        required: false
+        type: string
+        default: "Debug"
+      static:
+        required: true
+        type: string
+      sanitizers:
+        required: false
+        type: string
+        default: "OFF"
+      cuda:
+        required: false
+        type: string
+        default: "OFF"
+      cuda_version:
+        required: false
+        type: string
+      python:
+        required: false
+        type: string
+        default: "OFF"
+      python_version:
+        required: false
+        type: string
+      tests:
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  build:
+    runs-on: ${{ inputs.os }}
+    env:
+      BUILD_TYPE: ${{ inputs.build_type }}
+      CC: ${{ inputs.cc }}
+      CXX: ${{ inputs.cxx }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      # --- Setup Python (Conditional) ---
+      - name: Setup Python
+        if: inputs.python == 'ON'
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python_version }}
+
+      # --- Setup CUDA (Conditional) ---
+      - name: Setup CUDA
+        if: inputs.cuda == 'ON'
+        uses: Jimver/cuda-toolkit@v0.2.30
+        with:
+          cuda: ${{ inputs.cuda_version }}
+          use-local-cache: 'false'
+          use-github-cache: 'false'
+
+      # --- Configure ---
+      - name: Configure CMake
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DHMLL_BUILD_STATIC=${{ inputs.static }} \
+            -DHMLL_BUILD_TESTS=ON \
+            -DHMLL_ENABLE_SANITIZERS=${{ inputs.sanitizers }} \
+            -DHMLL_USE_CUDA=${{ inputs.cuda }} \
+            -DHMLL_USE_PYTHON=${{ inputs.python }}
+
+      # --- Build ---
+      - name: Build
+        run: cmake --build build --config ${{ env.BUILD_TYPE }}
+
+      - name: Test
+        if: ${{ inputs.tests }}
+        working-directory: build
+        run: ctest -C ${{ env.BUILD_TYPE }} --output-on-failure

@@ -1,0 +1,46 @@
+name: HMLL Continuous Integration
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  cpu:
+    strategy:
+      matrix: &setup
+        os: [ ubuntu-latest, ubuntu-24.04-arm ]
+        compiler: [
+          { cc: gcc, cxx: g++ },
+          { cc: clang, cxx: clang++ }
+        ]
+        static: [OFF, ON]
+
+    uses: .github/workflows/build.yml
+    with:
+      build_type: "Debug"
+      tests: true
+      sanitizers: 'ON'
+      os: ${{ matrix.os }}
+      cc: ${{ matrix.compiler.cc }}
+      cxx: ${{ matrix.compiler.cxx }}
+      static: ${{ matrix.static }}
+
+  cuda:
+    strategy:
+      matrix:
+       <<: *setup
+       cuda: [ 12.9.0, 13.0.0, 13.1.0 ]
+
+    uses: .github/workflows/build.yml
+    with:
+      build_type: "Debug"
+      tests: false
+      cuda: 'ON'
+      cuda_version: ${{ matrix.cuda }}
+      sanitizers: 'ON'
+      os: ${{ matrix.os }}
+      cc: ${{ matrix.compiler.cc }}
+      cxx: ${{ matrix.compiler.cxx }}
+      static: ${{ matrix.static }}
