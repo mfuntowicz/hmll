@@ -68,6 +68,8 @@ jobs:
           cuda: ${{ inputs.cuda_version }}
           use-local-cache: 'false'
           use-github-cache: 'false'
+          log-file-suffix: '${{ inputs.os }}-${{ inputs.build_type }}-${{ inputs.compiler.cc }}-${{ inputs.static }}-cu${{ inputs.cuda_version }}-py${{ inputs.python_version}}.txt'
+          sub-packages: '[]'
 
       # --- Configure ---
       - name: Configure CMake
