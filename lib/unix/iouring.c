@@ -6,8 +6,6 @@
 #define HMLL_IOURING_BAIL(call, err) if ((call) < 0) { ctx->error = err; goto cleanup; }
 #define HMLL_IOURING_CHECK(call) HMLL_IOURING_BAIL(call, HMLL_ERR_IO_ERROR)
 
-#define HMLL_CQE_BATCH_SIZE 32
-
 #if defined(__HMLL_CUDA_ENABLED__)
 #include <cuda_runtime_api.h>
 #include <driver_types.h>
@@ -144,9 +142,10 @@ static struct hmll_range hmll_iouring_fetch_range_impl(
         return (struct hmll_range){0};
     }
 
+    size_t n_dma = 0;
     size_t b_read = 0;
     size_t b_submitted = 0;
-    struct io_uring_cqe *cqes[HMLL_CQE_BATCH_SIZE];
+    struct io_uring_cqe *cqes[HMLL_URING_CQE_BATCH_SIZE];
 
     while (b_read < a_size) {
         hmll_iouring_reclaim_slots(fetcher, dst.device);
@@ -168,13 +167,33 @@ static struct hmll_range hmll_iouring_fetch_range_impl(
                 fetcher, dst.device, sqe, (char *)dst.ptr + b_submitted, file_offset, to_read, iofile, slot);
 
             b_submitted += to_read;
+            ++n_dma;
         }
 
-        io_uring_submit(&fetcher->ioring);
+        // update congestion control algorithm
+        if (n_dma > 0) {
+             const size_t nwait = MIN(n_dma, fetcher->iocca.window);
+
+            struct timespec ts_start, ts_end;
+            clock_gettime(CLOCK_MONOTONIC_COARSE, &ts_start);
+
+            if (io_uring_submit_and_wait(&fetcher->ioring, nwait) < 0) {
+                // todo: do we need to reset the cca? hmll_iouring_cca_init(&fetcher->iocca)
+                ctx->error = HMLL_ERR_IO_ERROR;
+                return (struct hmll_range) {0};
+            }
+            clock_gettime(CLOCK_MONOTONIC_COARSE, &ts_end);
+
+            // todo: this is an approximated version of the number of bytes actually reads because it assumes
+            // full reads
+            hmll_iouring_cca_update(&fetcher->iocca, HMLL_URING_BUFFER_SIZE * nwait, ts_start, ts_end);
+        }
 
         unsigned count = 0;
-        while ((count = io_uring_peek_batch_cqe(&fetcher->ioring, cqes, HMLL_CQE_BATCH_SIZE)) > 0) {
+        while ((count = io_uring_peek_batch_cqe(&fetcher->ioring, cqes, HMLL_URING_CQE_BATCH_SIZE)) > 0) {
             for (unsigned i = 0; i < count; i++) {
+                --n_dma;
+
                 const struct io_uring_cqe *cqe = cqes[i];
                 if (cqe->res < 0) {
                     ctx->error = HMLL_ERR_IO_ERROR;
@@ -216,6 +235,8 @@ enum hmll_error_code hmll_iouring_init(
         return ctx->error;
 
     struct hmll_iouring *backend = calloc(1, sizeof(struct hmll_iouring));
+    hmll_iouring_cca_init(&backend->iocca);
+
     struct io_uring_params params = {0};
     params.flags |= IORING_SETUP_SQPOLL;
     params.sq_thread_idle = 500;
