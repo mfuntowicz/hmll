@@ -145,7 +145,7 @@ static struct hmll_range hmll_iouring_fetch_range_impl(
     size_t n_dma = 0;
     size_t b_read = 0;
     size_t b_submitted = 0;
-    struct io_uring_cqe *cqes[HMLL_CQE_BATCH_SIZE];
+    struct io_uring_cqe *cqes[HMLL_URING_CQE_BATCH_SIZE];
 
     while (b_read < a_size) {
         hmll_iouring_reclaim_slots(fetcher, dst.device);
@@ -189,7 +189,7 @@ static struct hmll_range hmll_iouring_fetch_range_impl(
         }
 
         unsigned count = 0;
-        while ((count = io_uring_peek_batch_cqe(&fetcher->ioring, cqes, HMLL_CQE_BATCH_SIZE)) > 0) {
+        while ((count = io_uring_peek_batch_cqe(&fetcher->ioring, cqes, HMLL_URING_CQE_BATCH_SIZE)) > 0) {
             for (unsigned i = 0; i < count; i++) {
                 --n_dma;
 

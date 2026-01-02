@@ -10,8 +10,8 @@
 #define HMLL_URING_BUFFER_SIZE (64U * 1024)
 #endif
 
-#ifndef HMLL_CQE_BATCH_SIZE
-#define HMLL_CQE_BATCH_SIZE 32
+#ifndef HMLL_URING_CQE_BATCH_SIZE
+#define HMLL_URING_CQE_BATCH_SIZE 32
 #endif
 
 #ifndef MIN
@@ -67,9 +67,9 @@ static inline void hmll_iouring_cuda_stream_set_memcpy(enum hmll_iouring_cuda_st
 #endif
 
 
-static inline size_t hmll_iouring_throughput(const size_t nbytes, const size_t elasped)
+static inline size_t hmll_iouring_throughput(const size_t nbytes, const size_t elapsed)
 {
-    return nbytes * 1000000L / elasped;
+    return nbytes * 1000000L / elapsed;
 }
 
 static inline void hmll_iouring_cca_init(struct hmll_iouring_cca *cca)
@@ -84,13 +84,16 @@ static inline unsigned hmll_iouring_cca_update(
     printf("updating cca window: current = %u, ", cca->window);
     const unsigned current = cca->window;
     const size_t elapsed = MAX((ts_end.tv_sec - ts_start.tv_sec) * 1000000000L + (ts_end.tv_nsec - ts_start.tv_nsec), 1);
+
     const size_t throughput = hmll_iouring_throughput(bytes, elapsed);
+    const size_t smoothed = ((throughput * 3) + cca->throughput) >> 2;
+
     if (cca->throughput < throughput) {
-        cca->window = MIN(cca->window + 1, HMLL_CQE_BATCH_SIZE);
-        cca->throughput = throughput;
+        cca->window = MIN(cca->window + 1, HMLL_URING_CQE_BATCH_SIZE);
+        cca->throughput = smoothed;
     } else {
         cca->window = MAX(cca->window - 1, 1);
-        cca->throughput = throughput;
+        cca->throughput = smoothed;
     }
     printf("update = %u (elapsed: %zu ns)\n", cca->window, elapsed);
     return current;

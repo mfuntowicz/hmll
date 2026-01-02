@@ -7,7 +7,7 @@
 #include "hmll/hmll.h"
 #include "hmll/unix/iouring.h"
 
-TEST_CASE("io_uring set slot busy", "[io_uring][slot]")
+TEST_CASE("io_uring set slot busy", "[linux][io_uring][slot]")
 {
     struct hmll_iouring_iobusy iobusy = {0, 0};
     hmll_iouring_slot_set_busy(&iobusy, 0);
@@ -35,7 +35,7 @@ TEST_CASE("io_uring set slot busy", "[io_uring][slot]")
     REQUIRE(iobusy.msb == 1LL << 35);
 }
 
-TEST_CASE("io_uring set slot available", "[io_uring][slot]")
+TEST_CASE("io_uring set slot available", "[linux][io_uring][slot]")
 {
     struct hmll_iouring_iobusy iobusy = {0, 0};
     hmll_iouring_slot_set_busy(&iobusy, 0);
@@ -74,7 +74,7 @@ TEST_CASE("io_uring set slot available", "[io_uring][slot]")
     REQUIRE(iobusy.msb == 0);
 }
 
-SCENARIO("io_uring find slot", "[io_uring][slot]")
+SCENARIO("io_uring find slot", "[linux][io_uring][slot]")
 {
     GIVEN("A bitmap where all the slot are available")
     {
@@ -156,6 +156,81 @@ SCENARIO("io_uring find slot", "[io_uring][slot]")
             {
                 REQUIRE(hmll_iouring_slot_find_available(iobusy) == 100);
             }
+        }
+    }
+}
+
+TEST_CASE("io_uring compute throughput", "[linux][io_uring]")
+{
+    constexpr size_t nbytes = 7 * 1000 * 1000U;
+    const size_t throughput = hmll_iouring_throughput(nbytes, 7U * 1e9);
+    REQUIRE(throughput == 1000);
+}
+
+SCENARIO("io_uring congestion control algorithm", "[linux][io_uring]")
+{
+    hmll_iouring_cca cca = {0};
+    hmll_iouring_cca_init(&cca);
+
+    WHEN("initialization")
+    {
+        REQUIRE(cca.window == 1);
+        REQUIRE(cca.throughput == 0);
+    }
+
+    WHEN("update the throughput")
+    {
+        constexpr timespec ts_start = {0, 0};
+        constexpr timespec ts_end = {1, 0};
+        const unsigned prev = hmll_iouring_cca_update(&cca, 7U * 1000 * 1000, ts_start, ts_end);
+        THEN("update cca window")
+        {
+            REQUIRE(prev == 1);
+            REQUIRE(cca.throughput > 0);
+            REQUIRE(cca.window == 2);
+        }
+    }
+
+    WHEN("throughput increase")
+    {
+        for (size_t i = 0; i < 2; i++) {
+            constexpr timespec ts_end = {0, 5000};
+            constexpr timespec ts_start = {0, 0};
+            const unsigned throughput = cca.throughput;
+            const unsigned prev = hmll_iouring_cca_update(&cca, 7U * 1000 * 1000, ts_start, ts_end);
+            THEN("update cca window")
+            {
+                REQUIRE(prev < cca.window);
+                REQUIRE(throughput < cca.throughput);
+                REQUIRE(cca.window == i + 2);
+            }
+        }
+    }
+
+    WHEN("throughput increase and then decrease (I/O limit)")
+    {
+        for (size_t i = 0; i < 5; i++) {
+            constexpr timespec ts_end = {0, 5000};
+            constexpr timespec ts_start = {0, 0};
+            const unsigned throughput = cca.throughput;
+            const unsigned prev = hmll_iouring_cca_update(&cca, (i + 1) * 7U * 1000 * 1000, ts_start, ts_end);
+            THEN("update cca window")
+            {
+                REQUIRE(prev < cca.window);
+                REQUIRE(throughput < cca.throughput);
+                REQUIRE(cca.window == i + 2);
+            }
+        }
+
+        constexpr timespec ts_end = {5, 5000};
+        constexpr timespec ts_start = {0, 0};
+        const unsigned throughput = cca.throughput;
+        const unsigned prev = hmll_iouring_cca_update(&cca, 7U * 1000 * 1000, ts_start, ts_end);
+        THEN("update cca window")
+        {
+            REQUIRE(prev > cca.window);
+            REQUIRE(throughput > cca.throughput);
+            REQUIRE(cca.window == 5);
         }
     }
 }
