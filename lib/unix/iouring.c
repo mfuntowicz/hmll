@@ -6,6 +6,8 @@
 #define HMLL_IOURING_BAIL(call, err) if ((call) < 0) { ctx->error = err; goto cleanup; }
 #define HMLL_IOURING_CHECK(call) HMLL_IOURING_BAIL(call, HMLL_ERR_IO_ERROR)
 
+#define HMLL_CQE_BATCH_SIZE 32
+
 #if defined(__HMLL_CUDA_ENABLED__)
 #include <cuda_runtime_api.h>
 #include <driver_types.h>
@@ -124,14 +126,12 @@ static inline void hmll_iouring_handle_completion(
 #endif
 }
 
-// --- Main Unified Logic ---------------------------------------------------
-
 static struct hmll_range hmll_iouring_fetch_range_impl(
     struct hmll_context *ctx,
     struct hmll_iouring *fetcher,
     const struct hmll_device_buffer dst,
     const struct hmll_range range,
-    const unsigned short iofile
+    const unsigned iofile
 ) {
     if (hmll_has_error(hmll_get_error(ctx))) return (struct hmll_range) {0};
 
@@ -146,7 +146,7 @@ static struct hmll_range hmll_iouring_fetch_range_impl(
 
     size_t b_read = 0;
     size_t b_submitted = 0;
-    unsigned int n_dma = 0;
+    struct io_uring_cqe *cqes[HMLL_CQE_BATCH_SIZE];
 
     while (b_read < a_size) {
         hmll_iouring_reclaim_slots(fetcher, dst.device);
@@ -168,34 +168,26 @@ static struct hmll_range hmll_iouring_fetch_range_impl(
                 fetcher, dst.device, sqe, (char *)dst.ptr + b_submitted, file_offset, to_read, iofile, slot);
 
             b_submitted += to_read;
-            ++n_dma;
         }
 
-        if (n_dma > 0) {
-            const int to_wait = (dst.device == HMLL_DEVICE_CPU && n_dma >= 8) ? 8 : 1;
-            if (io_uring_submit_and_wait(&fetcher->ioring, to_wait) < 0) {
-                ctx->error = HMLL_ERR_IO_ERROR;
-                return (struct hmll_range) {0};
-            }
-        }
+        io_uring_submit(&fetcher->ioring);
 
-        unsigned head, count = 0;
-        struct io_uring_cqe *cqe;
+        unsigned count = 0;
+        while ((count = io_uring_peek_batch_cqe(&fetcher->ioring, cqes, HMLL_CQE_BATCH_SIZE)) > 0) {
+            for (unsigned i = 0; i < count; i++) {
+                const struct io_uring_cqe *cqe = cqes[i];
+                if (cqe->res < 0) {
+                    ctx->error = HMLL_ERR_IO_ERROR;
+                    io_uring_cq_advance(&fetcher->ioring, i + 1);
+                    return (struct hmll_range) {0};
+                }
 
-        io_uring_for_each_cqe(&fetcher->ioring, head, cqe) {
-            count++;
-            --n_dma;
-
-            if (cqe->res < 0) {
-                ctx->error = HMLL_ERR_IO_ERROR;
-                return (struct hmll_range) {0};
+                b_read += cqe->res;
+                hmll_iouring_handle_completion(fetcher, cqe, &dst, a_start, cqe->res);
             }
 
-            b_read += cqe->res;
-            hmll_iouring_handle_completion(fetcher, cqe, &dst, a_start, cqe->res);
+            io_uring_cq_advance(&fetcher->ioring, count);
         }
-
-        io_uring_cq_advance(&fetcher->ioring, count);
     }
 
     return (struct hmll_range){ range.start - a_start, a_start + (range.end - range.start) };
