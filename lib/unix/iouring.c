@@ -236,9 +236,10 @@ enum hmll_error_code hmll_iouring_init(
     struct hmll_iouring *backend = calloc(1, sizeof(struct hmll_iouring));
     hmll_iouring_cca_init(&backend->iocca);
 
-    struct io_uring_params params = {0};
-    params.flags |= IORING_SETUP_SQPOLL;
-    params.sq_thread_idle = 500;
+    struct io_uring_params params = {
+        .flags = IORING_SETUP_SQPOLL | IORING_SETUP_SINGLE_ISSUER,
+        .sq_thread_idle = 500
+    };
 
     if (device == HMLL_DEVICE_CUDA) {
 #if defined(__HMLL_CUDA_ENABLED__)
