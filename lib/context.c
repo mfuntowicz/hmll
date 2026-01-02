@@ -47,7 +47,7 @@ struct hmll_tensor_lookup_result hmll_get_tensor_specs(const struct hmll_context
         if (index >= 0) {
             result.found = 1;
             result.index = index;
-            result.fidx = ctx->table.indexes[index];
+            result.file = ctx->table.indexes[index];
             result.specs = ctx->table.tensors[index];
         }
     }

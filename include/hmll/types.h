@@ -115,7 +115,7 @@ struct hmll_tensor_lookup_result
 {
     struct hmll_tensor_specs specs;
     size_t index;
-    unsigned short fidx;
+    size_t file;
     unsigned char found;
 };
 typedef struct hmll_tensor_lookup_result hmll_tensor_lookup_result_t;
