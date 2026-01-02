@@ -86,7 +86,7 @@ static inline unsigned hmll_iouring_cca_update(
     const size_t elapsed = MAX((ts_end.tv_sec - ts_start.tv_sec) * 1000000000L + (ts_end.tv_nsec - ts_start.tv_nsec), 1);
     const size_t throughput = hmll_iouring_throughput(bytes, elapsed);
     if (cca->throughput < throughput) {
-        cca->window = MIN(cca->window + 1, HMLL_URING_CQE_BATCH_SIZE);
+        cca->window = MIN(cca->window + 1, HMLL_CQE_BATCH_SIZE);
         cca->throughput = throughput;
     } else {
         cca->window = MAX(cca->window - 1, 1);
