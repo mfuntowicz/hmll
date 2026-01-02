@@ -81,7 +81,6 @@ static inline void hmll_iouring_cca_init(struct hmll_iouring_cca *cca)
 static inline unsigned hmll_iouring_cca_update(
     struct hmll_iouring_cca *cca, const size_t bytes, const struct timespec ts_start, const struct timespec ts_end)
 {
-    printf("updating cca window: current = %u, ", cca->window);
     const unsigned current = cca->window;
     const size_t elapsed = MAX((ts_end.tv_sec - ts_start.tv_sec) * 1000000000L + (ts_end.tv_nsec - ts_start.tv_nsec), 1);
 
@@ -95,7 +94,6 @@ static inline unsigned hmll_iouring_cca_update(
         cca->window = MAX(cca->window - 1, 1);
         cca->throughput = smoothed;
     }
-    printf("update = %u (elapsed: %zu ns)\n", cca->window, elapsed);
     return current;
 }
 
