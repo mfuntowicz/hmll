@@ -190,7 +190,7 @@ static struct hmll_range hmll_iouring_fetch_range_impl(
         }
 
         unsigned count = 0;
-        while ((count = io_uring_peek_batch_cqe(&fetcher->ioring, cqes, HMLL_URING_CQE_BATCH_SIZE)) > 0) {
+        while ((count = io_uring_peek_batch_cqe(&fetcher->ioring, cqes, HMLL_CQE_BATCH_SIZE)) > 0) {
             for (unsigned i = 0; i < count; i++) {
                 --n_dma;
 
