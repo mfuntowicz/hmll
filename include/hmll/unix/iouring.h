@@ -69,7 +69,7 @@ static inline void hmll_iouring_cuda_stream_set_memcpy(enum hmll_iouring_cuda_st
 
 static inline size_t hmll_iouring_throughput(const size_t nbytes, const size_t elasped)
 {
-    return nbytes * 10000000L / elasped;
+    return nbytes * 1000000L / elasped;
 }
 
 static inline void hmll_iouring_cca_init(struct hmll_iouring_cca *cca)
