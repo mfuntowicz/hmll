@@ -38,8 +38,7 @@ HMLL_EXTERN int hmll_open(struct hmll_context *, struct hmll_source **, const ch
 HMLL_EXTERN int hmll_close(struct hmll_context *, struct hmll_source) NO_EXCEPT;
 
 HMLL_EXTERN struct hmll_fetcher hmll_fetcher_init(struct hmll_context *, enum hmll_device, enum hmll_fetcher_kind kind);
-HMLL_EXTERN struct hmll_range hmll_fetch_tensor(struct hmll_context *, struct hmll_fetcher, const char *, struct hmll_device_buffer);
-HMLL_EXTERN struct hmll_range hmll_fetch_range(struct hmll_context *, struct hmll_fetcher, struct hmll_device_buffer, struct hmll_range, unsigned short);
+HMLL_EXTERN struct hmll_range hmll_fetch(struct hmll_context *, struct hmll_fetcher, struct hmll_device_buffer, struct hmll_range, unsigned short);
 
 void *hmll_get_buffer(struct hmll_context *, enum hmll_device, size_t) NO_EXCEPT;
 struct hmll_device_buffer hmll_get_buffer_for_range(struct hmll_context *, enum hmll_device, struct hmll_range) NO_EXCEPT;
