@@ -65,27 +65,27 @@ endif()
 set(LIBHMLL_HEADERS
         include/hmll/fetcher.h
         include/hmll/hmll.h
-        include/hmll/safetensors.h
+#        include/hmll/safetensors.h
         include/hmll/types.h
         include/hmll/unix/fetcher.h
-        include/hmll/unix/iouring.h
+        include/hmll/unix/backend/iouring.h
 )
 set(LIBHMLL_SOURCES
         lib/context.c
         lib/errors.c
         lib/fetcher.c
         lib/memory.c
-        lib/tensors.c
-        lib/safetensors.c
-        lib/sources.c
-        lib/unix/mmap.c
-        lib/unix/iouring.c
+#        lib/tensors.c
+#        lib/safetensors.c
+        lib/unix/fetcher.c
+        lib/unix/file.c
+        lib/unix/backend/iouring.c
 )
 
-if(${HMLL_ENABLE_CUDA})
-    list(APPEND LIBHMLL_HEADERS include/hmll/cuda.h)
-    list(APPEND LIBHMLL_SOURCES lib/cuda.c)
-endif()
+#if(${HMLL_ENABLE_CUDA})
+#    list(APPEND LIBHMLL_HEADERS include/hmll/cuda.h)
+#   list(APPEND LIBHMLL_SOURCES lib/cuda.c)
+#endif()
 
 add_library(libhmll ${LIBHMLL_HEADERS} ${LIBHMLL_SOURCES})
 target_include_directories(libhmll PUBLIC
@@ -103,12 +103,13 @@ endif()
 # Examples
 ###########################################################
 if(${HMLL_BUILD_EXAMPLES})
-    add_executable(hmll_safetensors_ex examples/safetensors.c)
+#    add_executable(hmll_safetensors_ex examples/safetensors.c)
+    add_executable(hmll_examples_universal examples/universal.c)
 
     if(${HMLL_ENABLE_CUDA})
-        target_link_libraries(hmll_safetensors_ex PRIVATE libhmll CUDA::cudart)
+        target_link_libraries(hmll_examples_universal PRIVATE libhmll CUDA::cudart)
     else()
-        target_link_libraries(hmll_safetensors_ex PRIVATE libhmll)
+        target_link_libraries(hmll_examples_universal PRIVATE libhmll)
     endif()
 endif()
 

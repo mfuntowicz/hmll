@@ -35,7 +35,7 @@ struct hmll_source hmll_open_mapped(hmll_context_t *ctx, const char *path)
         goto close_fd_and_return_error;
     }
 
-    return (struct hmll_source) {fd, content, sb.st_size, HMLL_SOURCE_MMAP};
+    return (struct hmll_source) {HMLL_SOURCE_MMAP, fd, content, sb.st_size};
 
 close_fd_and_return_error:
     close(fd);

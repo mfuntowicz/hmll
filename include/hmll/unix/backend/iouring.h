@@ -147,5 +147,5 @@ static inline void hmll_iouring_slot_set_available(struct hmll_iouring_iobusy *i
     }
 }
 
-enum hmll_error_code hmll_iouring_init(struct hmll_context *, struct hmll_fetcher *, enum hmll_device);
+struct hmll_error hmll_iouring_init(struct hmll *, enum hmll_device);
 #endif // HMLL_FETCHER_IOURING_H

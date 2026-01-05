@@ -18,7 +18,7 @@
 
 #endif
 
-void *hmll_get_buffer(struct hmll_context *ctx, const enum hmll_device device, const size_t size)
+void *hmll_get_buffer(struct hmll *ctx, const enum hmll_device device, const size_t size)
 {
     void* ptr = NULL;
 
@@ -28,7 +28,7 @@ void *hmll_get_buffer(struct hmll_context *ctx, const enum hmll_device device, c
     case HMLL_DEVICE_CPU:
         ptr = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         if (ptr == MAP_FAILED) {
-            ctx->error = HMLL_ERR_ALLOCATION_FAILED;
+            ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
             return NULL;
         }
         break;
@@ -43,30 +43,30 @@ void *hmll_get_buffer(struct hmll_context *ctx, const enum hmll_device device, c
 #endif
         break;
 #else
-        ctx->error = HMLL_ERR_CUDA_NOT_ENABLED;
+        ctx->error = HMLL_ERR(HMLL_ERR_CUDA_NOT_ENABLED);
 #endif
     }
 #endif
     return ptr;
 }
 
-struct hmll_device_buffer hmll_get_buffer_for_range(struct hmll_context *ctx, const enum hmll_device device, const struct hmll_range range)
+struct hmll_iobuf hmll_get_buffer_for_range(struct hmll *ctx, const enum hmll_device device, const struct hmll_range range)
 {
-    if (hmll_has_error(hmll_get_error(ctx)))
-        return (struct hmll_device_buffer) {0, 0, device};
+    if (HMLL_FAILED(ctx->error))
+        return (struct hmll_iobuf) {0};
 
     const size_t alstart = ALIGN_DOWN(range.start, ALIGN_PAGE);
     const size_t alend = ALIGN_UP(range.end, ALIGN_PAGE);
     const size_t alsize = alend - alstart;
 
     void *ptr = hmll_get_buffer(ctx, device, alsize);
-    if (hmll_has_error(hmll_get_error(ctx)))
-        return (struct hmll_device_buffer) {0, 0, device};
+    if (HMLL_FAILED(ctx->error))
+        return (struct hmll_iobuf) {0};
 
-    return (struct hmll_device_buffer) {ptr, alsize, device};
+    return (struct hmll_iobuf) {alsize, ptr, device};
 }
 
-void *hmll_get_io_buffer(struct hmll_context *ctx, const enum hmll_device device, const size_t size)
+void *hmll_get_io_buffer(struct hmll *ctx, const enum hmll_device device, const size_t size)
 {
     void *ptr = NULL;
     switch (device)
@@ -84,7 +84,7 @@ void *hmll_get_io_buffer(struct hmll_context *ctx, const enum hmll_device device
     case HMLL_DEVICE_CUDA:
 #if defined(__HMLL_CUDA_ENABLED__)
         ;
-        enum cudaError error = cudaHostAlloc(&ptr, size, cudaHostAllocMapped);
+        const enum cudaError error = cudaHostAlloc(&ptr, size, cudaHostAllocMapped);
         if (error == cudaSuccess)
             return ptr;
 
@@ -94,6 +94,6 @@ void *hmll_get_io_buffer(struct hmll_context *ctx, const enum hmll_device device
 #endif
     }
 
-    ctx->error = HMLL_ERR_ALLOCATION_FAILED;
+    ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
     return ptr;
 }

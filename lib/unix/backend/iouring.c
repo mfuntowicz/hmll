@@ -1,42 +1,42 @@
-#include "hmll/unix/iouring.h"
+#include "../../../include/hmll/unix/backend/iouring.h"
 
 #include <stdlib.h>
-#include "hmll/hmll.h"
 
-#define HMLL_IOURING_BAIL(call, err) if ((call) < 0) { ctx->error = err; goto cleanup; }
-#define HMLL_IOURING_CHECK(call) HMLL_IOURING_BAIL(call, HMLL_ERR_IO_ERROR)
+#include "hmll/cuda.h"
+#include "hmll/hmll.h"
+#include "hmll/memory.h"
 
 #if defined(__HMLL_CUDA_ENABLED__)
 #include <cuda_runtime_api.h>
 #include <driver_types.h>
-#include "hmll/cuda.h"
 #endif
 
-static enum hmll_error_code hmll_iouring_register_staging_buffers(
-    struct hmll_context *ctx,
+static struct hmll_error hmll_iouring_register_staging_buffers(
+    struct hmll *ctx,
     struct hmll_iouring *fetcher,
     const enum hmll_device device
 ) {
     fetcher->iovecs = hmll_get_io_buffer(ctx, HMLL_DEVICE_CPU, HMLL_URING_QUEUE_DEPTH * sizeof(struct iovec));
-    if (hmll_has_error(hmll_get_error(ctx))) return ctx->error;
+    if (HMLL_FAILED(ctx->error)) return ctx->error;
 
     void *arena = hmll_get_io_buffer(ctx, device, HMLL_URING_QUEUE_DEPTH * HMLL_URING_BUFFER_SIZE);
-    if (hmll_has_error(hmll_get_error(ctx))) return ctx->error;
+    if (HMLL_FAILED(ctx->error)) return ctx->error;
 
     for (size_t i = 0; i < HMLL_URING_QUEUE_DEPTH; ++i) {
         fetcher->iovecs[i].iov_base = (char *)arena + i * HMLL_URING_BUFFER_SIZE;
         fetcher->iovecs[i].iov_len = HMLL_URING_BUFFER_SIZE;
     }
 
-    if (io_uring_register_buffers(&fetcher->ioring, fetcher->iovecs, HMLL_URING_QUEUE_DEPTH) != 0)
-        return ctx->error = HMLL_ERR_IO_BUFFER_REGISTRATION_FAILED;
+    int res;
+    if ((res = io_uring_register_buffers(&fetcher->ioring, fetcher->iovecs, HMLL_URING_QUEUE_DEPTH)) < 0)
+        return ctx->error = HMLL_SYS_ERR(res);
 
-    return HMLL_ERR_SUCCESS;
+    return HMLL_OK;
 }
 
 /**
  * Checks for completed CUDA events and reclaims the associated io_uring slots.
- * If CUDA is disabled or device is CPU, this is a no-op.
+ * If CUDA is disabled or the device is CPU, this is a no-op.
  */
 static inline void hmll_iouring_reclaim_slots(
     struct hmll_iouring *fetcher,
@@ -65,8 +65,8 @@ static inline void hmll_iouring_reclaim_slots(
  * Handles the difference between direct CPU buffer reads and CUDA staging buffer reads.
  */
 static inline void hmll_iouring_prep_sqe(
-    struct hmll_iouring *fetcher,
-    enum hmll_device device,
+    const struct hmll_iouring *fetcher,
+    const enum hmll_device device,
     struct io_uring_sqe *sqe,
     void *dst,
     const size_t offset,
@@ -102,7 +102,7 @@ static inline void hmll_iouring_prep_sqe(
 static inline void hmll_iouring_handle_completion(
     struct hmll_iouring *fetcher,
     const struct io_uring_cqe *cqe,
-    const struct hmll_device_buffer *dst,
+    const struct hmll_iobuf *dst,
     const size_t offset,
     const int32_t len
 ) {
@@ -125,20 +125,20 @@ static inline void hmll_iouring_handle_completion(
 }
 
 static struct hmll_range hmll_iouring_fetch_range_impl(
-    struct hmll_context *ctx,
+    struct hmll *ctx,
     struct hmll_iouring *fetcher,
-    const struct hmll_device_buffer dst,
+    const struct hmll_iobuf *dst,
     const struct hmll_range range,
     const unsigned iofile
 ) {
-    if (hmll_has_error(hmll_get_error(ctx))) return (struct hmll_range) {0};
+    if (HMLL_FAILED(ctx->error)) return (struct hmll_range) {0};
 
     const size_t a_start = ALIGN_DOWN(range.start, ALIGN_PAGE);
     const size_t a_end = ALIGN_UP(range.end, ALIGN_PAGE);
     const size_t a_size = a_end - a_start;
 
-    if (dst.device == HMLL_DEVICE_CPU && !hmll_is_aligned((uintptr_t)dst.ptr, ALIGN_PAGE)) {
-        ctx->error = HMLL_ERR_BUFFER_ADDR_NOT_ALIGNED;
+    if (dst->device == HMLL_DEVICE_CPU && !hmll_is_aligned((uintptr_t)dst->ptr, ALIGN_PAGE)) {
+        ctx->error = HMLL_ERR(HMLL_ERR_BUFFER_ADDR_NOT_ALIGNED);
         return (struct hmll_range){0};
     }
 
@@ -148,7 +148,7 @@ static struct hmll_range hmll_iouring_fetch_range_impl(
     struct io_uring_cqe *cqes[HMLL_URING_CQE_BATCH_SIZE];
 
     while (b_read < a_size) {
-        hmll_iouring_reclaim_slots(fetcher, dst.device);
+        hmll_iouring_reclaim_slots(fetcher, dst->device);
 
         while (b_submitted < a_size) {
             const int slot = hmll_iouring_slot_find_available(fetcher->iobusy);
@@ -164,7 +164,7 @@ static struct hmll_range hmll_iouring_fetch_range_impl(
             const size_t file_offset = a_start + b_submitted;
 
             hmll_iouring_prep_sqe(
-                fetcher, dst.device, sqe, (char *)dst.ptr + b_submitted, file_offset, to_read, iofile, slot);
+                fetcher, dst->device, sqe, (char *)dst->ptr + b_submitted, file_offset, to_read, iofile, slot);
 
             b_submitted += to_read;
             ++n_dma;
@@ -179,7 +179,7 @@ static struct hmll_range hmll_iouring_fetch_range_impl(
 
             if (io_uring_submit_and_wait(&fetcher->ioring, nwait) < 0) {
                 // todo: do we need to reset the cca? hmll_iouring_cca_init(&fetcher->iocca)
-                ctx->error = HMLL_ERR_IO_ERROR;
+                ctx->error = HMLL_ERR(HMLL_ERR_IO_ERROR);
                 return (struct hmll_range) {0};
             }
             clock_gettime(CLOCK_MONOTONIC_COARSE, &ts_end);
@@ -195,13 +195,13 @@ static struct hmll_range hmll_iouring_fetch_range_impl(
 
                 const struct io_uring_cqe *cqe = cqes[i];
                 if (cqe->res < 0) {
-                    ctx->error = HMLL_ERR_IO_ERROR;
+                    ctx->error = HMLL_ERR(HMLL_ERR_IO_ERROR);
                     io_uring_cq_advance(&fetcher->ioring, i + 1);
                     return (struct hmll_range) {0};
                 }
 
                 b_read += cqe->res;
-                hmll_iouring_handle_completion(fetcher, cqe, &dst, a_start, cqe->res);
+                hmll_iouring_handle_completion(fetcher, cqe, dst, a_start, cqe->res);
             }
 
             io_uring_cq_advance(&fetcher->ioring, count);
@@ -213,24 +213,20 @@ static struct hmll_range hmll_iouring_fetch_range_impl(
 
 
 static struct hmll_range hmll_iouring_fetch_range(
-    struct hmll_context *ctx,
+    struct hmll *ctx,
     void *fetcher,
-    const struct hmll_device_buffer dst,
+    struct hmll_iobuf *dst,
     const struct hmll_range range,
     const unsigned short iofile
 ) {
-    if (hmll_has_error(hmll_get_error(ctx)))
+    if (HMLL_FAILED(ctx->error))
         return (struct hmll_range){0};
 
     return hmll_iouring_fetch_range_impl(ctx, fetcher, dst, range, iofile);
 }
 
-enum hmll_error_code hmll_iouring_init(
-    struct hmll_context *ctx,
-    struct hmll_fetcher *fetcher,
-    const enum hmll_device device
-) {
-    if (hmll_has_error(hmll_get_error(ctx)))
+struct hmll_error hmll_iouring_init(struct hmll *ctx, const enum hmll_device device) {
+    if (HMLL_FAILED(ctx->error))
         return ctx->error;
 
     struct hmll_iouring *backend = calloc(1, sizeof(struct hmll_iouring));
@@ -253,11 +249,18 @@ enum hmll_error_code hmll_iouring_init(
         }
 
 
-        HMLL_IOURING_BAIL(io_uring_queue_init_params(HMLL_URING_QUEUE_DEPTH, &backend->ioring, &params), HMLL_ERR_IO_ERROR);
-        HMLL_IOURING_CHECK(hmll_iouring_register_staging_buffers(ctx, backend, device));
+        int res = 0;
+        if ((res = io_uring_queue_init_params(HMLL_URING_QUEUE_DEPTH, &backend->ioring, &params)) < 0) {
+            ctx->error = HMLL_SYS_ERR(res);
+            return ctx->error;
+        }
+
+        if (HMLL_FAILED((ctx->error = hmll_iouring_register_staging_buffers(ctx, backend, device)))) {
+            return ctx->error;
+        }
 
 #else
-        ctx->error = HMLL_ERR_CUDA_NOT_ENABLED;
+        ctx->error = HMLL_ERR(HMLL_ERR_CUDA_NOT_ENABLED);
         return ctx->error;
 #endif
     } else {
@@ -269,27 +272,34 @@ enum hmll_error_code hmll_iouring_init(
         for (size_t i = 0; i < ctx->num_sources; ++i)
             iofiles[i] = ctx->sources[i].fd;
 
-        int res = io_uring_register_files(&backend->ioring, iofiles, ctx->num_sources);
+        const int res = io_uring_register_files(&backend->ioring, iofiles, ctx->num_sources);
         free(iofiles);
+
         if (res != 0) {
-            ctx->error = HMLL_ERR_IO_BUFFER_REGISTRATION_FAILED;
+            ctx->error = HMLL_ERR(HMLL_ERR_IO_BUFFER_REGISTRATION_FAILED);
             goto cleanup;
         }
     }
 
-    fetcher->device = device;
-    fetcher->backend_impl_ = backend;
-    fetcher->fetch_range_impl_ = hmll_iouring_fetch_range;
+    if (ctx->fetcher == NULL) {
+        ctx->fetcher = calloc(1, sizeof(struct hmll_fetcher));
+        ctx->fetcher->device = device;
+        ctx->fetcher->backend_impl_ = backend;
+        ctx->fetcher->fetch_range_impl_ = hmll_iouring_fetch_range;
+    }
 
-    return HMLL_ERR_SUCCESS;
+
+    return HMLL_OK;
 
 cleanup:
-    if (backend->ioring.ring_fd > 0) io_uring_queue_exit(&backend->ioring);
+    if (backend->ioring.ring_fd > 0)
+        io_uring_queue_exit(&backend->ioring);
+
 #if defined(__HMLL_CUDA_ENABLED__)
-    if (backend->device_ctx) {
+    if (backend->device_ctx)
         free(backend->device_ctx);
-    }
 #endif
+
     free(backend);
     return ctx->error;
 }

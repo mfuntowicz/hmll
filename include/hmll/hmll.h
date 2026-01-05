@@ -22,30 +22,37 @@ extern "C" {
 #endif
 
 #define HMLL_FALSE   0u
-#define HMLL_SUCCESS 0U
 #define HMLL_UNUSED(expr) (void)(expr)
-#define HMLL_CHECK(ctx) if(hmll_has_error(hmll_get_error(ctx))) return ctx->error;
 
 #include "fetcher.h"
 #include "types.h"
 
-HMLL_EXTERN unsigned char hmll_success(enum hmll_error_code);
-HMLL_EXTERN unsigned char hmll_has_error(enum hmll_error_code);
-HMLL_EXTERN int hmll_get_error(const struct hmll_context *);
-HMLL_EXTERN const char *hmll_strerr(enum hmll_error_code);
+#ifdef __linux__
+#include "unix/file.h"
+#include "unix/fetcher.h"
+#endif
 
-HMLL_EXTERN int hmll_open(struct hmll_context *, struct hmll_source **, const char *) NO_EXCEPT;
-HMLL_EXTERN int hmll_close(struct hmll_context *, struct hmll_source) NO_EXCEPT;
+/** Error handling stubs **/
+#define HMLL_FAILED(res) ((res).code != HMLL_ERR_SUCCESS || (res).sys_err != HMLL_ERR_SUCCESS)
+#define HMLL_RES(...) (struct hmll_error){ __VA_ARGS__ }
+#define HMLL_OK  HMLL_RES(.code = HMLL_ERR_SUCCESS, .sys_err = 0)
+#define HMLL_ERR(c) HMLL_RES(.code = c, .sys_err = 0)
+#define HMLL_SYS_ERR(e) HMLL_RES(.code = HMLL_ERR_SYSTEM, .sys_err = e)
 
-HMLL_EXTERN struct hmll_fetcher hmll_fetcher_init(struct hmll_context *, enum hmll_device, enum hmll_fetcher_kind kind);
-HMLL_EXTERN struct hmll_range hmll_fetch(struct hmll_context *, struct hmll_fetcher, struct hmll_device_buffer, struct hmll_range, unsigned short);
+HMLL_EXTERN unsigned char hmll_success(struct hmll_error error);
+HMLL_EXTERN unsigned char hmll_has_error(struct hmll_error error);
+HMLL_EXTERN unsigned char hmll_error_is_os_error(struct hmll_error err);
+HMLL_EXTERN unsigned char hmll_error_is_lib_error(struct hmll_error err);
+HMLL_EXTERN const char *hmll_strerr(struct hmll_error err);
 
-void *hmll_get_buffer(struct hmll_context *, enum hmll_device, size_t) NO_EXCEPT;
-struct hmll_device_buffer hmll_get_buffer_for_range(struct hmll_context *, enum hmll_device, struct hmll_range) NO_EXCEPT;
-void *hmll_get_io_buffer(struct hmll_context *, enum hmll_device, size_t) NO_EXCEPT;
+/** Sources handling stubs **/
+HMLL_EXTERN struct hmll_error hmll_source_open(const char *path, struct hmll_source *src) NO_EXCEPT;
+HMLL_EXTERN void hmll_source_close(struct hmll_source *src) NO_EXCEPT;
 
-struct hmll_source hmll_open_mapped(struct hmll_context *, const char *) NO_EXCEPT;
-void hmll_close_mapped(struct hmll_source src) NO_EXCEPT;
+HMLL_EXTERN struct hmll_error hmll_fetcher_init(struct hmll *ctx, struct hmll_source *srcs, size_t n, enum hmll_device device, enum hmll_fetcher_kind kind) NO_EXCEPT;
+HMLL_EXTERN void hmll_destroy(struct hmll *ctx) NO_EXCEPT;
+
+HMLL_EXTERN struct hmll_range hmll_fetch(struct hmll *ctx, struct hmll_iobuf *dst, struct hmll_range range,  size_t iofile) NO_EXCEPT;
 #ifdef __cplusplus
 }
 #endif

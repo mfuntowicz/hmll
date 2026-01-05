@@ -1,18 +1,34 @@
 //
 // Created by mfuntowicz on 12/11/25.
 //
+#include <string.h>
+
+#include "hmll/hmll.h"
 #include "hmll/types.h"
 
-char *hmll_strerr(const enum hmll_error_code status)
+const char *hmll_strerr(const struct hmll_error err)
 {
-    switch (status)
+    if (hmll_error_is_os_error(err))
+        return strerror(-err.sys_err);
+
+    if (hmll_error_is_lib_error(err))
     {
-    case HMLL_ERR_FILE_NOT_FOUND: return "File not found";
-    case HMLL_ERR_ALLOCATION_FAILED: return "Failed to allocate memory";
-    case HMLL_ERR_TABLE_EMPTY: return "No tensors found while reading the file";
-    case HMLL_ERR_TENSOR_NOT_FOUND: return "Tensor not found in the known tensors table";
-    case HMLL_ERR_CUDA_NOT_ENABLED: return "CUDA not enabled";
-    case HMLL_ERR_CUDA_NO_DEVICE: return "No CUDA devices found";
-    default: return "Unknown error happened. Please open an issues at https://github.com/mfuntowicz/hmll/issues.";
+        switch (err.code)
+        {
+        case HMLL_ERR_FILE_NOT_FOUND: return "File not found";
+        case HMLL_ERR_ALLOCATION_FAILED: return "Failed to allocate memory";
+        case HMLL_ERR_TABLE_EMPTY: return "No tensors found while reading the file";
+        case HMLL_ERR_TENSOR_NOT_FOUND: return "Tensor not found in the known tensors table";
+        case HMLL_ERR_CUDA_NOT_ENABLED: return "CUDA not enabled";
+        case HMLL_ERR_CUDA_NO_DEVICE: return "No CUDA devices found";
+        default: return "Unknown error happened. Please open an issues at https://github.com/mfuntowicz/hmll/issues.";
+        }
     }
+
+    return "No error";
 }
+
+unsigned char hmll_success(const struct hmll_error error) { return (int)error.code == error.sys_err == HMLL_ERR_SUCCESS; }
+unsigned char hmll_has_error(const struct hmll_error error){ return hmll_error_is_os_error(error) || hmll_error_is_lib_error(error); }
+unsigned char hmll_error_is_os_error(const struct hmll_error err) { return err.sys_err != HMLL_ERR_SUCCESS; }
+unsigned char hmll_error_is_lib_error(const struct hmll_error err) { return err.code != HMLL_ERR_SUCCESS; }
