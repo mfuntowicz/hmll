@@ -15,8 +15,6 @@
 struct hmll;
 
 enum hmll_status_code {
-    __HMLL_ERR_ENSURE_INT32 = INT32_MAX,  // force the enum to be
-
     HMLL_ERR_SUCCESS = 0,
 
     HMLL_ERR_UNSUPPORTED_PLATFORM,
@@ -53,7 +51,6 @@ struct hmll_error {
     enum hmll_status_code code;
     int sys_err;
 };
-
 typedef struct hmll_error hmll_error_t;
 
 // enum hmll_file_kind
