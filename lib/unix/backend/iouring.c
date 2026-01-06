@@ -16,11 +16,11 @@ static struct hmll_error hmll_iouring_register_staging_buffers(
     struct hmll_iouring *fetcher,
     const enum hmll_device device
 ) {
-    fetcher->iovecs = hmll_get_io_buffer(ctx, HMLL_DEVICE_CPU, HMLL_URING_QUEUE_DEPTH * sizeof(struct iovec));
-    if (HMLL_FAILED(ctx->error)) return ctx->error;
+    fetcher->iovecs = hmll_get_io_buffer(ctx, device, HMLL_URING_QUEUE_DEPTH * sizeof(struct iovec));
+    if (hmll_check(ctx->error)) return ctx->error;
 
     void *arena = hmll_get_io_buffer(ctx, device, HMLL_URING_QUEUE_DEPTH * HMLL_URING_BUFFER_SIZE);
-    if (HMLL_FAILED(ctx->error)) return ctx->error;
+    if (hmll_check(ctx->error)) return ctx->error;
 
     for (size_t i = 0; i < HMLL_URING_QUEUE_DEPTH; ++i) {
         fetcher->iovecs[i].iov_base = (char *)arena + i * HMLL_URING_BUFFER_SIZE;
@@ -131,7 +131,7 @@ static struct hmll_range hmll_iouring_fetch_range_impl(
     const struct hmll_range range,
     const unsigned iofile
 ) {
-    if (HMLL_FAILED(ctx->error)) return (struct hmll_range) {0};
+    if (hmll_check(ctx->error)) return (struct hmll_range) {0};
 
     const size_t a_start = ALIGN_DOWN(range.start, ALIGN_PAGE);
     const size_t a_end = ALIGN_UP(range.end, ALIGN_PAGE);
@@ -219,14 +219,14 @@ static struct hmll_range hmll_iouring_fetch_range(
     const struct hmll_range range,
     const unsigned short iofile
 ) {
-    if (HMLL_FAILED(ctx->error))
+    if (hmll_check(ctx->error))
         return (struct hmll_range){0};
 
     return hmll_iouring_fetch_range_impl(ctx, fetcher, dst, range, iofile);
 }
 
 struct hmll_error hmll_iouring_init(struct hmll *ctx, const enum hmll_device device) {
-    if (HMLL_FAILED(ctx->error))
+    if (hmll_check(ctx->error))
         return ctx->error;
 
     struct hmll_iouring *backend = calloc(1, sizeof(struct hmll_iouring));
@@ -255,7 +255,8 @@ struct hmll_error hmll_iouring_init(struct hmll *ctx, const enum hmll_device dev
             return ctx->error;
         }
 
-        if (HMLL_FAILED((ctx->error = hmll_iouring_register_staging_buffers(ctx, backend, device)))) {
+        ctx->error = hmll_iouring_register_staging_buffers(ctx, backend, device);
+        if (hmll_check(ctx->error)) {
             return ctx->error;
         }
 

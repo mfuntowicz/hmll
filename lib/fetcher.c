@@ -25,7 +25,7 @@ struct hmll_error hmll_fetcher_init(
 
 struct hmll_range hmll_fetch(struct hmll *ctx, struct hmll_iobuf *dst, const struct hmll_range range, const size_t iofile)
 {
-    if (HMLL_FAILED(ctx->error))
+    if (hmll_check(ctx->error))
         goto fail;
 
     if (range.start >= range.end) {

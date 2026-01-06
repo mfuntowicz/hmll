@@ -33,14 +33,16 @@ extern "C" {
 #endif
 
 /** Error handling stubs **/
-#define HMLL_FAILED(res) ((res).code != HMLL_ERR_SUCCESS || (res).sys_err != HMLL_ERR_SUCCESS)
 #define HMLL_RES(...) (struct hmll_error){ __VA_ARGS__ }
 #define HMLL_OK  HMLL_RES(.code = HMLL_ERR_SUCCESS, .sys_err = 0)
-#define HMLL_ERR(c) HMLL_RES(.code = c, .sys_err = 0)
-#define HMLL_SYS_ERR(e) HMLL_RES(.code = HMLL_ERR_SYSTEM, .sys_err = e)
+#define HMLL_ERR(c) HMLL_RES(.code = (c), .sys_err = 0)
+#define HMLL_SYS_ERR(e) HMLL_RES(.code = HMLL_ERR_SYSTEM, .sys_err = (e))
+
+static inline unsigned char hmll_check(const struct hmll_error res) {
+    return res.code != HMLL_ERR_SUCCESS || res.sys_err != HMLL_ERR_SUCCESS;
+}
 
 HMLL_EXTERN unsigned char hmll_success(struct hmll_error error);
-HMLL_EXTERN unsigned char hmll_has_error(struct hmll_error error);
 HMLL_EXTERN unsigned char hmll_error_is_os_error(struct hmll_error err);
 HMLL_EXTERN unsigned char hmll_error_is_lib_error(struct hmll_error err);
 HMLL_EXTERN const char *hmll_strerr(struct hmll_error err);

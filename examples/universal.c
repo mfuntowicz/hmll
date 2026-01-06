@@ -23,7 +23,7 @@ int main(const int argc, const char** argv)
 
     printf("Opening %u files:\n", argc - 1);
     for (size_t i = 0; i < argc - 1; ++i) {
-        if (HMLL_FAILED((err = hmll_source_open(argv[i + 1], src + i)))) {
+        if (hmll_check((err = hmll_source_open(argv[i + 1], src + i)))) {
             fprintf(stderr, "Failed to open source %s: %s\n", argv[i + 1], hmll_strerr(err));
             free(src);
             status = 3;
@@ -32,7 +32,8 @@ int main(const int argc, const char** argv)
         printf("\t- %s -> %zu bytes (fd: %u)\n", argv[i + 1], src[i].size, src[i].fd);
     }
 
-    if (HMLL_FAILED(err = hmll_fetcher_init(&ctx, src, argc - 1, HMLL_DEVICE_CUDA, HMLL_FETCHER_AUTO))) {
+    err = hmll_fetcher_init(&ctx, src, argc - 1, HMLL_DEVICE_CUDA, HMLL_FETCHER_AUTO);
+    if (hmll_check(err)) {
         fprintf(stderr, "Failed to initialize HMLL: %s\n", hmll_strerr(ctx.error));
         status = 4;
         goto clean;
@@ -42,7 +43,7 @@ int main(const int argc, const char** argv)
 
     struct hmll_iobuf buf = hmll_get_buffer_for_range(&ctx, HMLL_DEVICE_CUDA, (struct hmll_range){0, 1024});
     struct hmll_range offsets = hmll_fetch(&ctx, &buf, (struct hmll_range){0, 1024}, 0);
-    if (HMLL_FAILED(ctx.error)) {
+    if (hmll_check(ctx.error)) {
         fprintf(stderr, "Failed to fetch tensor: %s\n", hmll_strerr(ctx.error));
         status = 4;
         goto clean;
