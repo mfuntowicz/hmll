@@ -40,7 +40,7 @@ static inline void hmll_iouring_reclaim_slots(
     struct hmll_iouring *fetcher,
     const enum hmll_device device
 ) {
-#if defined(__HMLL_CUDA_ENABLED__)
+#ifdef __HMLL_CUDA_ENABLED__
     if (device != HMLL_DEVICE_CUDA) return;
 
     struct hmll_iouring_cuda_context *dctx = fetcher->device_ctx;
@@ -55,6 +55,9 @@ static inline void hmll_iouring_reclaim_slots(
             }
         }
     }
+#else
+    HMLL_UNUSED(fetcher);
+    HMLL_UNUSED(device);
 #endif
 }
 
@@ -89,6 +92,8 @@ static inline void hmll_iouring_prep_sqe(
         io_uring_sqe_set_data(sqe, dctx + slot);
         io_uring_prep_read_fixed(sqe, iofile, buf, len, offset, slot);
     }
+#else
+    HMLL_UNUSED(fetcher);
 #endif
 }
 
@@ -119,6 +124,9 @@ static inline void hmll_iouring_handle_completion(
         cudaEventRecord(cctx->done, cctx->stream);
         hmll_iouring_cuda_stream_set_memcpy(&cctx->state);
     }
+#else
+    HMLL_UNUSED(offset);
+    HMLL_UNUSED(len);
 #endif
 }
 
