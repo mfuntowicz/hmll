@@ -107,14 +107,18 @@ endif()
 # Examples
 ###########################################################
 if(${HMLL_BUILD_EXAMPLES})
-#    add_executable(hmll_safetensors_ex examples/safetensors.c)
-    add_executable(hmll_examples_universal examples/universal.c)
-
+    set(HMLL_EXAMPLES_EXTRA_LIBS "")
     if(${HMLL_ENABLE_CUDA})
-        target_link_libraries(hmll_examples_universal PRIVATE libhmll CUDA::cudart)
-    else()
-        target_link_libraries(hmll_examples_universal PRIVATE libhmll)
+        list(APPEND HMLL_EXAMPLES_EXTRA_LIBS CUDA::cudart)
     endif()
+
+    if(${HMLL_ENABLE_SAFETENSORS})
+        add_executable(hmll_safetensors_ex examples/safetensors.c)
+        target_link_libraries(hmll_safetensors_ex PRIVATE libhmll ${HMLL_EXAMPLES_EXTRA_LIBS})
+    endif()
+
+    add_executable(hmll_examples_universal examples/universal.c)
+    target_link_libraries(hmll_examples_universal PRIVATE libhmll ${HMLL_EXAMPLES_EXTRA_LIBS})
 endif()
 
 ###########################################################
