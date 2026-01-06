@@ -87,7 +87,7 @@ void *hmll_get_io_buffer(struct hmll *ctx, const enum hmll_device device, const 
             return ptr;
 
 #else
-        ctx->error = HMLL_ERR_CUDA_NOT_ENABLED;
+        ctx->error = HMLL_ERR(HMLL_ERR_CUDA_NOT_ENABLED);
         return ptr;
 #endif
     }
