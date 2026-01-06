@@ -55,6 +55,9 @@ static inline void hmll_iouring_reclaim_slots(
             }
         }
     }
+#else
+    HMLL_UNUSED(fetcher);
+    HMLL_UNUSED(device);
 #endif
 }
 
