@@ -16,6 +16,7 @@ include(FetchContent)
 ###########################################################
 option(HMLL_ENABLE_CUDA "Flag to build with CUDA capabilities" OFF)
 option(HMLL_ENABLE_PYTHON "Flag to build Python binding" OFF)
+option(HMLL_ENABLE_SAFETENSORS "Flag to add support for reading safetensors natively" OFF)
 option(HMLL_BUILD_STATIC "Flag indicating if cmake should generate a static build for libhmll" OFF)
 option(HMLL_BUILD_EXAMPLES "Flag indicating if cmake should build examples" OFF)
 option(HMLL_BUILD_TESTS "Flag indicating if cmake should build unit-tests" OFF)
@@ -31,14 +32,6 @@ endif()
 # Dependencies
 ###########################################################
 set(HMLL_LIBRARIES "")
-fetchcontent_declare(
-        yyjson
-        GIT_REPOSITORY https://github.com/ibireme/yyjson.git
-        GIT_TAG        master
-)
-fetchcontent_makeavailable(yyjson)
-list(APPEND HMLL_LIBRARIES yyjson)
-
 if(${HMLL_ENABLE_CUDA})
     find_package(CUDAToolkit REQUIRED)
     list(APPEND HMLL_LIBRARIES CUDA::cudart CUDA::cuda_driver)
@@ -65,7 +58,6 @@ endif()
 set(LIBHMLL_HEADERS
         include/hmll/fetcher.h
         include/hmll/hmll.h
-#        include/hmll/safetensors.h
         include/hmll/types.h
         include/hmll/unix/fetcher.h
         include/hmll/unix/backend/iouring.h
@@ -76,16 +68,28 @@ set(LIBHMLL_SOURCES
         lib/fetcher.c
         lib/memory.c
 #        lib/tensors.c
-#        lib/safetensors.c
         lib/unix/fetcher.c
         lib/unix/file.c
         lib/unix/backend/iouring.c
 )
 
-#if(${HMLL_ENABLE_CUDA})
-#    list(APPEND LIBHMLL_HEADERS include/hmll/cuda.h)
-#   list(APPEND LIBHMLL_SOURCES lib/cuda.c)
-#endif()
+if(${HMLL_ENABLE_SAFETENSORS})
+    add_compile_definitions(libhmll PUBLIC __HMLL_SAFETENSORS_ENABLED__=1)
+    fetchcontent_declare(
+            yyjson
+            GIT_REPOSITORY https://github.com/ibireme/yyjson.git
+            GIT_TAG        master
+    )
+    fetchcontent_makeavailable(yyjson)
+
+    list(APPEND LIBHMLL_HEADERS include/hmll/safetensors.h)
+    list(APPEND LIBHMLL_SOURCES lib/safetensors.c)
+    list(APPEND HMLL_LIBRARIES yyjson)
+endif()
+
+if(${HMLL_ENABLE_CUDA})
+    list(APPEND LIBHMLL_HEADERS include/hmll/cuda.h)
+endif()
 
 add_library(libhmll ${LIBHMLL_HEADERS} ${LIBHMLL_SOURCES})
 target_include_directories(libhmll PUBLIC
