@@ -45,7 +45,7 @@ static inline unsigned char hmll_check(const struct hmll_error res)
 
 static inline unsigned char hmll_success(const struct hmll_error error)
 {
-    return (int)error.code == error.sys_err == HMLL_ERR_SUCCESS;
+    return (int)error.code == HMLL_ERR_SUCCESS && error.sys_err == HMLL_ERR_SUCCESS;
 }
 HMLL_EXTERN unsigned char hmll_error_is_os_error(struct hmll_error err);
 HMLL_EXTERN unsigned char hmll_error_is_lib_error(struct hmll_error err);
