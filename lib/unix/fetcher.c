@@ -4,10 +4,6 @@
 #include "hmll/unix/backend/iouring.h"
 #include "hmll/hmll.h"
 
-#ifdef __HMLL_CUDA_ENABLED__
-#include <hmll/cuda.h>
-#endif
-
 struct hmll_error hmll_fetcher_init_impl(struct hmll *ctx, const enum hmll_device device, const enum hmll_fetcher_kind kind)
 {
     if (kind == HMLL_FETCHER_AUTO || kind == HMLL_FETCHER_IO_URING)
