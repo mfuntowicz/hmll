@@ -4,9 +4,8 @@ project(hmll LANGUAGES C CXX)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
-set(CMAKE_C_VISIBILITY_PRESET hidden)
 set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O3 -g ")
-set(CMAKE_C_FLAGS "-Wno-unused-function")
+set(CMAKE_C_VISIBILITY_PRESET hidden)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 include(FetchContent)
@@ -96,7 +95,7 @@ target_include_directories(libhmll PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
 )
-target_compile_options(libhmll PRIVATE $<$<COMPILE_LANGUAGE:C>:-Wall -Werror -Wextra -Wpedantic>)
+target_compile_options(libhmll PRIVATE $<$<COMPILE_LANGUAGE:C>:-Wall -Werror -Wextra -Wpedantic -Wno-unused-function>)
 target_link_libraries(libhmll ${HMLL_LIBRARIES})
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
