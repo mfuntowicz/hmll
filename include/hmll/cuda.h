@@ -5,6 +5,7 @@
 #ifndef HMLL_CUDA_HPP
 #define HMLL_CUDA_HPP
 
+#ifdef __HMLL_CUDA_ENABLED__
 #include <cuda.h>
 
 /// Taken from Morpheus
@@ -21,6 +22,10 @@ do {                                    \
     if (cudaSuccess != status)          \
         cudaGetLastError();             \
 } while (0);
+
+#else
+#define CHECK_CUDA(call)
+#endif
 
 int hmll_cuda_device_count(void);
 int hmll_cuda_allocation_flags(void);
