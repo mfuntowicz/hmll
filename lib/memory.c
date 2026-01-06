@@ -5,10 +5,8 @@
 #include "hmll/types.h"
 #include <linux/mman.h>
 #include <sys/mman.h>
-#include <stdlib.h>
 
 #include "hmll/hmll.h"
-#include "hmll/types.h"
 
 #if defined(__HMLL_CUDA_ENABLED__)
 #include <cuda_runtime_api.h>

@@ -22,7 +22,6 @@
 #endif
 
 #include <liburing.h>
-#include "hmll/fetcher.h"
 #include "hmll/types.h"
 
 struct hmll_iouring_iobusy

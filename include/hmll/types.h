@@ -1,7 +1,6 @@
 #ifndef HMLL_TYPES_H
 #define HMLL_TYPES_H
 
-#include <stdint.h>
 #include <stdio.h>
 
 #ifndef HMLL_MAX_TENSOR_RANK
