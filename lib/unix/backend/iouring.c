@@ -32,6 +32,7 @@ static struct hmll_error hmll_iouring_register_staging_buffers(
     return HMLL_OK;
 }
 
+#ifdef __HMLL_CUDA_ENABLED__
 /**
  * Checks for completed CUDA events and reclaims the associated io_uring slots.
  * If CUDA is disabled or the device is CPU, this is a no-op.
@@ -40,7 +41,6 @@ static inline void hmll_iouring_reclaim_slots(
     struct hmll_iouring *fetcher,
     const enum hmll_device device
 ) {
-#ifdef __HMLL_CUDA_ENABLED__
     if (device != HMLL_DEVICE_CUDA) return;
 
     struct hmll_iouring_cuda_context *dctx = fetcher->device_ctx;
@@ -55,11 +55,8 @@ static inline void hmll_iouring_reclaim_slots(
             }
         }
     }
-#else
-    HMLL_UNUSED(fetcher);
-    HMLL_UNUSED(device);
-#endif
 }
+#endif
 
 /**
  * Prepares a single SQE (Submission Queue Entry).
