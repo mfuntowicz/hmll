@@ -132,7 +132,7 @@ if(${HMLL_BUILD_TESTS})
     fetchcontent_declare(
             Catch2
             GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-            GIT_TAG        v3.11.0
+            GIT_TAG        v3.12.0
     )
     fetchcontent_makeavailable(Catch2)
     list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
@@ -154,7 +154,7 @@ if(${HMLL_BUILD_TESTS})
             tests/tests_hmll_dtype.cpp
         )
     endif()
-    
+
     add_executable(libhmll_tests ${HMLL_TESTS_SRC})
     target_link_libraries(libhmll_tests PRIVATE Catch2::Catch2WithMain libhmll)
     catch_discover_tests(libhmll_tests)
