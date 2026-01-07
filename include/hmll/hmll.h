@@ -25,6 +25,7 @@ extern "C" {
 #define HMLL_UNUSED(expr) (void)(expr)
 
 #include "fetcher.h"
+#include "memory.h"
 #include "types.h"
 
 #ifdef __linux__
@@ -54,9 +55,14 @@ HMLL_EXTERN void hmll_destroy(struct hmll *ctx) NO_EXCEPT;
 
 /** Sources handling stubs **/
 HMLL_EXTERN struct hmll_error hmll_source_open(const char *path, struct hmll_source *src) NO_EXCEPT;
-HMLL_EXTERN void hmll_source_close(struct hmll_source *src) NO_EXCEPT;
+HMLL_EXTERN void hmll_source_close(const struct hmll_source *src) NO_EXCEPT;
 
-HMLL_EXTERN struct hmll_error hmll_fetcher_init(struct hmll *ctx, struct hmll_source *srcs, size_t n, enum hmll_device device, enum hmll_fetcher_kind kind) NO_EXCEPT;
+/** Memory handling stubs **/
+void *hmll_get_buffer(struct hmll *ctx, enum hmll_device device, size_t size);
+void *hmll_get_io_buffer(struct hmll *ctx, enum hmll_device device, size_t size);
+struct hmll_iobuf hmll_get_buffer_for_range(struct hmll *ctx, enum hmll_device device, struct hmll_range range);
+
+HMLL_EXTERN struct hmll_error hmll_fetcher_init(struct hmll *ctx, const struct hmll_source *srcs, size_t n, enum hmll_device device, enum hmll_fetcher_kind kind) NO_EXCEPT;
 HMLL_EXTERN struct hmll_range hmll_fetch(struct hmll *ctx, struct hmll_iobuf *dst, struct hmll_range range,  size_t iofile) NO_EXCEPT;
 #ifdef __cplusplus
 }

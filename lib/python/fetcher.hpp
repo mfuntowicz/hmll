@@ -2,23 +2,33 @@
 #define PYHMLL_FETCHER_HPP
 
 #include <memory>
-#include <string>
+#include <utility>
+#include <vector>
 #include <hmll/fetcher.h>
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
+#include <nanobind/stl/unique_ptr.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/vector.h>
+
+#include "hmll/hmll.h"
 
 namespace nb = nanobind;
 
 class HmllContext;
-class HmllFetcher
+class Fetcher
 {
-    hmll_fetcher_t fetcher_;
-    nb::object ctx_obj_;  // Keep Python object alive
-    hmll_t* ctx_ptr_;  // Raw pointer for C API calls
+    std::unique_ptr<hmll_t> ctx_;
+    std::vector<hmll_source_t> srcs_;
 
 public:
-    explicit HmllFetcher(hmll_fetcher fetcher, nb::object ctx_obj, hmll_t* ctx_ptr):
-        fetcher_(fetcher), ctx_obj_(ctx_obj), ctx_ptr_(ctx_ptr) {}
+    static std::unique_ptr<Fetcher> from_paths(const std::vector<std::string>& paths, hmll_device_t device);
+
+    Fetcher(Fetcher&&) = default;
+    Fetcher& operator=(Fetcher&&) = default;
+    Fetcher(const Fetcher&) = delete;
+    Fetcher& operator=(const Fetcher&) = delete;
+    explicit Fetcher(std::unique_ptr<hmll_t> ctx, std::vector<hmll_source_t>& srcs, hmll_device_t device);
 
     [[nodiscard]]
     hmll_device_t device() const;
@@ -27,7 +37,7 @@ public:
     hmll_fetcher_kind_t kind() const;
 
     [[nodiscard]]
-    nb::ndarray<> fetch(const std::string& name) const;
+    nb::ndarray<unsigned char, nb::ndim<1>, nb::c_contig> fetch(size_t start, size_t end, int iofile) const;
 };
 
 #endif // PYHMLL_FETCHER_HPP

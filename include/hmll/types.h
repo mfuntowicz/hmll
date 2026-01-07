@@ -137,7 +137,7 @@ typedef struct hmll_range hmll_range_t;
 
 struct hmll {
     struct hmll_fetcher *fetcher;
-    struct hmll_source *sources;
+    const struct hmll_source *sources;
     size_t num_sources;
     struct hmll_error error;
 };

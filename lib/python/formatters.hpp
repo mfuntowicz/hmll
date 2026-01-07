@@ -10,6 +10,8 @@ struct std::formatter<hmll_device_t> : std::formatter<std::string> {
         switch (device) {
         case HMLL_DEVICE_CPU:
             return std::formatter<std::string>::format("CPU", ctx);
+        case HMLL_DEVICE_CUDA:
+            return std::formatter<std::string>::format("CUDA", ctx);
         default:
             return std::formatter<std::string>::format("unknown", ctx);
         }

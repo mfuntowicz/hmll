@@ -9,7 +9,7 @@
 
 struct hmll_error hmll_fetcher_init(
     struct hmll *ctx,
-    struct hmll_source *srcs,
+    const struct hmll_source *srcs,
     const size_t n,
     const enum hmll_device device,
     const enum hmll_fetcher_kind kind)

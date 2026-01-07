@@ -39,7 +39,7 @@ exit:
 }
 
 
-void hmll_source_close(struct hmll_source *src)
+void hmll_source_close(const struct hmll_source *src)
 {
     if (src != NULL && src->fd > 0)
         close(src->fd);

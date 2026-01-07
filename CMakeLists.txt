@@ -57,6 +57,7 @@ endif()
 set(LIBHMLL_HEADERS
         include/hmll/fetcher.h
         include/hmll/hmll.h
+        include/hmll/memory.h
         include/hmll/types.h
         include/hmll/unix/fetcher.h
         include/hmll/unix/backend/iouring.h
