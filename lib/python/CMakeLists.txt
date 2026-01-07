@@ -8,7 +8,10 @@ fetchcontent_declare(
 )
 fetchcontent_makeavailable(nanobind)
 
-nanobind_add_module(_pyhmll_impl NB_STATIC STABLE_ABI LTO context.cpp fetcher.cpp specs.cpp safetensors.cpp pyhmll.cpp)
+nanobind_add_module(_pyhmll_impl NB_STATIC STABLE_ABI LTO
+        context.cpp
+        pyhmll.cpp
+)
 nanobind_add_stub(
         _pyhmll_impl_stub
         MODULE _pyhmll_impl
