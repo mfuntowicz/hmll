@@ -141,7 +141,7 @@ if(${HMLL_BUILD_TESTS})
     include(Catch)
 
     set(HMLL_TESTS_SRC
-            tests/tests_hmll_status.cpp
+            tests/tests_hmll_errors.cpp
             tests/tests_hmll_memory.cpp)
 
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND ${HMLL_ENABLE_IO_URING})
