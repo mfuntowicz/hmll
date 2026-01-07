@@ -50,14 +50,13 @@ static inline unsigned char hmll_success(const struct hmll_error error)
 HMLL_EXTERN unsigned char hmll_error_is_os_error(struct hmll_error err);
 HMLL_EXTERN unsigned char hmll_error_is_lib_error(struct hmll_error err);
 HMLL_EXTERN const char *hmll_strerr(struct hmll_error err);
+HMLL_EXTERN void hmll_destroy(struct hmll *ctx) NO_EXCEPT;
 
 /** Sources handling stubs **/
 HMLL_EXTERN struct hmll_error hmll_source_open(const char *path, struct hmll_source *src) NO_EXCEPT;
 HMLL_EXTERN void hmll_source_close(struct hmll_source *src) NO_EXCEPT;
 
 HMLL_EXTERN struct hmll_error hmll_fetcher_init(struct hmll *ctx, struct hmll_source *srcs, size_t n, enum hmll_device device, enum hmll_fetcher_kind kind) NO_EXCEPT;
-HMLL_EXTERN void hmll_destroy(struct hmll *ctx) NO_EXCEPT;
-
 HMLL_EXTERN struct hmll_range hmll_fetch(struct hmll *ctx, struct hmll_iobuf *dst, struct hmll_range range,  size_t iofile) NO_EXCEPT;
 #ifdef __cplusplus
 }
