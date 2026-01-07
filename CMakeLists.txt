@@ -74,6 +74,7 @@ set(LIBHMLL_SOURCES
 
 if(${HMLL_ENABLE_SAFETENSORS})
     add_compile_definitions(libhmll PUBLIC __HMLL_SAFETENSORS_ENABLED__=1)
+    add_compile_definitions(libhmll PUBLIC __HMLL_TENSORS_ENABLED__=1)
     fetchcontent_declare(
             yyjson
             GIT_REPOSITORY https://github.com/ibireme/yyjson.git
@@ -141,14 +142,19 @@ if(${HMLL_BUILD_TESTS})
 
     set(HMLL_TESTS_SRC
             tests/tests_hmll_status.cpp
-            tests/tests_hmll_dtype.cpp
-            tests/tests_hmll_tensor_specs.cpp
             tests/tests_hmll_memory.cpp)
 
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND ${HMLL_ENABLE_IO_URING})
         list(APPEND HMLL_TESTS_SRC tests/tests_hmll_io_uring.cpp)
     endif()
 
+    if(${HMLL_ENABLE_SAFETENSORS})
+        list(APPEND HMLL_TESTS_SRC
+            tests/tests_hmll_tensor_specs.cpp
+            tests/tests_hmll_dtype.cpp
+        )
+    endif()
+    
     add_executable(libhmll_tests ${HMLL_TESTS_SRC})
     target_link_libraries(libhmll_tests PRIVATE Catch2::Catch2WithMain libhmll)
     catch_discover_tests(libhmll_tests)
