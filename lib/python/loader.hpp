@@ -4,7 +4,7 @@
 #include <memory>
 #include <utility>
 #include <vector>
-#include <hmll/fetcher.h>
+#include <hmll/loader.h>
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/unique_ptr.h>
@@ -15,20 +15,19 @@
 
 namespace nb = nanobind;
 
-class HmllContext;
-class Fetcher
+class WeightLoader
 {
     std::unique_ptr<hmll_t> ctx_;
     std::vector<hmll_source_t> srcs_;
 
 public:
-    static std::unique_ptr<Fetcher> from_paths(const std::vector<std::string>& paths, hmll_device_t device);
+    static std::unique_ptr<WeightLoader> from_paths(const std::vector<std::string>& paths, hmll_device_t device);
 
-    Fetcher(Fetcher&&) = default;
-    Fetcher& operator=(Fetcher&&) = default;
-    Fetcher(const Fetcher&) = delete;
-    Fetcher& operator=(const Fetcher&) = delete;
-    explicit Fetcher(std::unique_ptr<hmll_t> ctx, std::vector<hmll_source_t>& srcs, hmll_device_t device);
+    WeightLoader(WeightLoader&&) = default;
+    WeightLoader& operator=(WeightLoader&&) = default;
+    WeightLoader(const WeightLoader&) = delete;
+    WeightLoader& operator=(const WeightLoader&) = delete;
+    explicit WeightLoader(std::unique_ptr<hmll_t> ctx, std::vector<hmll_source_t>& srcs, hmll_device_t device);
 
     [[nodiscard]]
     hmll_device_t device() const;

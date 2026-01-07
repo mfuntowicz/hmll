@@ -1,18 +1,18 @@
 #include "hmll/types.h"
-#include "hmll/fetcher.h"
+#include "hmll/loader.h"
 #include "hmll/hmll.h"
 
 #if defined(__linux)
-#include "hmll/unix/fetcher.h"
+#include "hmll/unix/loader.h"
 #endif
 
 
-struct hmll_error hmll_fetcher_init(
+struct hmll_error hmll_loader_init(
     struct hmll *ctx,
     const struct hmll_source *srcs,
     const size_t n,
     const enum hmll_device device,
-    const enum hmll_fetcher_kind kind)
+    const enum hmll_loader_kind kind)
 {
     if (n > 0 && srcs) {
         ctx->num_sources = n;

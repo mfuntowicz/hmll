@@ -24,13 +24,13 @@ extern "C" {
 #define HMLL_FALSE   0u
 #define HMLL_UNUSED(expr) (void)(expr)
 
-#include "fetcher.h"
+#include "loader.h"
 #include "memory.h"
 #include "types.h"
 
 #ifdef __linux__
 #include "unix/file.h"
-#include "unix/fetcher.h"
+#include "unix/loader.h"
 #endif
 
 /** Error handling stubs **/
@@ -62,7 +62,7 @@ void *hmll_get_buffer(struct hmll *ctx, enum hmll_device device, size_t size);
 void *hmll_get_io_buffer(struct hmll *ctx, enum hmll_device device, size_t size);
 struct hmll_iobuf hmll_get_buffer_for_range(struct hmll *ctx, enum hmll_device device, struct hmll_range range);
 
-HMLL_EXTERN struct hmll_error hmll_fetcher_init(struct hmll *ctx, const struct hmll_source *srcs, size_t n, enum hmll_device device, enum hmll_fetcher_kind kind) NO_EXCEPT;
+HMLL_EXTERN struct hmll_error hmll_loader_init(struct hmll *ctx, const struct hmll_source *srcs, size_t n, enum hmll_device device, enum hmll_loader_kind kind) NO_EXCEPT;
 HMLL_EXTERN struct hmll_range hmll_fetch(struct hmll *ctx, struct hmll_iobuf *dst, struct hmll_range range,  size_t iofile) NO_EXCEPT;
 #ifdef __cplusplus
 }

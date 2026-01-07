@@ -32,7 +32,7 @@ int main(const int argc, const char** argv)
         printf("\t- %s -> %zu bytes (fd: %u)\n", argv[i + 1], src[i].size, src[i].fd);
     }
 
-    err = hmll_fetcher_init(&ctx, src, argc - 1, HMLL_DEVICE_CUDA, HMLL_FETCHER_AUTO);
+    err = hmll_loader_init(&ctx, src, argc - 1, HMLL_DEVICE_CUDA, HMLL_FETCHER_AUTO);
     if (hmll_check(err)) {
         fprintf(stderr, "Failed to initialize HMLL: %s\n", hmll_strerr(ctx.error));
         status = 4;

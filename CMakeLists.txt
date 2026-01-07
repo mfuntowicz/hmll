@@ -55,17 +55,17 @@ endif()
 # Definition of libhmll
 ###########################################################
 set(LIBHMLL_HEADERS
-        include/hmll/fetcher.h
         include/hmll/hmll.h
+        include/hmll/loader.h
         include/hmll/memory.h
         include/hmll/types.h
-        include/hmll/unix/fetcher.h
+        include/hmll/unix/loader.h
         include/hmll/unix/backend/iouring.h
 )
 set(LIBHMLL_SOURCES
         lib/context.c
         lib/errors.c
-        lib/fetcher.c
+        lib/loader.c
         lib/memory.c
 #        lib/tensors.c
         lib/unix/fetcher.c

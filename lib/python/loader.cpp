@@ -1,4 +1,4 @@
-#include "fetcher.hpp"
+#include "loader.hpp"
 #include <format>
 #include <sys/mman.h>
 #include <hmll/hmll.h>
@@ -12,11 +12,11 @@
 namespace nb = nanobind;
 using namespace nb::literals;
 
-hmll_device_t Fetcher::device() const { return ctx_->fetcher->device; }
-hmll_fetcher_kind_t Fetcher::kind() const { return ctx_->fetcher->kind; }
+hmll_device_t WeightLoader::device() const { return ctx_->fetcher->device; }
+hmll_fetcher_kind_t WeightLoader::kind() const { return ctx_->fetcher->kind; }
 
 
-std::unique_ptr<Fetcher> Fetcher::from_paths(const std::vector<std::string>& paths, const hmll_device_t device)
+std::unique_ptr<WeightLoader> WeightLoader::from_paths(const std::vector<std::string>& paths, const hmll_device_t device)
 {
     auto ctx = std::make_unique<hmll_t>();
     std::vector<hmll_source> srcs(paths.size());
@@ -30,16 +30,16 @@ std::unique_ptr<Fetcher> Fetcher::from_paths(const std::vector<std::string>& pat
         }
     }
 
-    return std::make_unique<Fetcher>(std::move(ctx), srcs, device);
+    return std::make_unique<WeightLoader>(std::move(ctx), srcs, device);
 }
 
-Fetcher::Fetcher(std::unique_ptr<hmll_t> ctx, std::vector<hmll_source_t>& srcs, const hmll_device_t device)
+WeightLoader::WeightLoader(std::unique_ptr<hmll_t> ctx, std::vector<hmll_source_t>& srcs, const hmll_device_t device)
     : ctx_(std::move(ctx)), srcs_(std::move(srcs))
 {
-    hmll_fetcher_init(ctx_.get(), srcs_.data(), srcs_.size(), device, HMLL_FETCHER_AUTO);
+    hmll_loader_init(ctx_.get(), srcs_.data(), srcs_.size(), device, HMLL_FETCHER_AUTO);
 }
 
-nb::ndarray<unsigned char, nb::ndim<1>, nb::c_contig> Fetcher::fetch(const size_t start, const size_t end, const int iofile) const
+nb::ndarray<unsigned char, nb::ndim<1>, nb::c_contig> WeightLoader::fetch(const size_t start, const size_t end, const int iofile) const
 {
     auto buffer = std::make_unique<hmll_iobuf_t>();
     hmll_range_t offsets;
@@ -84,13 +84,13 @@ void init_fetcher(const nb::module_& m)
     .value("CPU", HMLL_DEVICE_CPU, "Target CPU device")
     .value("CUDA", HMLL_DEVICE_CUDA, "Target CUDA device");
 
-    nb::class_<Fetcher>(m, "Fetcher", R"pbdoc("Opaque type representing an allocated fetcher backend)pbdoc")
-    .def(nb::new_(&Fetcher::from_paths), "paths"_a.sig("list[str]"), "device"_a.sig("Device"))
-    .def_prop_ro("device", &Fetcher::device)
-    .def_prop_ro("kind", &Fetcher::kind)
-    .def("fetch", &Fetcher::fetch, "start"_a.sig("int"), "end"_a.sig("int"), "iofile"_a.sig("int"))
-    .def("__repr__", [](const Fetcher& self)
+    nb::class_<WeightLoader>(m, "WeightLoader", R"pbdoc("Opaque type representing an allocated fetcher backend)pbdoc")
+    .def(nb::new_(&WeightLoader::from_paths), "paths"_a.sig("list[str]"), "device"_a.sig("Device"))
+    .def_prop_ro("device", &WeightLoader::device)
+    .def_prop_ro("kind", &WeightLoader::kind)
+    .def("fetch", &WeightLoader::fetch, "start"_a.sig("int"), "end"_a.sig("int"), "iofile"_a.sig("int"))
+    .def("__repr__", [](const WeightLoader& self)
     {
-        return std::format("Fetcher(kind={}, device={})", self.kind(), self.device());
+        return std::format("WeightLoader(kind={}, device={})", self.kind(), self.device());
     });
 }
