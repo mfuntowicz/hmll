@@ -28,5 +28,12 @@ const char *hmll_strerr(const struct hmll_error err)
     return "No error";
 }
 
-unsigned char hmll_error_is_os_error(const struct hmll_error err) { return err.sys_err != HMLL_ERR_SUCCESS; }
-unsigned char hmll_error_is_lib_error(const struct hmll_error err) { return err.code != HMLL_ERR_SUCCESS; }
+unsigned char hmll_error_is_os_error(const struct hmll_error err)
+{
+    return err.sys_err != HMLL_ERR_SUCCESS;
+}
+
+unsigned char hmll_error_is_lib_error(const struct hmll_error err)
+{
+    return err.code != HMLL_ERR_SUCCESS && err.code != HMLL_ERR_SYSTEM;
+}

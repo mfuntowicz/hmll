@@ -158,3 +158,72 @@ TEST_CASE("hmll_strerr returns message for system error", "[error]")
     REQUIRE(msg != nullptr);
     REQUIRE(strlen(msg) > 0);
 }
+
+TEST_CASE("hmll_error_is_lib_error detects library error even with sys_err set", "[error]")
+{
+    auto err = HMLL_RES(.code = HMLL_ERR_ALLOCATION_FAILED, .sys_err = 5);
+    REQUIRE(hmll_error_is_lib_error(err));
+}
+
+TEST_CASE("hmll_error_is_os_error detects system error even with code set", "[error]")
+{
+    auto err = HMLL_RES(.code = HMLL_ERR_IO_ERROR, .sys_err = 13);
+    REQUIRE(hmll_error_is_os_error(err));
+}
+
+TEST_CASE("hmll_strerr returns specific message for mapped error codes", "[error]")
+{
+    auto err = HMLL_ERR(HMLL_ERR_FILE_NOT_FOUND);
+    const char* msg = hmll_strerr(err);
+    REQUIRE(strcmp(msg, "File not found") == 0);
+
+    err = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
+    msg = hmll_strerr(err);
+    REQUIRE(strcmp(msg, "Failed to allocate memory") == 0);
+
+    err = HMLL_ERR(HMLL_ERR_TABLE_EMPTY);
+    msg = hmll_strerr(err);
+    REQUIRE(strcmp(msg, "No tensors found while reading the file") == 0);
+
+    err = HMLL_ERR(HMLL_ERR_TENSOR_NOT_FOUND);
+    msg = hmll_strerr(err);
+    REQUIRE(strcmp(msg, "Tensor not found in the known tensors table") == 0);
+
+    err = HMLL_ERR(HMLL_ERR_CUDA_NOT_ENABLED);
+    msg = hmll_strerr(err);
+    REQUIRE(strcmp(msg, "CUDA not enabled") == 0);
+
+    err = HMLL_ERR(HMLL_ERR_CUDA_NO_DEVICE);
+    msg = hmll_strerr(err);
+    REQUIRE(strcmp(msg, "No CUDA devices found") == 0);
+}
+
+TEST_CASE("hmll_strerr returns unknown error message for unmapped error codes", "[error]")
+{
+    auto err = HMLL_ERR(HMLL_ERR_BUFFER_TOO_SMALL);
+    const char* msg = hmll_strerr(err);
+    REQUIRE(strstr(msg, "Unknown error") != nullptr);
+}
+
+TEST_CASE("hmll_strerr handles negative sys_err values", "[error]")
+{
+    auto err = HMLL_SYS_ERR(-2);
+    const char* msg = hmll_strerr(err);
+    REQUIRE(msg != nullptr);
+    REQUIRE(strlen(msg) > 0);
+}
+
+TEST_CASE("hmll_check and hmll_success are logical inverses", "[error]")
+{
+    auto err = HMLL_OK;
+    REQUIRE(hmll_check(err) == !hmll_success(err));
+
+    err = HMLL_ERR(HMLL_ERR_FILE_NOT_FOUND);
+    REQUIRE(hmll_check(err) == !hmll_success(err));
+
+    err = HMLL_SYS_ERR(5);
+    REQUIRE(hmll_check(err) == !hmll_success(err));
+
+    err = HMLL_RES(.code = HMLL_ERR_MMAP_FAILED, .sys_err = 12);
+    REQUIRE(hmll_check(err) == !hmll_success(err));
+}
