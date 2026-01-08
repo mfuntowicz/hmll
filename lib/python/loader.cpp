@@ -39,7 +39,8 @@ WeightLoader::WeightLoader(std::unique_ptr<hmll_t> ctx, std::vector<hmll_source_
     hmll_loader_init(ctx_.get(), srcs_.data(), srcs_.size(), device, HMLL_FETCHER_AUTO);
 }
 
-nb::ndarray<unsigned char, nb::ndim<1>, nb::c_contig> WeightLoader::fetch(const size_t start, const size_t end, const int iofile) const
+nb::ndarray<nb::ndim<1>, nb::c_contig> WeightLoader::fetch(
+    const size_t start, const size_t end, const hmll_dtype_t dtype, const int iofile) const
 {
     auto buffer = std::make_unique<hmll_iobuf_t>();
     hmll_range_t offsets;
@@ -75,7 +76,7 @@ nb::ndarray<unsigned char, nb::ndim<1>, nb::c_contig> WeightLoader::fetch(const 
         }
     });
 
-    return hmll_to_ndarray({start, end}, *handle, offsets, deleter);
+    return hmll_to_ndarray({start, end}, *handle, offsets, dtype, deleter);
 }
 
 void init_fetcher(const nb::module_& m)
@@ -84,11 +85,35 @@ void init_fetcher(const nb::module_& m)
     .value("CPU", HMLL_DEVICE_CPU, "Target CPU device")
     .value("CUDA", HMLL_DEVICE_CUDA, "Target CUDA device");
 
+    nb::enum_<hmll_dtype_t>(m, "dtype", R"pbdoc(Define all the targetable element type in a tensor)pbdoc")
+    .value("BOOL", HMLL_DTYPE_BOOL)
+    .value("BFLOAT16", HMLL_DTYPE_BFLOAT16)
+    .value("COMPLEX", HMLL_DTYPE_COMPLEX)
+    .value("FLOAT4", HMLL_DTYPE_FLOAT4)
+    .value("FLOAT6_E2M3", HMLL_DTYPE_FLOAT6_E2M3)
+    .value("FLOAT6_E3M2", HMLL_DTYPE_FLOAT6_E3M2)
+    .value("FLOAT8_E5M2", HMLL_DTYPE_FLOAT8_E5M2)
+    .value("FLOAT8_E4M3", HMLL_DTYPE_FLOAT8_E4M3)
+    .value("FLOAT8_E8M0", HMLL_DTYPE_FLOAT8_E8M0)
+    .value("FLOAT16", HMLL_DTYPE_FLOAT16)
+    .value("FLOAT32", HMLL_DTYPE_FLOAT32)
+    .value("SIGNED_INT4", HMLL_DTYPE_SIGNED_INT4)
+    .value("SIGNED_INT8", HMLL_DTYPE_SIGNED_INT8)
+    .value("SIGNED_INT16", HMLL_DTYPE_SIGNED_INT16)
+    .value("SIGNED_INT32", HMLL_DTYPE_SIGNED_INT32)
+    .value("SIGNED_INT64", HMLL_DTYPE_SIGNED_INT64)
+    .value("UNSIGNED_INT4", HMLL_DTYPE_UNSIGNED_INT4)
+    .value("UNSIGNED_INT8", HMLL_DTYPE_UNSIGNED_INT8)
+    .value("UNSIGNED_INT16", HMLL_DTYPE_UNSIGNED_INT16)
+    .value("UNSIGNED_INT32", HMLL_DTYPE_UNSIGNED_INT32)
+    .value("UNSIGNED_INT64", HMLL_DTYPE_UNSIGNED_INT64)
+    .value("UNKNOWN", HMLL_DTYPE_UNKNOWN);
+
     nb::class_<WeightLoader>(m, "WeightLoader", R"pbdoc("Opaque type representing an allocated fetcher backend)pbdoc")
     .def(nb::new_(&WeightLoader::from_paths), "paths"_a.sig("list[str]"), "device"_a.sig("Device"))
     .def_prop_ro("device", &WeightLoader::device)
     .def_prop_ro("kind", &WeightLoader::kind)
-    .def("fetch", &WeightLoader::fetch, "start"_a.sig("int"), "end"_a.sig("int"), "iofile"_a.sig("int"))
+    .def("fetch", &WeightLoader::fetch, "start"_a.sig("int"), "end"_a.sig("int"), "dtype"_a.sig("dtype"), "iofile"_a.sig("int"))
     .def("__repr__", [](const WeightLoader& self)
     {
         return std::format("WeightLoader(kind={}, device={})", self.kind(), self.device());

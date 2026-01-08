@@ -36,7 +36,7 @@ public:
     hmll_fetcher_kind_t kind() const;
 
     [[nodiscard]]
-    nb::ndarray<unsigned char, nb::ndim<1>, nb::c_contig> fetch(size_t start, size_t end, int iofile) const;
+    nb::ndarray<nb::ndim<1>, nb::c_contig> fetch(size_t start, size_t end, hmll_dtype_t dtype, int iofile) const;
 };
 
 #endif // PYHMLL_FETCHER_HPP
