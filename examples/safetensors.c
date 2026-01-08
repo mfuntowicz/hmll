@@ -27,14 +27,14 @@ int main(const int argc, const char** argv)
     if (hmll_check(hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0)))
         return 2;
 
-    if (hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CUDA, HMLL_FETCHER_AUTO)))
+    if (hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, HMLL_FETCHER_AUTO)))
         return 3;
 
     const hmll_lookup_result_t lookup = hmll_lookup_tensor(&ctx, &registry, TENSOR_NAME);
     if (hmll_success(ctx.error) && lookup.specs != NULL)
     {
         const hmll_range_t range = (struct hmll_range){ lookup.specs->start, lookup.specs->end };
-        hmll_iobuf_t buffer = hmll_get_buffer_for_range(&ctx, HMLL_DEVICE_CPU, range);
+        hmll_iobuf_t buffer = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
         if (hmll_success(ctx.error)) {
             // Start timing
             struct timespec start, end;
