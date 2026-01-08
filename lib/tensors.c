@@ -1,5 +1,6 @@
-#include "stdint.h"
-#include "hmll/types.h"
+#include <string.h>
+
+#include "hmll/hmll.h"
 
 // uint8_t hmll_nbits(const hmll_tensor_data_type_t dtype)
 // {
@@ -36,14 +37,47 @@
 //         return 0;
 //     }
 // }
-//
-// size_t hmll_numel(const hmll_tensor_specs_t *specs)
-// {
-//     if (specs->rank > HMLL_MAX_TENSOR_RANK) __builtin_unreachable();
-//
-//     size_t numel = 1;
-//     for (size_t i = 0; i < specs->rank; ++i)
-//         numel *= specs->shape[i];
-//
-//     return numel;
-// }
+
+int hmll_find_by_name(const struct hmll *ctx, const struct hmll_registry *reg, const char *name)
+{
+    if (hmll_check(ctx->error)) return -1;
+
+    char **names = reg->names;
+    for (size_t i = 0; i < reg->num_tensors; ++i) {
+        if (strcmp(name, names[i]) == 0)
+            return (int)i;
+    }
+
+    return -1;
+}
+
+unsigned char hmll_contains(const struct hmll *ctx, const struct hmll_registry *reg, const char *name)
+{
+    return hmll_find_by_name(ctx, reg, name) >= 0;
+}
+
+struct hmll_lookup_result hmll_lookup_tensor(const struct hmll *ctx, const struct hmll_registry *reg, const char *name)
+{
+    if (hmll_check(ctx->error)) return (struct hmll_lookup_result){0};
+
+    struct hmll_lookup_result result = {0};
+    const int index = hmll_find_by_name(ctx, reg, name);
+    if (index >= 0) {
+        result.index = (short)index;
+        result.file = reg->indexes[index];
+        result.specs = reg->tensors + index;
+    }
+
+    return result;
+}
+
+size_t hmll_numel(const hmll_tensor_specs_t *specs)
+{
+    if (specs->rank > HMLL_MAX_TENSOR_RANK) __builtin_unreachable();
+
+    size_t numel = 1;
+    for (size_t i = 0; i < specs->rank; ++i)
+        numel *= specs->shape[i];
+
+    return numel;
+}

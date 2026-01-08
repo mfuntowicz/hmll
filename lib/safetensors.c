@@ -1,11 +1,10 @@
 //
 // Created by mfuntowicz on 12/1/25.
 //
-#include "hmll/safetensors.h"
-
 #include "hmll/hmll.h"
 #include "hmll/types.h"
 #include <yyjson.h>
+#include <sys/mman.h>
 
 
 char *hmll_safetensors_path_create(const char *path, const char *file) {
@@ -19,7 +18,7 @@ char *hmll_safetensors_path_create(const char *path, const char *file) {
     if (last_slash != NULL)
         dir_len = (last_slash - path) + 1;
 
-    size_t file_len = strlen(file);
+    const size_t file_len = strlen(file);
     char *new_path = malloc(dir_len + file_len + 1);
     if (new_path == NULL)
         return NULL;
@@ -40,7 +39,7 @@ static short hmll_safetensors_contains_key(char **files, const size_t num_files,
     return -1;
 }
 
-static hmll_tensor_data_type_t hmll_safetensors_dtype_from_str(const char *dtype, const size_t size)
+static enum hmll_dtype hmll_safetensors_dtype_from_str(const char *dtype, const size_t size)
 {
     if (strncmp(dtype, "BOOL", size) == 0) return HMLL_DTYPE_BOOL;
     if (strncmp(dtype, "BF16", size) == 0) return HMLL_DTYPE_BFLOAT16;
@@ -64,7 +63,7 @@ static hmll_tensor_data_type_t hmll_safetensors_dtype_from_str(const char *dtype
     return HMLL_DTYPE_UNKNOWN;
 }
 
-static enum hmll_error_code hmll_safetensors_header_parse_dtype(yyjson_val *dtype, struct hmll_tensor_specs *tensor)
+static struct hmll_error hmll_safetensors_header_parse_dtype(yyjson_val *dtype, struct hmll_tensor_specs *tensor)
 {
     if (dtype && yyjson_is_str(dtype)) {
         const char* dtype_str = yyjson_get_str(dtype);
@@ -75,13 +74,13 @@ static enum hmll_error_code hmll_safetensors_header_parse_dtype(yyjson_val *dtyp
     }
 
     if (tensor->dtype == HMLL_DTYPE_UNKNOWN) {
-        return HMLL_ERR_UNKNOWN_DTYPE;
+        return HMLL_ERR(HMLL_ERR_UNKNOWN_DTYPE);
     }
 
-    return HMLL_ERR_SUCCESS;
+    return HMLL_OK;
 }
 
-static enum hmll_error_code hmll_safetensors_header_parse_offsets(yyjson_val *offsets, struct hmll_tensor_specs *tensor)
+static struct hmll_error hmll_safetensors_header_parse_offsets(yyjson_val *offsets, struct hmll_tensor_specs *tensor)
 {
     if (offsets && yyjson_is_arr(offsets)) {
         const size_t length = yyjson_arr_size(offsets);
@@ -94,17 +93,14 @@ static enum hmll_error_code hmll_safetensors_header_parse_offsets(yyjson_val *of
 
             if (yyjson_is_uint(end_val))
                 tensor->end = yyjson_get_uint(end_val);
-
-            return HMLL_ERR_SUCCESS;
+            return HMLL_ERR(HMLL_ERR_SUCCESS);
         }
-
-        return HMLL_ERR_SAFETENSORS_JSON_MALFORMED_HEADER;
+        return HMLL_ERR(HMLL_ERR_SAFETENSORS_JSON_MALFORMED_HEADER);
     }
-
-    return HMLL_ERR_SAFETENSORS_JSON_MALFORMED_HEADER;
+    return HMLL_ERR(HMLL_ERR_SAFETENSORS_JSON_MALFORMED_HEADER);
 }
 
-static enum hmll_error_code hmll_safetensors_header_parse_shape(yyjson_val *shape, struct hmll_tensor_specs *tensor)
+static struct hmll_error hmll_safetensors_header_parse_shape(yyjson_val *shape, struct hmll_tensor_specs *tensor)
 {
     if (shape && yyjson_is_arr(shape)) {
         const size_t rank = yyjson_arr_size(shape);
@@ -117,72 +113,66 @@ static enum hmll_error_code hmll_safetensors_header_parse_shape(yyjson_val *shap
                 if (yyjson_is_uint(dim_val))
                     tensor->shape[shape_idx] = yyjson_get_uint(dim_val);
             }
-            return HMLL_ERR_SUCCESS;
+            return HMLL_ERR(HMLL_ERR_SUCCESS);
         }
-
-        return HMLL_ERR_SUCCESS;
+        return HMLL_ERR(HMLL_ERR_SUCCESS);
     }
-
-    return HMLL_ERR_SAFETENSORS_JSON_MALFORMED_HEADER;
+    return HMLL_ERR(HMLL_ERR_SAFETENSORS_JSON_MALFORMED_HEADER);
 }
 
-static enum hmll_error_code hmll_safetensors_header_parse_tensor(yyjson_val *specs, hmll_tensor_specs_t *tensor)
+static struct hmll_error hmll_safetensors_header_parse_tensor(yyjson_val *specs, hmll_tensor_specs_t *tensor)
 {
-    enum hmll_error_code error = HMLL_ERR_SUCCESS;
+    struct hmll_error error = HMLL_OK;
 
     // Parse dtype
     yyjson_val* dtype_val = yyjson_obj_get(specs, "dtype");
     error = hmll_safetensors_header_parse_dtype(dtype_val, tensor);
 
-    if (error != HMLL_ERR_SUCCESS) return error;
+    if (hmll_check(error)) return error;
 
     // Parse shape
     yyjson_val* shape_val = yyjson_obj_get(specs, "shape");
     error = hmll_safetensors_header_parse_shape(shape_val, tensor);
 
-    if (error != HMLL_ERR_SUCCESS) return error;
+    if (hmll_check(error)) return error;
 
     // Parse offsets
     yyjson_val* data_offsets_val = yyjson_obj_get(specs, "data_offsets");
     return hmll_safetensors_header_parse_offsets(data_offsets_val, tensor);
 }
 
-struct hmll_safetensors_index
-{
-    const char **files;
-    size_t n;
-};
-
-struct hmll_safetensors_index hmll_safetensors_read_index(struct hmll_context *ctx, const struct hmll_source source)
+struct hmll_error hmll_safetensors_index(struct hmll *ctx, struct hmll_registry *reg, const struct hmll_source source)
 {
     size_t num_files = 0;
     size_t num_allocated_files = 0;
     char **files = NULL;
 
-    if (hmll_has_error(hmll_get_error(ctx)))
+    if (hmll_check(ctx->error))
         goto return_error;
+
+    char *content = mmap(NULL, source.size, PROT_READ, MAP_PRIVATE, source.fd, 0);
 
     yyjson_read_err error;
     yyjson_doc *document = NULL;
-    if ((document = yyjson_read_opts(source.content, source.size, YYJSON_READ_NOFLAG, NULL, &error)) == NULL) {
-        ctx->error = HMLL_ERR_SAFETENSORS_JSON_MALFORMED_INDEX;
+    if ((document = yyjson_read_opts(content, source.size, YYJSON_READ_NOFLAG, NULL, &error)) == NULL) {
+        ctx->error = HMLL_ERR(HMLL_ERR_SAFETENSORS_JSON_MALFORMED_INDEX);
         goto return_error;
     }
 
     yyjson_val *root = yyjson_doc_get_root(document);
     yyjson_val *map = yyjson_obj_get(root, "weight_map");
     if (map == NULL) {
-        ctx->error = HMLL_ERR_SAFETENSORS_JSON_MALFORMED_INDEX;
+        ctx->error = HMLL_ERR(HMLL_ERR_SAFETENSORS_JSON_MALFORMED_INDEX);
         goto cleanup;
     }
 
     // indexes contain all the tensor -> file mapping, so we know how many tensors we have
     // note: the function only allocates memory to hold all the definition but does not fill it,
     // filling is handled by hmll_safetensors_populate_table
-    ctx->num_tensors = yyjson_obj_size(map) + 1;  // (account for __metadata__ not in the index)
-    ctx->table.indexes = calloc(ctx->num_tensors, sizeof(unsigned short*));
-    ctx->table.names = calloc(ctx->num_tensors, sizeof(char*));
-    ctx->table.tensors = calloc(ctx->num_tensors, sizeof(struct hmll_tensor_specs));
+    reg->num_tensors = yyjson_obj_size(map) + 1;  // (account for __metadata__ not in the index)
+    reg->indexes = calloc(reg->num_tensors, sizeof(unsigned short*));
+    reg->names = calloc(reg->num_tensors, sizeof(char*));
+    reg->tensors = calloc(reg->num_tensors, sizeof(struct hmll_tensor_specs));
 
     size_t idx, max;
     yyjson_val *key, *val;
@@ -199,14 +189,14 @@ struct hmll_safetensors_index hmll_safetensors_read_index(struct hmll_context *c
 
                 char **files_ = NULL;
                 if ((files_ = realloc(files, num_allocated_files * sizeof(char *))) == NULL) {
-                    ctx->error = HMLL_ERR_ALLOCATION_FAILED;
+                    ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
                     goto cleanup;
                 }
                 files = files_;
                 files[num_files - 1] = NULL;
             } else {
                 if ((files = calloc(num_files, sizeof(char *))) == NULL) {
-                    ctx->error = HMLL_ERR_ALLOCATION_FAILED;
+                    ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
                     goto cleanup;
                 }
                 num_allocated_files = 1;
@@ -219,7 +209,7 @@ struct hmll_safetensors_index hmll_safetensors_read_index(struct hmll_context *c
     free(document);
     ctx->num_sources = num_files;
     ctx->sources = calloc(ctx->num_sources, sizeof(struct hmll_source));
-    return (struct hmll_safetensors_index) {(const char **)files, num_files};
+    return HMLL_OK;
 
 cleanup:
     if (files) {
@@ -227,45 +217,46 @@ cleanup:
         free(files);
     }
 
-    if (ctx->table.indexes) { free(ctx->table.indexes); ctx->table.indexes = NULL; }
-    if (ctx->table.names) { free(ctx->table.names); ctx->table.names = NULL; }
-    if (ctx->table.tensors) { free(ctx->table.tensors); ctx->table.tensors = NULL; }
+    if (reg->indexes) { free(reg->indexes); reg->indexes = NULL; }
+    if (reg->names) { free(reg->names); reg->names = NULL; }
+    if (reg->tensors) { free(reg->tensors); reg->tensors = NULL; }
 
     free(document);
+    munmap(content, source.size);
 
 return_error:
-    return (struct hmll_safetensors_index) {0};
+    return ctx->error;
 }
 
-int hmll_safetensors_populate_table(
-    struct hmll_context *ctx,
+struct hmll_error hmll_safetensors_populate_registry(
+    struct hmll *ctx,
+    struct hmll_registry *reg,
     const struct hmll_source source,
-    const hmll_flags_t flags,
     const size_t fid,
     const size_t offset
 )
 {
-    HMLL_UNUSED(flags);
+    char* content = mmap(0, source.size, PROT_READ, MAP_PRIVATE, source.fd, 0);
 
     size_t num_tensors = 0;
-    if (hmll_has_error(hmll_get_error(ctx)))
+    if (hmll_check(ctx->error))
         goto exit;
 
     uint64_t hsize;
-    memcpy(&hsize, source.content, sizeof(uint64_t));
-    char *header = source.content + sizeof(uint64_t);
+    memcpy(&hsize, content, sizeof(uint64_t));
+    char *header = content + sizeof(uint64_t);
 
     // Parse JSON
     yyjson_read_err error;
     yyjson_doc *document = yyjson_read_opts(header, hsize, YYJSON_READ_NOFLAG, NULL, &error);
     if (!document) {
-        ctx->error = HMLL_ERR_SAFETENSORS_JSON_INVALID_HEADER;
+        ctx->error = HMLL_ERR(HMLL_ERR_SAFETENSORS_JSON_INVALID_HEADER);
         goto freeup_and_exit;
     }
 
     yyjson_val *root = yyjson_doc_get_root(document);
     if (!yyjson_is_obj(root)) {
-        ctx->error = HMLL_ERR_SAFETENSORS_JSON_INVALID_HEADER;
+        ctx->error = HMLL_ERR(HMLL_ERR_SAFETENSORS_JSON_INVALID_HEADER);
         goto freeup_and_exit;
     }
 
@@ -273,26 +264,26 @@ int hmll_safetensors_populate_table(
     // this means we are certainly reading from a chunked safetensors file and the context has an
     // omniscient view on the total number of tensors
     num_tensors = yyjson_obj_size(root);
-    if (ctx->num_tensors == 0) {
-        if ((ctx->table.names = calloc(num_tensors, sizeof(char*))) == NULL) {
-            ctx->error = HMLL_ERR_ALLOCATION_FAILED;
+    if (reg->num_tensors == 0) {
+        if ((reg->names = calloc(num_tensors, sizeof(char*))) == NULL) {
+            ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
             goto freeup_and_exit;
         }
 
-        if ((ctx->table.tensors = calloc(num_tensors, sizeof(struct hmll_tensor_specs))) == NULL) {
-            ctx->error = HMLL_ERR_ALLOCATION_FAILED;
+        if ((reg->tensors = calloc(num_tensors, sizeof(struct hmll_tensor_specs))) == NULL) {
+            ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
             goto freeup_and_exit;
         }
 
-        if ((ctx->table.indexes = calloc(num_tensors, sizeof(struct hmll_source))) == NULL) {
-            ctx->error = HMLL_ERR_ALLOCATION_FAILED;
+        if ((reg->indexes = calloc(num_tensors, sizeof(struct hmll_source))) == NULL) {
+            ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
             goto freeup_and_exit;
         }
     }
 
-    char **names = ctx->table.names;
-    unsigned short *indexes = ctx->table.indexes;
-    hmll_tensor_specs_t *tensors = ctx->table.tensors;
+    char **names = reg->names;
+    unsigned short *indexes = reg->indexes;
+    hmll_tensor_specs_t *tensors = reg->tensors;
 
     size_t idx, max, tidx = 0;
     yyjson_val *key, *val;
@@ -303,19 +294,17 @@ int hmll_safetensors_populate_table(
 
         // Skip __metadata__ if the flag is set
         if (is_metadata != HMLL_FALSE) continue;
-            // if (!(flags & HMLL_SKIP_METADATA)) { /* TODO: Not implemented yet */ }
-
         if (indexes != NULL) indexes[offset + tidx] = fid; // can be NULL if not chunked safetensors
 
         const size_t name_len = yyjson_get_len(key);
         names[offset + tidx] = strndup(keyval, name_len);
 
         if (!yyjson_is_obj(val)) {
-            ctx->error = HMLL_ERR_SAFETENSORS_JSON_MALFORMED_HEADER;
+            ctx->error = HMLL_ERR(HMLL_ERR_SAFETENSORS_JSON_MALFORMED_HEADER);
             goto freeup_and_exit;
         }
 
-        if (hmll_safetensors_header_parse_tensor(val, tensors + offset + tidx) != HMLL_SUCCESS)
+        if (hmll_check(hmll_safetensors_header_parse_tensor(val, tensors + offset + tidx)))
             goto freeup_and_exit;
 
         // tensor offsets start at 0, we need to add header size + 8 to get the real position in the file
@@ -327,47 +316,47 @@ int hmll_safetensors_populate_table(
 
 freeup_and_exit:
     yyjson_doc_free(document);
+    munmap(content, source.size);
 
 exit:
-    if (hmll_has_error(hmll_get_error(ctx))) return ctx->error;
-
-    if (ctx->num_tensors == 0) ctx->num_tensors = tidx;
-    return tidx;
+    if (hmll_check(ctx->error)) return ctx->error;
+    if (reg->num_tensors == 0) reg->num_tensors = tidx;
+    return HMLL_OK;
 }
 
-int hmll_safetensors_open(
-    struct hmll_context *ctx, const char *path, const enum hmll_file_kind kind, const enum hmll_flags flags)
-{
-    if (hmll_has_error(hmll_get_error(ctx)))
-        return -1;
-
-    int num_tensors = 0;
-    const struct hmll_source source = hmll_open_mapped(ctx, path);
-    if (kind == HMLL_SAFETENSORS_CHUNKED) {
-        const struct hmll_safetensors_index index = hmll_safetensors_read_index(ctx, source);
-
-        size_t offset = 0;
-        for (size_t fid = 0; fid < index.n; ++fid) {
-            char *p = hmll_safetensors_path_create(path, index.files[fid]);
-            if (p == NULL) {
-                ctx->error = HMLL_ERR_ALLOCATION_FAILED;
-                return -1;
-            }
-            const struct hmll_source src = hmll_open_mapped(ctx, p);
-            const int res = hmll_safetensors_populate_table(ctx, src, flags, fid, offset);
-            if (res < 0) return ctx->error;
-
-            ctx->sources[fid] = src;
-            offset += res;
-            free(p);
-        }
-        num_tensors = offset - (ctx->num_sources - 1);
-    } else {
-        ctx->num_sources = 1;
-        ctx->sources = calloc(ctx->num_sources, sizeof(struct hmll_source));
-        ctx->sources[0] = source;
-        num_tensors = hmll_safetensors_populate_table(ctx, source, flags, 0, 0);
-    }
-
-    return num_tensors;
-}
+// int hmll_safetensors_open(
+//     struct hmll_context *ctx, const char *path, const enum hmll_file_kind kind, const enum hmll_flags flags)
+// {
+//     if (hmll_has_error(hmll_get_error(ctx)))
+//         return -1;
+//
+//     int num_tensors = 0;
+//     const struct hmll_source source = hmll_open_mapped(ctx, path);
+//     if (kind == HMLL_SAFETENSORS_CHUNKED) {
+//         const struct hmll_safetensors_index index = hmll_safetensors_read_index(ctx, source);
+//
+//         size_t offset = 0;
+//         for (size_t fid = 0; fid < index.n; ++fid) {
+//             char *p = hmll_safetensors_path_create(path, index.files[fid]);
+//             if (p == NULL) {
+//                 ctx->error = HMLL_ERR_ALLOCATION_FAILED;
+//                 return -1;
+//             }
+//             const struct hmll_source src = hmll_open_mapped(ctx, p);
+//             const int res = hmll_safetensors_populate_table(ctx, src, flags, fid, offset);
+//             if (res < 0) return ctx->error;
+//
+//             ctx->sources[fid] = src;
+//             offset += res;
+//             free(p);
+//         }
+//         num_tensors = offset - (ctx->num_sources - 1);
+//     } else {
+//         ctx->num_sources = 1;
+//         ctx->sources = calloc(ctx->num_sources, sizeof(struct hmll_source));
+//         ctx->sources[0] = source;
+//         num_tensors = hmll_safetensors_populate_table(ctx, source, flags, 0, 0);
+//     }
+//
+//     return num_tensors;
+// }

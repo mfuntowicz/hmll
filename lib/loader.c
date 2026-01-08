@@ -38,7 +38,7 @@ struct hmll_range hmll_fetch(struct hmll *ctx, struct hmll_iobuf *dst, const str
         goto fail;
     }
 
-    const struct hmll_fetcher *fetcher = ctx->fetcher;
+    const struct hmll_loader *fetcher = ctx->fetcher;
     return fetcher->fetch_range_impl_(ctx, fetcher->backend_impl_, dst, range, iofile);
 
 fail:

@@ -2,6 +2,7 @@
 #define HMLL_TYPES_H
 
 #include <stdio.h>
+#include <stdint.h>
 
 #ifndef HMLL_MAX_TENSOR_RANK
 #define HMLL_MAX_TENSOR_RANK 5
@@ -52,14 +53,6 @@ struct hmll_error {
 };
 typedef struct hmll_error hmll_error_t;
 
-// enum hmll_file_kind
-// {
-//     HMLL_SAFETENSORS,
-//     HMLL_SAFETENSORS_CHUNKED,
-//     HMLL_GGUF
-// };
-// typedef enum hmll_file_kind hmll_file_kind_t;
-
 enum hmll_dtype
 {
     HMLL_DTYPE_BOOL,
@@ -87,32 +80,34 @@ enum hmll_dtype
 };
 typedef enum hmll_dtype hmll_dtype_t;
 
-// struct hmll_tensor_specs
-// {
-//     size_t shape[HMLL_MAX_TENSOR_RANK];
-//     size_t start;
-//     size_t end;
-//     uint8_t rank;
-//     enum hmll_tensor_data_type dtype;
-// };
-// typedef struct hmll_tensor_specs hmll_tensor_specs_t;
-//
-// struct hmll_tensor_lookup_result
-// {
-//     unsigned char found;
-//     size_t index;
-//     size_t file;
-//     struct hmll_tensor_specs specs;
-// };
-// typedef struct hmll_tensor_lookup_result hmll_tensor_lookup_result_t;
-//
-// struct hmll_table
-// {
-//     struct hmll_tensor_specs *tensors;
-//     unsigned short *indexes;
-//     char **names;
-// };
-// typedef struct hmll_table hmll_table_t;
+#ifdef __HMLL_TENSORS_ENABLED__
+struct hmll_tensor_specs
+{
+    size_t shape[HMLL_MAX_TENSOR_RANK];
+    size_t start;
+    size_t end;
+    uint8_t rank;
+    enum hmll_dtype dtype;
+};
+typedef struct hmll_tensor_specs hmll_tensor_specs_t;
+
+struct hmll_lookup_result
+{
+    unsigned short index;
+    unsigned short file;
+    const struct hmll_tensor_specs *specs;
+};
+typedef struct hmll_lookup_result hmll_lookup_result_t;
+
+struct hmll_registry
+{
+    size_t num_tensors;
+    struct hmll_tensor_specs *tensors;
+    unsigned short *indexes;
+    char **names;
+};
+typedef struct hmll_registry hmll_registry_t;
+#endif
 
 enum hmll_device
 {
@@ -136,7 +131,7 @@ struct hmll_range {
 typedef struct hmll_range hmll_range_t;
 
 struct hmll {
-    struct hmll_fetcher *fetcher;
+    struct hmll_loader *fetcher;
     const struct hmll_source *sources;
     size_t num_sources;
     struct hmll_error error;

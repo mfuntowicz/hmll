@@ -74,6 +74,7 @@ set(LIBHMLL_SOURCES
 )
 
 if(${HMLL_ENABLE_SAFETENSORS})
+    message(STATUS "Enabling safetensors format support")
     add_compile_definitions(libhmll PUBLIC __HMLL_SAFETENSORS_ENABLED__=1)
     add_compile_definitions(libhmll PUBLIC __HMLL_TENSORS_ENABLED__=1)
     fetchcontent_declare(
@@ -83,8 +84,7 @@ if(${HMLL_ENABLE_SAFETENSORS})
     )
     fetchcontent_makeavailable(yyjson)
 
-    list(APPEND LIBHMLL_HEADERS include/hmll/safetensors.h)
-    list(APPEND LIBHMLL_SOURCES lib/safetensors.c)
+    list(APPEND LIBHMLL_SOURCES lib/safetensors.c lib/tensors.c)
     list(APPEND HMLL_LIBRARIES yyjson)
 endif()
 

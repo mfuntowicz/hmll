@@ -289,7 +289,7 @@ struct hmll_error hmll_iouring_init(struct hmll *ctx, const enum hmll_device dev
     }
 
     if (ctx->fetcher == NULL) {
-        ctx->fetcher = calloc(1, sizeof(struct hmll_fetcher));
+        ctx->fetcher = calloc(1, sizeof(struct hmll_loader));
         ctx->fetcher->device = device;
         ctx->fetcher->backend_impl_ = backend;
         ctx->fetcher->fetch_range_impl_ = hmll_iouring_fetch_range;
