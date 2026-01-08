@@ -153,10 +153,12 @@ if(${HMLL_BUILD_TESTS})
         list(APPEND HMLL_TESTS_SRC
             tests/tests_hmll_tensor_specs.cpp
             tests/tests_hmll_dtype.cpp
+            tests/tests_hmll_safetensors.cpp
         )
     endif()
 
     add_executable(libhmll_tests ${HMLL_TESTS_SRC})
+    target_include_directories(libhmll_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/include)
     target_link_libraries(libhmll_tests PRIVATE Catch2::Catch2WithMain libhmll)
     catch_discover_tests(libhmll_tests)
 endif()

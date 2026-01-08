@@ -39,8 +39,14 @@ static short hmll_safetensors_contains_key(char **files, const size_t num_files,
     return -1;
 }
 
+#ifdef DEBUG
+// Expose for testing
+enum hmll_dtype hmll_safetensors_dtype_from_str(const char *dtype, const size_t size)
+#else
 static enum hmll_dtype hmll_safetensors_dtype_from_str(const char *dtype, const size_t size)
+#endif
 {
+    if (size == 0) return HMLL_DTYPE_UNKNOWN;
     if (strncmp(dtype, "BOOL", size) == 0) return HMLL_DTYPE_BOOL;
     if (strncmp(dtype, "BF16", size) == 0) return HMLL_DTYPE_BFLOAT16;
     if (strncmp(dtype, "C64", size) == 0) return HMLL_DTYPE_COMPLEX;
@@ -80,7 +86,12 @@ static struct hmll_error hmll_safetensors_header_parse_dtype(yyjson_val *dtype, 
     return HMLL_OK;
 }
 
+#ifdef DEBUG
+// Expose for testing
+struct hmll_error hmll_safetensors_header_parse_offsets(yyjson_val *offsets, struct hmll_tensor_specs *tensor)
+#else
 static struct hmll_error hmll_safetensors_header_parse_offsets(yyjson_val *offsets, struct hmll_tensor_specs *tensor)
+#endif
 {
     if (offsets && yyjson_is_arr(offsets)) {
         const size_t length = yyjson_arr_size(offsets);
@@ -100,7 +111,12 @@ static struct hmll_error hmll_safetensors_header_parse_offsets(yyjson_val *offse
     return HMLL_ERR(HMLL_ERR_SAFETENSORS_JSON_MALFORMED_HEADER);
 }
 
+#ifdef DEBUG
+// Expose for testing
+struct hmll_error hmll_safetensors_header_parse_shape(yyjson_val *shape, struct hmll_tensor_specs *tensor)
+#else
 static struct hmll_error hmll_safetensors_header_parse_shape(yyjson_val *shape, struct hmll_tensor_specs *tensor)
+#endif
 {
     if (shape && yyjson_is_arr(shape)) {
         const size_t rank = yyjson_arr_size(shape);
