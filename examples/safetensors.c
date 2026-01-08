@@ -17,12 +17,12 @@ int main(const int argc, const char** argv)
         return 1;
     }
 
-    // Get the tensors' table
     hmll_t ctx = {0};
     hmll_source_t src = {0};
     if (hmll_check(hmll_source_open(argv[1], &src)))
         return 1;
 
+    // Read safetensors table with all tensors mapping
     hmll_registry_t registry = {0};
     if (hmll_check(hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0)))
         return 2;
