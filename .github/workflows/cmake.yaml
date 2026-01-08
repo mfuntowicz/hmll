@@ -32,7 +32,8 @@ jobs:
           -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}  \
           -DHMLL_BUILD_STATIC=${{ matrix.static }}  \
           -DHMLL_BUILD_TESTS=ON                     \
-          -DHMLL_ENABLE_SANITIZERS=ON
+          -DHMLL_ENABLE_SANITIZERS=ON               \
+          -DHMLL_ENABLE_SAFETENSORS=ON
 
       - name: Build
         run:  cmake --build ${{ github.workspace }}/build --config ${{env.BUILD_TYPE}}
