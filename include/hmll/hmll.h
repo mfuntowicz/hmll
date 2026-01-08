@@ -21,6 +21,12 @@ extern "C" {
 #endif
 #endif
 
+#ifdef DEBUG
+#define HMLL_STATIC
+#else
+#define HMLL_STATIC static
+#endif
+
 #define HMLL_FALSE   0u
 #define HMLL_UNUSED(expr) (void)(expr)
 
@@ -72,6 +78,7 @@ HMLL_EXTERN size_t hmll_numel(const struct hmll_tensor_specs *specs) NO_EXCEPT;
 HMLL_EXTERN unsigned char hmll_contains(const struct hmll *ctx, const struct hmll_registry *reg, const char *name) NO_EXCEPT;
 HMLL_EXTERN int hmll_find_by_name(const struct hmll *ctx, const struct hmll_registry *reg, const char *name) NO_EXCEPT;
 HMLL_EXTERN struct hmll_lookup_result hmll_lookup_tensor(const struct hmll *ctx, const struct hmll_registry *registry, const char *name) NO_EXCEPT;
+HMLL_EXTERN struct hmll_range hmll_fetch_tensor(struct hmll *ctx, const struct hmll_registry *registry, struct hmll_iobuf *dst, const char *name) NO_EXCEPT;
 #endif
 
 /** Safetensors format support **/
