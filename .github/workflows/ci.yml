@@ -41,11 +41,11 @@ jobs:
       os: ${{ matrix.os }}
       compiler-cc: clang
       compiler-cxx: clang++
-      build-type: Release
+      build-type: Debug
       enable-cuda: true
       cuda-version: ${{ matrix.cuda-version }}
       enable-safetensors: true
-      enable-sanitizers: false
+      enable-sanitizers: true
       run-tests: true
 
   rust-bindings:
@@ -60,7 +60,7 @@ jobs:
       os: ${{ matrix.os }}
       compiler-cc: gcc
       compiler-cxx: g++
-      build-type: Release
+      build-type: Debug
       enable-rust: true
       rust-toolchain: ${{ matrix.rust-toolchain }}
       enable-safetensors: true
@@ -78,25 +78,8 @@ jobs:
       os: ${{ matrix.os }}
       compiler-cc: gcc
       compiler-cxx: g++
-      build-type: Release
+      build-type: Debug
       enable-python: true
       python-version: ${{ matrix.python-version }}
-      enable-safetensors: true
-      run-tests: true
-
-  release-build:
-    name: Release Build (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ ubuntu-latest, ubuntu-24.04-arm ]
-    uses: ./.github/workflows/build.yml
-    with:
-      os: ${{ matrix.os }}
-      compiler-cc: gcc
-      compiler-cxx: g++
-      build-type: Release
-      static-build: false
-      enable-sanitizers: false
       enable-safetensors: true
       run-tests: true

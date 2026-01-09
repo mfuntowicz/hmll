@@ -1,4 +1,4 @@
-name: Reusable Build Workflow
+name: HMLL Build Workflow
 
 on:
   workflow_call:
