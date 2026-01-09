@@ -52,7 +52,7 @@ struct hmll_range hmll_fetch_tensor(struct hmll *ctx, const struct hmll_registry
         return (struct hmll_range){0};
 
     const struct hmll_lookup_result lookup = hmll_lookup_tensor(ctx, registry, name);
-    if (lookup.specs == HMLL_FALSE) {
+    if (lookup.specs == NULL) {
         ctx->error = HMLL_ERR(HMLL_ERR_TENSOR_NOT_FOUND);
         return (struct hmll_range){0};
     }
