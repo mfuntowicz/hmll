@@ -102,7 +102,7 @@ fn main() {
     // Generate bindings
     let include_path = project_root.join("include");
 
-    let mut builder = bindgen::Builder::default()
+    let builder = bindgen::Builder::default()
         .header(include_path.join("hmll/hmll.h").to_str().unwrap())
         .clang_arg(format!("-I{}", include_path.display()))
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
@@ -121,15 +121,12 @@ fn main() {
 
     // Add conditional defines based on features
     #[cfg(feature = "safetensors")]
-    {
-        builder = builder.clang_arg("-D__HMLL_SAFETENSORS_ENABLED__=1");
-        builder = builder.clang_arg("-D__HMLL_TENSORS_ENABLED__=1");
-    }
+    let builder = builder
+        .clang_arg("-D__HMLL_SAFETENSORS_ENABLED__=1")
+        .clang_arg("-D__HMLL_TENSORS_ENABLED__=1");
 
     #[cfg(feature = "cuda")]
-    {
-        builder = builder.clang_arg("-D__HMLL_CUDA_ENABLED__=1");
-    }
+    let builder = builder.clang_arg("-D__HMLL_CUDA_ENABLED__=1");
 
     let bindings = builder
         .generate()
