@@ -113,7 +113,7 @@ fn main() {
         .derive_default(true)
         .derive_copy(true)
         .derive_eq(true)
-        .derive_hash(true)
+        .no_partialeq("hmll_loader")
         .impl_debug(true)
         .prepend_enum_name(false)
         .size_t_is_usize(true)
