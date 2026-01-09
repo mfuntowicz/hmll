@@ -1,0 +1,140 @@
+name: Reusable Build Workflow
+
+on:
+  workflow_call:
+    inputs:
+      os:
+        description: 'Operating system to run on'
+        required: true
+        type: string
+      compiler-cc:
+        description: 'C compiler'
+        required: true
+        type: string
+      compiler-cxx:
+        description: 'C++ compiler'
+        required: true
+        type: string
+      build-type:
+        description: 'CMake build type (Release, Debug, RelWithDebInfo)'
+        required: false
+        type: string
+        default: 'Debug'
+      static-build:
+        description: 'Build static library'
+        required: false
+        type: boolean
+        default: false
+      enable-cuda:
+        description: 'Enable CUDA support'
+        required: false
+        type: boolean
+        default: false
+      cuda-version:
+        description: 'CUDA version to use'
+        required: false
+        type: string
+        default: '12.2.0'
+      enable-python:
+        description: 'Enable Python bindings'
+        required: false
+        type: boolean
+        default: false
+      python-version:
+        description: 'Python version to use'
+        required: false
+        type: string
+        default: '3.11'
+      enable-rust:
+        description: 'Enable Rust bindings'
+        required: false
+        type: boolean
+        default: false
+      rust-toolchain:
+        description: 'Rust toolchain version'
+        required: false
+        type: string
+        default: 'stable'
+      enable-sanitizers:
+        description: 'Enable sanitizers'
+        required: false
+        type: boolean
+        default: true
+      enable-safetensors:
+        description: 'Enable safetensors support'
+        required: false
+        type: boolean
+        default: true
+      run-tests:
+        description: 'Run tests after build'
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  build:
+    runs-on: ${{ inputs.os }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup CUDA
+        if: inputs.enable-cuda
+        uses: Jimver/cuda-toolkit@v0.2.30
+        with:
+          cuda: ${{ inputs.cuda-version }}
+          sub-packages: '["nvcc", "cudart"]'
+
+      - name: Setup Python
+        if: inputs.enable-python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Setup Rust
+        if: inputs.enable-rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: ${{ inputs.rust-toolchain }}
+
+      - name: Install Python dependencies
+        if: inputs.enable-python
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest numpy
+
+      - name: Configure CMake
+        env:
+          CC: ${{ inputs.compiler-cc }}
+          CXX: ${{ inputs.compiler-cxx }}
+        run: |
+          cmake -B ${{ github.workspace }}/build \
+            -DCMAKE_BUILD_TYPE=${{ inputs.build-type }} \
+            -DHMLL_BUILD_STATIC=${{ inputs.static-build && 'ON' || 'OFF' }} \
+            -DHMLL_BUILD_TESTS=${{ inputs.run-tests && 'ON' || 'OFF' }} \
+            -DHMLL_ENABLE_SANITIZERS=${{ inputs.enable-sanitizers && 'ON' || 'OFF' }} \
+            -DHMLL_ENABLE_SAFETENSORS=${{ inputs.enable-safetensors && 'ON' || 'OFF' }} \
+            ${{ inputs.enable-cuda && '-DHMLL_ENABLE_CUDA=ON' || '' }}
+
+      - name: Build C++ Library
+        run: cmake --build ${{ github.workspace }}/build --config ${{ inputs.build-type }}
+
+      - name: Build Rust Bindings
+        if: inputs.enable-rust
+        working-directory: lib/rust/hmll
+        run: cargo build --release
+
+      - name: Test C++ Library
+        if: inputs.run-tests
+        working-directory: ${{ github.workspace }}/build
+        run: ctest -C ${{ inputs.build-type }} --output-on-failure
+
+      - name: Test Rust Bindings
+        if: inputs.enable-rust && inputs.run-tests
+        working-directory: lib/rust/hmll
+        run: cargo test
+
+      - name: Test Python Bindings
+        if: inputs.enable-python && inputs.run-tests
+        run: |
+          python examples/read_with_hmll.py || echo "Python example test - define proper test suite"

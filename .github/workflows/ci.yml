@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  cpu-build-matrix:
+    name: CPU Build (${{ matrix.os }}, ${{ matrix.compiler.cc }}, static=${{ matrix.static }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, ubuntu-24.04-arm ]
+        compiler: [
+          { cc: gcc, cxx: g++ },
+          { cc: clang, cxx: clang++ }
+        ]
+        static: [ false, true ]
+    uses: ./.github/workflows/build.yml
+    with:
+      os: ${{ matrix.os }}
+      compiler-cc: ${{ matrix.compiler.cc }}
+      compiler-cxx: ${{ matrix.compiler.cxx }}
+      build-type: Debug
+      static-build: ${{ matrix.static }}
+      enable-sanitizers: true
+      enable-safetensors: true
+      run-tests: true
+
+  cuda-build:
+    name: CUDA Build (${{ matrix.os }}, ${{ matrix.cuda-version }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest ]
+        cuda-version: [ '12.6.0', '12.8.0', '13.0.0']
+    uses: ./.github/workflows/build.yml
+    with:
+      os: ${{ matrix.os }}
+      compiler-cc: clang
+      compiler-cxx: clang++
+      build-type: Release
+      enable-cuda: true
+      cuda-version: ${{ matrix.cuda-version }}
+      enable-safetensors: true
+      enable-sanitizers: false
+      run-tests: true
+
+  rust-bindings:
+    name: Rust Bindings (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, ubuntu-24.04-arm ]
+        rust-toolchain: [ stable, nightly ]
+    uses: ./.github/workflows/build.yml
+    with:
+      os: ${{ matrix.os }}
+      compiler-cc: gcc
+      compiler-cxx: g++
+      build-type: Release
+      enable-rust: true
+      rust-toolchain: ${{ matrix.rust-toolchain }}
+      enable-safetensors: true
+      run-tests: true
+
+  python-bindings:
+    name: Python Bindings (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, ubuntu-24.04-arm ]
+        python-version: [ '3.9', '3.10', '3.11', '3.12' ]
+    uses: ./.github/workflows/build.yml
+    with:
+      os: ${{ matrix.os }}
+      compiler-cc: gcc
+      compiler-cxx: g++
+      build-type: Release
+      enable-python: true
+      python-version: ${{ matrix.python-version }}
+      enable-safetensors: true
+      run-tests: true
+
+  release-build:
+    name: Release Build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, ubuntu-24.04-arm ]
+    uses: ./.github/workflows/build.yml
+    with:
+      os: ${{ matrix.os }}
+      compiler-cc: gcc
+      compiler-cxx: g++
+      build-type: Release
+      static-build: false
+      enable-sanitizers: false
+      enable-safetensors: true
+      run-tests: true
