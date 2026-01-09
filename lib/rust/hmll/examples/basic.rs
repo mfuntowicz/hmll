@@ -2,18 +2,21 @@
 
 use hmll::{Device, LoaderKind, Source, WeightLoader};
 use std::env;
+use std::str::FromStr;
 use std::time::Instant;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get the file path from command line arguments
     let args: Vec<String> = env::args().collect();
-    if args.len() != 2 {
+    if args.len() != 4 {
         eprintln!("Usage: {} <model_file>", args[0]);
         eprintln!("Example: {} model.safetensors", args[0]);
         std::process::exit(1);
     }
 
     let file_path = &args[1];
+    let start = usize::from_str(&args[2]).expect("<start> parameter should be a number");
+    let end = usize::from_str(&args[3]).expect("<end> parameter should be a number");
 
     println!("Opening file: {}", file_path);
 
@@ -33,8 +36,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  Number of sources: {}", loader.num_sources());
 
     // Fetch some data from the beginning of the file
-    let start = 39304;
-    let end = 604019080;
     let fetch_size = end - start;
     let actual_fetch_size = fetch_size.min(sources[0].size());
     println!("\nFetching {} bytes ({:.2} MB)...", actual_fetch_size, actual_fetch_size as f64 / 1_048_576.0);
