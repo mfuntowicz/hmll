@@ -27,7 +27,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create a weight loader
     println!("\nCreating weight loader...");
-    let mut loader = WeightLoader::new(&sources, Device::Cuda, LoaderKind::Auto)?;
+    let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)?;
     println!("✓ Loader created successfully");
     println!("  Device: {}", loader.device());
     println!("  Number of sources: {}", loader.num_sources());
