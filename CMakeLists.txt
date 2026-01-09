@@ -143,7 +143,8 @@ if(${HMLL_BUILD_TESTS})
 
     set(HMLL_TESTS_SRC
             tests/tests_hmll_errors.cpp
-            tests/tests_hmll_memory.cpp)
+            tests/tests_hmll_memory.cpp
+            tests/tests_hmll_context.cpp)
 
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND ${HMLL_ENABLE_IO_URING})
         list(APPEND HMLL_TESTS_SRC tests/tests_hmll_io_uring.cpp)

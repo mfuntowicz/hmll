@@ -79,7 +79,7 @@ nb::ndarray<nb::ndim<1>, nb::c_contig> WeightLoader::fetch(
     return hmll_to_ndarray({start, end}, *handle, offsets, dtype, deleter);
 }
 
-void init_fetcher(const nb::module_& m)
+void init_loader(nb::module_& m)
 {
     nb::enum_<hmll_device_t>(m, "Device", R"pbdoc(Define all the targetable devices)pbdoc")
     .value("CPU", HMLL_DEVICE_CPU, "Target CPU device")

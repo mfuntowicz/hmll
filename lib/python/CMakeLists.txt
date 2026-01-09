@@ -8,10 +8,14 @@ fetchcontent_declare(
 )
 fetchcontent_makeavailable(nanobind)
 
-nanobind_add_module(_pyhmll_impl NB_STATIC STABLE_ABI LTO
-        loader.cpp
-        pyhmll.cpp
-)
+set(HMLL_PYTHON_SRCS loader.cpp pyhmll.cpp)
+if(${HMLL_ENABLE_SAFETENSORS})
+    add_compile_definitions(__HMLL_TENSORS_ENABLED__)
+    add_compile_definitions(__HMLL_SAFETENSORS_ENABLED__)
+    list(APPEND HMLL_PYTHON_SRCS safetensors.cpp)
+endif()
+
+nanobind_add_module(_pyhmll_impl NB_STATIC STABLE_ABI LTO ${HMLL_PYTHON_SRCS})
 nanobind_add_stub(
         _pyhmll_impl_stub
         MODULE _pyhmll_impl
