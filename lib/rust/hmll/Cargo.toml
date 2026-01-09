@@ -1,0 +1,31 @@
+[package]
+name = "hmll"
+version = "0.1.0"
+edition = "2021"
+authors = ["HMLL Contributors"]
+description = "Safe, idiomatic Rust bindings to the hmll library for high-performance ML model loading"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/huggingface/hmll"
+
+[dependencies]
+hmll-sys = { path = "../hmll-sys" }
+thiserror = "2.0"
+
+[features]
+default = ["io_uring"]
+io_uring = ["hmll-sys/io_uring"]
+safetensors = ["hmll-sys/safetensors"]
+cuda = ["hmll-sys/cuda"]
+
+[profile.release]
+lto = "fat"          # Full LTO for maximum optimization across crates
+opt-level = 3        # Maximum optimization level
+codegen-units = 1    # Single codegen unit for better optimization
+strip = true         # Strip symbols for smaller binary size
+panic = "abort"      # Abort on panic for smaller code size
+
+[profile.bench]
+inherits = "release"
+lto = "fat"
+opt-level = 3
+codegen-units = 1

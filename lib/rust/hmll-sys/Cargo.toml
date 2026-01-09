@@ -1,0 +1,33 @@
+[package]
+name = "hmll-sys"
+version = "0.1.0"
+edition = "2021"
+authors = ["Morgan Funtowicz <morgan@huggingface.co>"]
+description = "Low-level FFI bindings to the hmll library"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/huggingface/hmll"
+links = "hmll"
+
+[dependencies]
+
+[build-dependencies]
+bindgen = "0.72.1"
+cmake = "0.1"
+
+[features]
+default = ["io_uring"]
+io_uring = []
+safetensors = []
+cuda = []
+
+[profile.release]
+lto = "fat"          # Full LTO for maximum optimization across crates
+opt-level = 3        # Maximum optimization level
+codegen-units = 1    # Single codegen unit for better optimization
+strip = true         # Strip symbols for smaller binary size
+
+[profile.bench]
+inherits = "release"
+lto = "fat"
+opt-level = 3
+codegen-units = 1
