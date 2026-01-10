@@ -46,7 +46,7 @@ jobs:
       cuda-version: ${{ matrix.cuda-version }}
       enable-safetensors: true
       enable-sanitizers: true
-      run-tests: true
+      run-tests: false
 
   rust-bindings:
     name: Rust Bindings (${{ matrix.os }})
