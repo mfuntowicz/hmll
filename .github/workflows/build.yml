@@ -83,8 +83,8 @@ jobs:
         uses: Jimver/cuda-toolkit@v0.2.30
         with:
           cuda: ${{ inputs.cuda-version }}
-          method: 'network'
-          sub-packages: '["nvcc", "cudart"]'
+          method: 'local'
+#          sub-packages: '["nvcc", "cudart"]'
 
       - name: Setup Python
         if: inputs.enable-python
