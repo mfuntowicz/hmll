@@ -84,6 +84,7 @@ jobs:
         with:
           cuda: ${{ inputs.cuda-version }}
           method: 'local'
+          linux-local-args: '["--toolkit"]'
 #          sub-packages: '["nvcc", "cudart"]'
 
       - name: Setup Python
