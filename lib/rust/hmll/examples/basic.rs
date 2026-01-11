@@ -38,7 +38,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Fetch some data from the beginning of the file
     let fetch_size = end - start;
     let actual_fetch_size = fetch_size.min(sources[0].size());
-    println!("\nFetching {} bytes ({:.2} MB)...", actual_fetch_size, actual_fetch_size as f64 / 1_048_576.0);
+    println!("\nFetching {} bytes ({:.2} MB)...", actual_fetch_size, actual_fetch_size as f32 / 1_048_576.0);
 
     let start_time = Instant::now();
     let buffer = loader.fetch(start..end, 0)?;
@@ -50,7 +50,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  Fetch time: {:.3}s", elapsed.as_secs_f64());
 
     // Calculate throughput
-    let throughput_bytes_per_sec = buffer.len() as f64 / elapsed.as_secs_f64();
+    let throughput_bytes_per_sec = buffer.len() as f32 / elapsed.as_secs_f32();
     let throughput_mb_per_sec = throughput_bytes_per_sec / 1_048_576.0;
     let throughput_gb_per_sec = throughput_bytes_per_sec / 1_073_741_824.0;
 

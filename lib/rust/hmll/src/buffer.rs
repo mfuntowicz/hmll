@@ -99,8 +99,6 @@ impl Buffer {
     /// # Safety
     ///
     /// The caller must ensure that `ptr` points to valid memory of at least `size` bytes.
-    ///
-    /// Hot path - inline always for construction.
     #[inline(always)]
     pub(crate) unsafe fn from_raw_parts(ptr: *mut u8, size: usize, device: Device, owned: bool) -> Self {
         Self {
@@ -112,8 +110,6 @@ impl Buffer {
     }
 
     /// Get the buffer as a byte slice (CPU only).
-    ///
-    /// Hot path - inline for efficient slice creation.
     #[inline]
     pub fn as_slice(&self) -> Option<&[u8]> {
         if self.device == Device::Cpu && !self.ptr.is_null() {
@@ -124,48 +120,36 @@ impl Buffer {
     }
 
     /// Get the size of the buffer in bytes.
-    ///
-    /// Hot path - inline always for zero-cost field access.
     #[inline(always)]
     pub const fn len(&self) -> usize {
         self.size
     }
 
     /// Check if the buffer is empty.
-    ///
-    /// Hot path - inline always for zero-cost check.
     #[inline(always)]
     pub const fn is_empty(&self) -> bool {
         self.size == 0
     }
 
     /// Get the device where the buffer is located.
-    ///
-    /// Hot path - inline always for zero-cost field access.
     #[inline(always)]
     pub const fn device(&self) -> Device {
         self.device
     }
 
     /// Get a raw pointer to the buffer.
-    ///
-    /// Hot path - inline always for zero-cost pointer access.
     #[inline(always)]
     pub const fn as_ptr(&self) -> *const u8 {
         self.ptr as *const u8
     }
 
     /// Get a mutable raw pointer to the buffer.
-    ///
-    /// Hot path - inline always for zero-cost pointer access.
     #[inline(always)]
     pub fn as_mut_ptr(&mut self) -> *mut u8 {
         self.ptr
     }
 
     /// Convert to a Vec (copies data if on CPU, panics if on GPU).
-    ///
-    /// This is a less common operation, so we use regular inline.
     #[inline]
     pub fn to_vec(&self) -> Vec<u8> {
         self.as_slice()

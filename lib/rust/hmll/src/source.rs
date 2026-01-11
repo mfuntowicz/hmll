@@ -51,16 +51,12 @@ impl Source {
     }
 
     /// Get the size of the source file in bytes.
-    ///
-    /// Hot path - inline always for zero-cost field access.
     #[inline(always)]
     pub const fn size(&self) -> usize {
         self.inner.size
     }
 
     /// Get the file descriptor (platform-specific).
-    ///
-    /// Hot path - inline always for zero-cost field access.
     #[cfg(target_family = "unix")]
     #[inline(always)]
     pub const fn fd(&self) -> i32 {
@@ -68,16 +64,12 @@ impl Source {
     }
 
     /// Get the path of the source file if available.
-    ///
-    /// Hot path - inline for efficient option access.
     #[inline]
     pub fn path(&self) -> Option<&str> {
         self.path.as_deref()
     }
 
     /// Get a reference to the underlying hmll_source.
-    ///
-    /// Hot path - inline always for zero-cost reference.
     #[inline(always)]
     pub(crate) const fn as_raw(&self) -> &hmll_sys::hmll_source {
         &self.inner
@@ -88,8 +80,6 @@ impl Source {
     /// # Safety
     ///
     /// The caller is responsible for calling hmll_source_close on the returned source.
-    ///
-    /// Hot path - inline always for efficient ownership transfer.
     #[allow(dead_code)]
     #[inline(always)]
     pub(crate) unsafe fn into_raw(mut self) -> hmll_sys::hmll_source {

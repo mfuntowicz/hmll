@@ -67,14 +67,18 @@ HMLL_EXTERN struct hmll_error hmll_source_open(const char *path, struct hmll_sou
 HMLL_EXTERN void hmll_source_close(const struct hmll_source *src) NO_EXCEPT;
 
 /** Memory handling stubs **/
-void *hmll_get_io_buffer(struct hmll *ctx, enum hmll_device device, size_t size) NO_EXCEPT;
+static inline size_t hmll_range_size(struct hmll_range range) NO_EXCEPT { return range.end - range.start; }
 HMLL_EXTERN void *hmll_get_buffer(struct hmll *ctx, enum hmll_device device, size_t size) NO_EXCEPT;
 HMLL_EXTERN struct hmll_iobuf hmll_get_buffer_for_range(struct hmll *ctx, enum hmll_device device, struct hmll_range range) NO_EXCEPT;
+void *hmll_get_io_buffer(struct hmll *ctx, enum hmll_device device, size_t size) NO_EXCEPT;
 
+/** Fetching stubs **/
 HMLL_EXTERN struct hmll_error hmll_loader_init(
     struct hmll *ctx, const struct hmll_source *srcs, size_t n, enum hmll_device device, enum hmll_loader_kind kind) NO_EXCEPT;
-HMLL_EXTERN struct hmll_range hmll_fetch(struct hmll *ctx, struct hmll_iobuf *dst, struct hmll_range range,  size_t iofile) NO_EXCEPT;
+HMLL_EXTERN struct hmll_range hmll_fetch(struct hmll *ctx, struct hmll_iobuf *dst, struct hmll_range range, int iofile) NO_EXCEPT;
+HMLL_EXTERN struct hmll_range *hmll_fetchv(struct hmll *ctx, struct hmll_iobuf *dsts, const struct hmll_range *ranges, int iofile, size_t n) NO_EXCEPT;
 
+/** Tensors manipulation stubs - enabled if a higher-level tensor format is enabled **/
 #ifdef __HMLL_TENSORS_ENABLED__
 HMLL_EXTERN uint8_t hmll_nbits(enum hmll_dtype dtype) NO_EXCEPT;
 HMLL_EXTERN size_t hmll_numel(const struct hmll_tensor_specs *specs) NO_EXCEPT;

@@ -16,8 +16,6 @@ pub enum LoaderKind {
 
 impl LoaderKind {
     /// Convert to the underlying C enum value.
-    ///
-    /// Hot path - inline always for FFI conversion.
     #[inline(always)]
     pub(crate) const fn to_raw(self) -> hmll_sys::hmll_loader_kind {
         match self {
@@ -159,11 +157,11 @@ impl<'a> WeightLoader<'a> {
     /// # }
     /// ```
     #[inline]
-    pub fn fetch<R: Into<Range>>(&mut self, range: R, file_index: usize) -> Result<Buffer> {
+    pub fn fetch<R: Into<Range>>(&mut self, range: R, file_index: i32) -> Result<Buffer> {
         let range = range.into();
 
         // Fast path: bounds check
-        if file_index >= self.sources.len() {
+        if file_index >= self.sources.len() as i32 {
             return Err(Error::InvalidRange);
         }
 
@@ -187,7 +185,7 @@ impl<'a> WeightLoader<'a> {
         }
 
         // Perform the actual fetch
-        let offsets = unsafe {
+        let _ = unsafe {
             hmll_sys::hmll_fetch(
                 self.context.as_mut(),
                 &mut iobuf,
@@ -209,8 +207,8 @@ impl<'a> WeightLoader<'a> {
         // Success path: create buffer
         Ok(unsafe {
             Buffer::from_raw_parts(
-                (iobuf.ptr as *mut u8).add(offsets.start),
-                offsets.end - offsets.start,
+                iobuf.ptr as *mut u8,
+                iobuf.size,
                 self.device,
                 false, // hmll manages the memory
             )
@@ -218,24 +216,18 @@ impl<'a> WeightLoader<'a> {
     }
 
     /// Get the device this loader is configured for.
-    ///
-    /// Hot path - inline always for zero-cost field access.
     #[inline(always)]
     pub const fn device(&self) -> Device {
         self.device
     }
 
     /// Get the number of source files.
-    ///
-    /// Hot path - inline always for zero-cost length access.
     #[inline(always)]
     pub fn num_sources(&self) -> usize {
         self.sources.len()
     }
 
     /// Get information about a specific source file.
-    ///
-    /// Hot path - inline for efficient bounds checking and struct creation.
     #[inline]
     pub fn source_info(&self, index: usize) -> Option<SourceInfo> {
         if index < self.sources.len() {

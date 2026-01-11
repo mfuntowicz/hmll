@@ -78,9 +78,6 @@ pub enum Error {
 
 impl Error {
     /// Convert a hmll_error to a Rust Error.
-    ///
-    /// This is a cold path - errors should be rare in normal operation.
-    /// We mark it as cold and never inline to optimize the hot (success) path.
     #[cold]
     #[inline(never)]
     pub(crate) fn from_hmll_error(err: hmll_sys::hmll_error) -> Self {
@@ -129,9 +126,6 @@ impl Error {
     }
 
     /// Check if a hmll_error represents success.
-    ///
-    /// This is a hot path - inline always for zero-cost abstraction.
-    /// The success path should be optimized and the error path should branch predict as unlikely.
     #[inline(always)]
     pub(crate) fn check_hmll_error(err: hmll_sys::hmll_error) -> Result<()> {
         if hmll_sys::hmll_is_success(err) {

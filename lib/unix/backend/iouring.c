@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 #include "hmll/hmll.h"
 #include "hmll/cuda.h"
 #include "hmll/memory.h"
@@ -9,9 +10,9 @@
 #include <driver_types.h>
 #endif
 
-static struct hmll_error hmll_iouring_register_staging_buffers(
+static struct hmll_error hmll_io_uring_register_staging_buffers(
     struct hmll *ctx,
-    struct hmll_iouring *fetcher,
+    struct hmll_io_uring *fetcher,
     const enum hmll_device device
 ) {
     fetcher->iovecs = hmll_get_io_buffer(ctx, device, HMLL_URING_QUEUE_DEPTH * sizeof(struct iovec));
@@ -36,22 +37,22 @@ static struct hmll_error hmll_iouring_register_staging_buffers(
  * Checks for completed CUDA events and reclaims the associated io_uring slots.
  * If CUDA is disabled or the device is CPU, this is a no-op.
  */
-static inline void hmll_iouring_reclaim_slots(
-    struct hmll_iouring *fetcher,
+static inline void hmll_io_uring_reclaim_slots(
+    struct hmll_io_uring *fetcher,
     const enum hmll_device device
 ) {
 #ifdef __HMLL_CUDA_ENABLED__
     if (device != HMLL_DEVICE_CUDA) return;
 
-    struct hmll_iouring_cuda_context *dctx = fetcher->device_ctx;
+    struct hmll_io_uring_cuda_context *dctx = fetcher->device_ctx;
 
     // TODO(mfuntowicz): Should we directly store `slots` which are doing memcpy currently to avoid full scan?
     for (size_t i = 0; i < HMLL_URING_QUEUE_DEPTH; ++i) {
-        struct hmll_iouring_cuda_context *cd = dctx + i;
-        if (hmll_iouring_slot_is_busy(fetcher->iobusy, i)) {
+        struct hmll_io_uring_cuda_context *cd = dctx + i;
+        if (hmll_io_uring_slot_is_busy(fetcher->iobusy, i)) {
             if (cd->state == HMLL_CUDA_STREAM_MEMCPY && cudaEventQuery(cd->done) == cudaSuccess) {
-                hmll_iouring_cuda_stream_set_idle(&cd->state);
-                hmll_iouring_slot_set_available(&fetcher->iobusy, cd->slot);
+                hmll_io_uring_cuda_stream_set_idle(&cd->state);
+                hmll_io_uring_slot_set_available(&fetcher->iobusy, cd->slot);
             }
         }
     }
@@ -65,8 +66,8 @@ static inline void hmll_iouring_reclaim_slots(
  * Prepares a single SQE (Submission Queue Entry).
  * Handles the difference between direct CPU buffer reads and CUDA staging buffer reads.
  */
-static inline void hmll_iouring_prep_sqe(
-    const struct hmll_iouring *fetcher,
+static inline void hmll_io_uring_prep_sqe(
+    const struct hmll_io_uring *fetcher,
     const enum hmll_device device,
     struct io_uring_sqe *sqe,
     void *dst,
@@ -85,7 +86,7 @@ static inline void hmll_iouring_prep_sqe(
 #if defined(__HMLL_CUDA_ENABLED__)
     else if (device == HMLL_DEVICE_CUDA) {
         // CUDA: Read into registered staging buffers
-        struct hmll_iouring_cuda_context *dctx = fetcher->device_ctx;
+        struct hmll_io_uring_cuda_context *dctx = fetcher->device_ctx;
         void *buf = fetcher->iovecs[slot].iov_base;
 
         dctx[slot].offset = offset;
@@ -97,13 +98,25 @@ static inline void hmll_iouring_prep_sqe(
 #endif
 }
 
+static inline int hmll_io_uring_get_sqe(struct hmll_io_uring *fetcher, struct io_uring_sqe **sqe)
+{
+    const int slot = hmll_io_uring_slot_find_available(fetcher->iobusy);
+    if (slot == -1) return -1;
+
+    *sqe = io_uring_get_sqe(&fetcher->ioring);
+    if (*sqe == NULL) return -1;
+
+    hmll_io_uring_slot_set_busy(&fetcher->iobusy, slot);
+    return slot;
+}
+
 /**
  * Handles the completion of an IO request (CQE).
  * For CPU: just marks a slot available.
  * For CUDA: Dispatches the Async Memcpy from staging to GPU.
  */
-static inline void hmll_iouring_handle_completion(
-    struct hmll_iouring *fetcher,
+static inline void hmll_io_uring_handle_completion(
+    struct hmll_io_uring *fetcher,
     const struct io_uring_cqe *cqe,
     const struct hmll_iobuf *dst,
     const size_t offset,
@@ -111,18 +124,18 @@ static inline void hmll_iouring_handle_completion(
 ) {
     if (dst->device == HMLL_DEVICE_CPU) {
         const uint64_t cb_slot = cqe->user_data;
-        hmll_iouring_slot_set_available(&fetcher->iobusy, cb_slot);
+        hmll_io_uring_slot_set_available(&fetcher->iobusy, cb_slot);
     }
 #if defined(__HMLL_CUDA_ENABLED__)
     else if (dst->device == HMLL_DEVICE_CUDA) {
-        struct hmll_iouring_cuda_context *cctx = (struct hmll_iouring_cuda_context *)cqe->user_data;
+        struct hmll_io_uring_cuda_context *cctx = (struct hmll_io_uring_cuda_context *)cqe->user_data;
 
         void *to = (char *)dst->ptr + (cctx->offset - offset);
         void *from = fetcher->iovecs[cctx->slot].iov_base;
 
         cudaMemcpyAsync(to, from, len, cudaMemcpyHostToDevice, cctx->stream);
         cudaEventRecord(cctx->done, cctx->stream);
-        hmll_iouring_cuda_stream_set_memcpy(&cctx->state);
+        hmll_io_uring_cuda_stream_set_memcpy(&cctx->state);
     }
 #else
     HMLL_UNUSED(offset);
@@ -130,12 +143,12 @@ static inline void hmll_iouring_handle_completion(
 #endif
 }
 
-static struct hmll_range hmll_iouring_fetch_range_impl(
+static struct hmll_range hmll_io_uring_fetch_range_impl(
     struct hmll *ctx,
-    struct hmll_iouring *fetcher,
+    struct hmll_io_uring *fetcher,
     const struct hmll_iobuf *dst,
     const struct hmll_range range,
-    const unsigned iofile
+    const int iofile
 ) {
     if (hmll_check(ctx->error)) return (struct hmll_range) {0};
 
@@ -147,21 +160,18 @@ static struct hmll_range hmll_iouring_fetch_range_impl(
     while (b_read < a_size) {
         hmll_iouring_reclaim_slots(fetcher, dst->device);
 
-        while (b_submitted < a_size) {
-            const int slot = hmll_iouring_slot_find_available(fetcher->iobusy);
-            if (slot == -1) break;
+    while (b_read < size) {
+        hmll_io_uring_reclaim_slots(fetcher, dst->device);
 
-            struct io_uring_sqe *sqe = io_uring_get_sqe(&fetcher->ioring);
-            if (!sqe) break;
+        while (b_submitted < size) {
+            if ((slot = hmll_io_uring_get_sqe(fetcher, &sqe)) < 0)
+                break;
 
-            hmll_iouring_slot_set_busy(&fetcher->iobusy, slot);
-
-            const size_t remaining = a_size - b_submitted;
+            const size_t remaining = size - b_submitted;
             const size_t to_read = (remaining < HMLL_URING_BUFFER_SIZE) ? remaining : HMLL_URING_BUFFER_SIZE;
             const size_t file_offset = range.start + b_submitted;
 
-            hmll_iouring_prep_sqe(
-                fetcher, dst->device, sqe, (char *)dst->ptr + b_submitted, file_offset, to_read, iofile, slot);
+            hmll_io_uring_prep_sqe(fetcher, dst->device, sqe, (char *)dst->ptr + b_submitted, file_offset, to_read, iofile, slot);
 
             b_submitted += to_read;
             ++n_dma;
@@ -175,14 +185,14 @@ static struct hmll_range hmll_iouring_fetch_range_impl(
             clock_gettime(CLOCK_MONOTONIC_COARSE, &ts_start);
 
             if (io_uring_submit_and_wait(&fetcher->ioring, nwait) < 0) {
-                // todo: do we need to reset the cca? hmll_iouring_cca_init(&fetcher->iocca)
+                // todo: do we need to reset the cca? hmll_io_uring_cca_init(&fetcher->iocca)
                 ctx->error = HMLL_ERR(HMLL_ERR_IO_ERROR);
                 return (struct hmll_range) {0};
             }
             clock_gettime(CLOCK_MONOTONIC_COARSE, &ts_end);
 
             // todo: approximated version of the number of bytes actually reads because it assumes full reads
-            hmll_iouring_cca_update(&fetcher->iocca, HMLL_URING_BUFFER_SIZE * nwait, ts_start, ts_end);
+            hmll_io_uring_cca_update(&fetcher->iocca, HMLL_URING_BUFFER_SIZE * nwait, ts_start, ts_end);
         }
 
         unsigned count = 0;
@@ -205,7 +215,7 @@ static struct hmll_range hmll_iouring_fetch_range_impl(
         }
     }
 
-    return (struct hmll_range){ 0 };
+    return (struct hmll_range){0};
 }
 
 static struct hmll_range *hmll_io_uring_fetchv_range_impl(
@@ -417,26 +427,25 @@ cleanup:
     return NULL;
 }
 
-
-static struct hmll_range hmll_iouring_fetch_range(
+static struct hmll_range hmll_io_uring_fetch_range(
     struct hmll *ctx,
     void *fetcher,
-    struct hmll_iobuf *dst,
+    const struct hmll_iobuf *dst,
     const struct hmll_range range,
-    const unsigned short iofile
+    const int iofile
 ) {
     if (hmll_check(ctx->error))
         return (struct hmll_range){0};
 
-    return hmll_iouring_fetch_range_impl(ctx, fetcher, dst, range, iofile);
+    return hmll_io_uring_fetch_range_impl(ctx, fetcher, dst, range, iofile);
 }
 
 struct hmll_error hmll_iouring_init(struct hmll *ctx, const enum hmll_device device) {
     if (hmll_check(ctx->error))
         return ctx->error;
 
-    struct hmll_iouring *backend = calloc(1, sizeof(struct hmll_iouring));
-    hmll_iouring_cca_init(&backend->iocca);
+    struct hmll_io_uring *backend = calloc(1, sizeof(struct hmll_io_uring));
+    hmll_io_uring_cca_init(&backend->iocca);
 
     struct io_uring_params params = {
         .flags = IORING_SETUP_SQPOLL | IORING_SETUP_SINGLE_ISSUER,
@@ -445,7 +454,7 @@ struct hmll_error hmll_iouring_init(struct hmll *ctx, const enum hmll_device dev
 
     if (device == HMLL_DEVICE_CUDA) {
 #if defined(__HMLL_CUDA_ENABLED__)
-        struct hmll_iouring_cuda_context *data = calloc(HMLL_URING_QUEUE_DEPTH, sizeof(struct hmll_iouring_cuda_context));
+        struct hmll_io_uring_cuda_context *data = calloc(HMLL_URING_QUEUE_DEPTH, sizeof(struct hmll_io_uring_cuda_context));
         backend->device_ctx = (void *)data;
 
         for (int i = 0; i < (int)HMLL_URING_QUEUE_DEPTH; ++i) {
@@ -461,7 +470,7 @@ struct hmll_error hmll_iouring_init(struct hmll *ctx, const enum hmll_device dev
             return ctx->error;
         }
 
-        ctx->error = hmll_iouring_register_staging_buffers(ctx, backend, device);
+        ctx->error = hmll_io_uring_register_staging_buffers(ctx, backend, device);
         if (hmll_check(ctx->error)) {
             return ctx->error;
         }
@@ -493,6 +502,7 @@ struct hmll_error hmll_iouring_init(struct hmll *ctx, const enum hmll_device dev
         ctx->fetcher->device = device;
         ctx->fetcher->backend_impl_ = backend;
         ctx->fetcher->fetch_range_impl_ = hmll_iouring_fetch_range;
+        ctx->fetcher->fetch_range_impl_ = hmll_io_uring_fetch_range;
     }
 
 

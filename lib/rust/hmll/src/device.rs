@@ -13,8 +13,6 @@ pub enum Device {
 
 impl Device {
     /// Convert to the underlying C enum value.
-    ///
-    /// Hot path - inline always for FFI conversion.
     #[inline(always)]
     pub(crate) const fn to_raw(self) -> hmll_device {
         match self {
@@ -24,8 +22,6 @@ impl Device {
     }
 
     /// Convert from the underlying C enum value.
-    ///
-    /// Hot path - inline always for FFI conversion.
     #[allow(dead_code)]
     #[inline(always)]
     pub(crate) const fn from_raw(device: hmll_device) -> Option<Self> {
@@ -39,8 +35,6 @@ impl Device {
 
 impl Default for Device {
     /// Default device is CPU.
-    ///
-    /// Hot path - inline always for zero-cost default.
     #[inline(always)]
     fn default() -> Self {
         Device::Cpu

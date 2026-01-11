@@ -44,7 +44,7 @@ enum hmll_iouring_cuda_state {
     HMLL_CUDA_STREAM_MEMCPY = 1,
 };
 
-struct hmll_iouring_cuda_context
+struct hmll_io_uring_cuda_context
 {
     cudaStream_t stream;
     cudaEvent_t done;
@@ -53,12 +53,12 @@ struct hmll_iouring_cuda_context
     enum hmll_iouring_cuda_state state;
 };
 
-static inline void hmll_iouring_cuda_stream_set_idle(enum hmll_iouring_cuda_state *state)
+static inline void hmll_io_uring_cuda_stream_set_idle(enum hmll_iouring_cuda_state *state)
 {
     *state = HMLL_CUDA_STREAM_IDLE;
 }
 
-static inline void hmll_iouring_cuda_stream_set_memcpy(enum hmll_iouring_cuda_state *state)
+static inline void hmll_io_uring_cuda_stream_set_memcpy(enum hmll_iouring_cuda_state *state)
 {
     *state = HMLL_CUDA_STREAM_MEMCPY;
 }
@@ -71,13 +71,13 @@ static inline size_t hmll_iouring_throughput(const size_t nbytes, const size_t e
     return nbytes * 1000000L / elapsed;
 }
 
-static inline void hmll_iouring_cca_init(struct hmll_iouring_cca *cca)
+static inline void hmll_io_uring_cca_init(struct hmll_iouring_cca *cca)
 {
     cca->throughput = 0;
     cca->window = 1;
 }
 
-static inline unsigned hmll_iouring_cca_update(
+static inline unsigned hmll_io_uring_cca_update(
     struct hmll_iouring_cca *cca, const size_t bytes, const struct timespec ts_start, const struct timespec ts_end)
 {
     const unsigned current = cca->window;
@@ -96,7 +96,7 @@ static inline unsigned hmll_iouring_cca_update(
     return current;
 }
 
-struct hmll_iouring {
+struct hmll_io_uring {
     struct io_uring ioring;
     struct iovec *iovecs;
     struct hmll_iouring_iobusy iobusy;
@@ -106,14 +106,14 @@ struct hmll_iouring {
     void *device_ctx;
 };
 
-static inline unsigned int hmll_iouring_slot_is_busy(const struct hmll_iouring_iobusy iobusy, const unsigned int slot)
+static inline unsigned int hmll_io_uring_slot_is_busy(const struct hmll_iouring_iobusy iobusy, const unsigned int slot)
 {
     if (slot < 64)
         return iobusy.lsb & (1LL << slot);
     return iobusy.msb & (1LL << (slot - 64));
 }
 
-static inline int hmll_iouring_slot_find_available(const struct hmll_iouring_iobusy iobusy)
+static inline int hmll_io_uring_slot_find_available(const struct hmll_iouring_iobusy iobusy)
 {
     // First check LSB
     const int pos_lsb = __builtin_ffsll(~iobusy.lsb);
@@ -128,7 +128,7 @@ static inline int hmll_iouring_slot_find_available(const struct hmll_iouring_iob
     return -1;
 }
 
-static inline void hmll_iouring_slot_set_busy(struct hmll_iouring_iobusy *iobusy, const unsigned int slot)
+static inline void hmll_io_uring_slot_set_busy(struct hmll_iouring_iobusy *iobusy, const unsigned int slot)
 {
     if (slot < 64) {
         iobusy->lsb |= 1LL << slot;
@@ -137,7 +137,7 @@ static inline void hmll_iouring_slot_set_busy(struct hmll_iouring_iobusy *iobusy
     }
 }
 
-static inline void hmll_iouring_slot_set_available(struct hmll_iouring_iobusy *iobusy, const unsigned int slot)
+static inline void hmll_io_uring_slot_set_available(struct hmll_iouring_iobusy *iobusy, const unsigned int slot)
 {
     if (slot < 64) {
         iobusy->lsb &= ~(1LL << slot);
@@ -146,5 +146,5 @@ static inline void hmll_iouring_slot_set_available(struct hmll_iouring_iobusy *i
     }
 }
 
-struct hmll_error hmll_iouring_init(struct hmll *, enum hmll_device);
+struct hmll_error hmll_io_uring_init(struct hmll *, enum hmll_device);
 #endif // HMLL_FETCHER_IOURING_H

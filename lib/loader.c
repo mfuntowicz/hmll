@@ -23,7 +23,7 @@ struct hmll_error hmll_loader_init(
     return HMLL_ERR(HMLL_ERR_FILE_EMPTY);
 }
 
-struct hmll_range hmll_fetch(struct hmll *ctx, struct hmll_iobuf *dst, const struct hmll_range range, const size_t iofile)
+struct hmll_range hmll_fetch(struct hmll *ctx, struct hmll_iobuf *dst, const struct hmll_range range, const int iofile)
 {
     if (hmll_check(ctx->error))
         goto fail;
@@ -43,6 +43,33 @@ struct hmll_range hmll_fetch(struct hmll *ctx, struct hmll_iobuf *dst, const str
 
 fail:
     return (struct hmll_range){0};
+}
+
+struct hmll_range *hmll_fetchv(struct hmll *ctx, struct hmll_iobuf *dsts, const struct hmll_range *ranges, const int iofile, const size_t n)
+{
+    if (hmll_check(ctx->error))
+        goto fail;
+
+    // validate ranges and dsts
+    for (size_t i = 0; i < n; ++i) {
+        const struct hmll_range range = ranges[i];
+        if (range.start >= range.end) {
+            ctx->error = HMLL_ERR(HMLL_ERR_INVALID_RANGE);
+            goto fail;
+        }
+
+        const struct hmll_iobuf dst = dsts[i];
+        if (dst.size < range.end - range.start) {
+            ctx->error.code = HMLL_ERR_BUFFER_TOO_SMALL;
+            goto fail;
+        }
+    }
+
+    const struct hmll_loader *fetcher = ctx->fetcher;
+    return fetcher->fetchv_range_impl_(ctx, fetcher->backend_impl_, dsts, ranges, iofile, n);
+
+fail:
+    return NULL;
 }
 
 #ifdef __HMLL_TENSORS_ENABLED__
