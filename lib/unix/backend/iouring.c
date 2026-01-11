@@ -139,15 +139,6 @@ static struct hmll_range hmll_iouring_fetch_range_impl(
 ) {
     if (hmll_check(ctx->error)) return (struct hmll_range) {0};
 
-    const size_t a_start = ALIGN_DOWN(range.start, ALIGN_PAGE);
-    const size_t a_end = ALIGN_UP(range.end, ALIGN_PAGE);
-    const size_t a_size = a_end - a_start;
-
-    if (dst->device == HMLL_DEVICE_CPU && !hmll_is_aligned((uintptr_t)dst->ptr, ALIGN_PAGE)) {
-        ctx->error = HMLL_ERR(HMLL_ERR_BUFFER_ADDR_NOT_ALIGNED);
-        return (struct hmll_range){0};
-    }
-
     size_t n_dma = 0;
     size_t b_read = 0;
     size_t b_submitted = 0;
@@ -167,7 +158,7 @@ static struct hmll_range hmll_iouring_fetch_range_impl(
 
             const size_t remaining = a_size - b_submitted;
             const size_t to_read = (remaining < HMLL_URING_BUFFER_SIZE) ? remaining : HMLL_URING_BUFFER_SIZE;
-            const size_t file_offset = a_start + b_submitted;
+            const size_t file_offset = range.start + b_submitted;
 
             hmll_iouring_prep_sqe(
                 fetcher, dst->device, sqe, (char *)dst->ptr + b_submitted, file_offset, to_read, iofile, slot);
@@ -207,14 +198,223 @@ static struct hmll_range hmll_iouring_fetch_range_impl(
                 }
 
                 b_read += cqe->res;
-                hmll_iouring_handle_completion(fetcher, cqe, dst, a_start, cqe->res);
+                hmll_io_uring_handle_completion(fetcher, cqe, dst, range.start, cqe->res);
             }
 
             io_uring_cq_advance(&fetcher->ioring, count);
         }
     }
 
-    return (struct hmll_range){ range.start - a_start, a_start + (range.end - range.start) };
+    return (struct hmll_range){ 0 };
+}
+
+static struct hmll_range *hmll_io_uring_fetchv_range_impl(
+    struct hmll *ctx,
+    struct hmll_io_uring *fetcher,
+    const struct hmll_iobuf *dsts,
+    const struct hmll_range *ranges,
+    const int iofile,
+    const size_t n
+) {
+    if (hmll_check(ctx->error)) return NULL;
+
+    // Allocate result array
+    struct hmll_range *results = calloc(n, sizeof(struct hmll_range));
+    if (!results) {
+        ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
+        return NULL;
+    }
+
+    // Use stack for small batches (common in tensor chunking)
+    struct fetch_state {
+        size_t submitted;
+        size_t read;
+        size_t size;
+        unsigned char fadvise_sent;
+    };
+
+    struct fetch_state *states;
+    struct fetch_state stack_states[64];
+    if (n <= 64) {
+        states = stack_states;
+        memset(states, 0, sizeof(struct fetch_state) * n);
+    } else {
+        states = calloc(n, sizeof(struct fetch_state));
+        if (!states) {
+            free(results);
+            ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
+            return NULL;
+        }
+    }
+
+    // Pre-calculate sizes
+    for (size_t i = 0; i < n; ++i) {
+        states[i].size = ranges[i].end - ranges[i].start;
+    }
+
+    // Bitmask Constants for packed user_data
+    // [1 bit: Fadvise] [31 bits: Range Index] [32 bits: Slot Index]
+    const uint64_t MASK_FADVISE   = 1ULL << 63;
+    const uint64_t MASK_RANGE     = 0x7FFFFFFF00000000ULL;
+    const uint64_t MASK_SLOT      = 0x00000000FFFFFFFFULL;
+    const uint64_t SHIFT_RANGE    = 32;
+
+    size_t n_in_flight_data = 0;
+    size_t n_completed = 0;
+    size_t submit_cursor = 0;
+
+    struct io_uring_cqe *cqes[HMLL_URING_CQE_BATCH_SIZE];
+
+    while (n_completed < n) {
+
+        while (1) {
+            // 1. Find work (Round-Robin)
+            size_t current_idx = -1;
+            size_t checked = 0;
+            size_t idx = submit_cursor;
+
+            while (checked < n) {
+                if ((states[idx].read < states[idx].size && states[idx].submitted < states[idx].size) ||
+                    (!states[idx].fadvise_sent && states[idx].size > 0)) {
+                    current_idx = idx;
+                    break;
+                }
+                idx++;
+                if (idx == n) idx = 0;
+                checked++;
+            }
+
+            if (current_idx == (size_t)-1) break;
+
+            submit_cursor = current_idx + 1;
+            if (submit_cursor == n) submit_cursor = 0;
+
+            // 2. Get SQE
+            struct io_uring_sqe *sqe = io_uring_get_sqe(&fetcher->ioring);
+            if (!sqe) break;
+
+            // 3. Prepare SQE
+            if (!states[current_idx].fadvise_sent) {
+                io_uring_prep_fadvise(
+                    sqe, iofile, ranges[current_idx].start, states[current_idx].size,
+                    POSIX_FADV_SEQUENTIAL | POSIX_FADV_WILLNEED);
+                io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
+
+                const uint64_t data = MASK_FADVISE | current_idx << SHIFT_RANGE;
+                io_uring_sqe_set_data64(sqe, data);
+
+                states[current_idx].fadvise_sent = true;
+                continue;
+            }
+
+            // Data Read
+            int slot = hmll_io_uring_slot_find_available(fetcher->iobusy);
+            if (slot == -1) {
+                hmll_io_uring_reclaim_slots(fetcher, dsts[0].device);
+                slot = hmll_io_uring_slot_find_available(fetcher->iobusy);
+            }
+
+            if (slot == -1) break; // No slots, must wait
+
+            hmll_io_uring_slot_set_busy(&fetcher->iobusy, slot);
+
+            const size_t remaining = states[current_idx].size - states[current_idx].submitted;
+            const size_t to_read = (remaining < HMLL_URING_BUFFER_SIZE) ? remaining : HMLL_URING_BUFFER_SIZE;
+            const size_t file_offset = ranges[current_idx].start + states[current_idx].submitted;
+
+            hmll_io_uring_prep_sqe(
+                fetcher,
+                dsts[current_idx].device,
+                sqe,
+                (char *)dsts[current_idx].ptr + states[current_idx].submitted,
+                file_offset,
+                to_read,
+                iofile,
+                slot
+            );
+
+            const uint64_t data = current_idx << SHIFT_RANGE | slot;
+            io_uring_sqe_set_data64(sqe, data);
+
+            states[current_idx].submitted += to_read;
+            n_in_flight_data++;
+        }
+
+        // --- WAITING PHASE ---
+        size_t nwait = 0;
+        if (n_in_flight_data > 0) {
+            nwait = MIN(n_in_flight_data, fetcher->iocca.window);
+        }
+
+        struct timespec ts_start, ts_end;
+        clock_gettime(CLOCK_MONOTONIC_COARSE, &ts_start);
+
+        if (io_uring_submit_and_wait(&fetcher->ioring, nwait) < 0) {
+            ctx->error = HMLL_ERR(HMLL_ERR_IO_ERROR);
+            goto cleanup;
+        }
+        clock_gettime(CLOCK_MONOTONIC_COARSE, &ts_end);
+
+        if (nwait > 0) {
+            hmll_io_uring_cca_update(&fetcher->iocca, HMLL_URING_BUFFER_SIZE * nwait, ts_start, ts_end);
+        }
+
+        // --- COMPLETION PHASE ---
+        unsigned count = 0;
+        while ((count = io_uring_peek_batch_cqe(&fetcher->ioring, cqes, HMLL_URING_CQE_BATCH_SIZE)) > 0) {
+            for (unsigned i = 0; i < count; i++) {
+                const struct io_uring_cqe *cqe = cqes[i];
+                const uint64_t data = cqe->user_data;
+
+                if (data & MASK_FADVISE) continue; // Ignore fadvise completion
+
+                --n_in_flight_data;
+
+                if (cqe->res < 0) {
+                    ctx->error = HMLL_ERR(HMLL_ERR_IO_ERROR);
+                    io_uring_cq_advance(&fetcher->ioring, count);
+                    goto cleanup;
+                }
+
+                const uint32_t r_idx = (data & MASK_RANGE) >> SHIFT_RANGE;
+                const uint32_t s_idx = (data & MASK_SLOT);
+
+                if (dsts[0].device == HMLL_DEVICE_CPU) {
+                    hmll_io_uring_slot_set_available(&fetcher->iobusy, s_idx);
+                }
+#if defined(__HMLL_CUDA_ENABLED__)
+                else if (dsts[0].device == HMLL_DEVICE_CUDA) {
+                    struct hmll_io_uring_cuda_context *cctx = &((struct hmll_io_uring_cuda_context *)fetcher->device_ctx)[s_idx];
+
+                    // Calc offset relative to destination buffer start
+                    const size_t rel_offset = cctx->offset - ranges[r_idx].start;
+
+                    void *to = (char *)dsts[r_idx].ptr + rel_offset;
+                    void *from = fetcher->iovecs[s_idx].iov_base;
+
+                    cudaMemcpyAsync(to, from, cqe->res, cudaMemcpyHostToDevice, cctx->stream);
+                    cudaEventRecord(cctx->done, cctx->stream);
+                    hmll_io_uring_cuda_stream_set_memcpy(&cctx->state);
+                }
+#endif
+
+                states[r_idx].read += cqe->res;
+                if (states[r_idx].read >= states[r_idx].size) {
+                    results[r_idx] = (struct hmll_range){ 0, states[r_idx].size };
+                    n_completed++;
+                }
+            }
+            io_uring_cq_advance(&fetcher->ioring, count);
+        }
+    }
+
+    if (n > 64) free(states);
+    return results;
+
+cleanup:
+    if (n > 64) free(states);
+    free(results);
+    return NULL;
 }
 
 

@@ -10,7 +10,7 @@ struct hmll_error hmll_source_open(const char *path, struct hmll_source *src)
     struct hmll_error error = HMLL_OK;
 
     int fd;
-    if ((fd = open(path, O_RDONLY | O_DIRECT)) == -1) {
+    if ((fd = open(path, O_RDONLY)) == -1) {
         error = HMLL_SYS_ERR(errno);
         goto exit;
     }

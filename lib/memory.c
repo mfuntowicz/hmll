@@ -53,15 +53,12 @@ struct hmll_iobuf hmll_get_buffer_for_range(struct hmll *ctx, const enum hmll_de
     if (hmll_check(ctx->error))
         return (struct hmll_iobuf) {0};
 
-    const size_t alstart = ALIGN_DOWN(range.start, ALIGN_PAGE);
-    const size_t alend = ALIGN_UP(range.end, ALIGN_PAGE);
-    const size_t alsize = alend - alstart;
-
-    void *ptr = hmll_get_buffer(ctx, device, alsize);
+    const size_t size = hmll_range_size(range);
+    void *ptr = hmll_get_buffer(ctx, device, size);
     if (hmll_check(ctx->error))
         return (struct hmll_iobuf) {0};
 
-    return (struct hmll_iobuf) {alsize, ptr, device};
+    return (struct hmll_iobuf) {size, ptr, device};
 }
 
 void *hmll_get_io_buffer(struct hmll *ctx, const enum hmll_device device, const size_t size)
