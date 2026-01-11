@@ -5,6 +5,8 @@
 #include "hmll/memory.h"
 #include "hmll/unix/backend/iouring.h"
 
+#define HMLL_IO_URING_ADVISORY_FLAG UINT64_MAX
+
 #if defined(__HMLL_CUDA_ENABLED__)
 #include <cuda_runtime_api.h>
 #include <driver_types.h>
@@ -157,8 +159,14 @@ static struct hmll_range hmll_io_uring_fetch_range_impl(
     size_t b_submitted = 0;
     struct io_uring_cqe *cqes[HMLL_URING_CQE_BATCH_SIZE];
 
-    while (b_read < a_size) {
-        hmll_iouring_reclaim_slots(fetcher, dst->device);
+    const size_t size = hmll_range_size(range);
+    struct io_uring_sqe *sqe = NULL;
+    int slot;
+    if ((slot = hmll_io_uring_get_sqe(fetcher, &sqe)) >= 0) {
+        io_uring_prep_fadvise(sqe, iofile, range.start, size, POSIX_FADV_SEQUENTIAL | POSIX_FADV_WILLNEED);
+        io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
+        io_uring_sqe_set_data64(sqe, HMLL_IO_URING_ADVISORY_FLAG);
+    }
 
     while (b_read < size) {
         hmll_io_uring_reclaim_slots(fetcher, dst->device);
@@ -201,6 +209,7 @@ static struct hmll_range hmll_io_uring_fetch_range_impl(
                 --n_dma;
 
                 const struct io_uring_cqe *cqe = cqes[i];
+                if (cqe->user_data == HMLL_IO_URING_ADVISORY_FLAG) continue;
                 if (cqe->res < 0) {
                     ctx->error = HMLL_ERR(HMLL_ERR_IO_ERROR);
                     io_uring_cq_advance(&fetcher->ioring, i + 1);
@@ -440,7 +449,21 @@ static struct hmll_range hmll_io_uring_fetch_range(
     return hmll_io_uring_fetch_range_impl(ctx, fetcher, dst, range, iofile);
 }
 
-struct hmll_error hmll_iouring_init(struct hmll *ctx, const enum hmll_device device) {
+static struct hmll_range *hmll_io_uring_fetchv_range(
+    struct hmll *ctx,
+    void *fetcher,
+    const struct hmll_iobuf *dsts,
+    const struct hmll_range *ranges,
+    const int iofile,
+    const size_t n
+) {
+    if (hmll_check(ctx->error))
+        return NULL;
+
+    return hmll_io_uring_fetchv_range_impl(ctx, fetcher, dsts, ranges, iofile, n);
+}
+
+struct hmll_error hmll_io_uring_init(struct hmll *ctx, const enum hmll_device device) {
     if (hmll_check(ctx->error))
         return ctx->error;
 
@@ -501,8 +524,8 @@ struct hmll_error hmll_iouring_init(struct hmll *ctx, const enum hmll_device dev
         ctx->fetcher = calloc(1, sizeof(struct hmll_loader));
         ctx->fetcher->device = device;
         ctx->fetcher->backend_impl_ = backend;
-        ctx->fetcher->fetch_range_impl_ = hmll_iouring_fetch_range;
         ctx->fetcher->fetch_range_impl_ = hmll_io_uring_fetch_range;
+        ctx->fetcher->fetchv_range_impl_ = hmll_io_uring_fetchv_range;
     }
 
 
