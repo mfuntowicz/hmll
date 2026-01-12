@@ -10,13 +10,30 @@
 
 #if defined(__HMLL_CUDA_ENABLED__)
 #include <cuda_runtime_api.h>
-
-// We use Write Combined as we don't want the CPU to read any of these bytes
-#define CUDA_HOST_ALLOC_FLAGS (cudaHostAllocMapped | cudaHostAllocPortable | cudaHostAllocWriteCombined)
-
 #endif
 
-void *hmll_get_buffer(struct hmll *ctx, const enum hmll_device device, const size_t size)
+
+static inline void *hmll_get_buffer_with_flags(const size_t size, const int flags)
+{
+    return mmap(0, size, PROT_READ | PROT_WRITE, flags, -1, 0);
+}
+
+
+void hmll_free_buffer(struct hmll_iobuf *buffer)
+{
+    if (buffer == NULL) return;
+
+#if defined(__HMLL_CUDA_ENABLED__)
+    if (buffer->device == HMLL_DEVICE_CUDA) cudaFreeHost(buffer->ptr);
+#endif
+
+    if (buffer->device == HMLL_DEVICE_CPU) munmap(buffer->ptr, buffer->size);
+
+    buffer->ptr = NULL;
+    buffer->size = 0;
+}
+
+void *hmll_get_buffer(struct hmll *ctx, const enum hmll_device device, const size_t size, const int flags)
 {
     void* ptr = NULL;
 
@@ -24,21 +41,28 @@ void *hmll_get_buffer(struct hmll *ctx, const enum hmll_device device, const siz
     switch (device)
     {
     case HMLL_DEVICE_CPU:
-        ptr = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        if (ptr == MAP_FAILED) {
-            ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
-            return NULL;
+        if ((ptr = hmll_get_buffer_with_flags(size, MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE| MAP_HUGETLB | MAP_HUGE_8MB)) == MAP_FAILED) {
+            if((ptr = hmll_get_buffer_with_flags(size, MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE)) == MAP_FAILED) {
+                ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
+                return NULL;
+            }
         }
         break;
 
     case HMLL_DEVICE_CUDA:
 #if defined(__HMLL_CUDA_ENABLED__)
         ;
-        const enum cudaError error = cudaHostAlloc(&ptr, size, CUDA_HOST_ALLOC_FLAGS);
-        if (error != cudaSuccess)
-#if defined(DEBUG)
-            printf("Failed to allocate CUDA paged-locked memory: %s\n", cudaGetErrorString(error));
-#endif
+        enum cudaError error;
+        if (flags == HMLL_MEM_DEVICE)
+            error = cudaMalloc(&ptr, size);
+        else
+            error = cudaHostAlloc(&ptr, size, cudaHostAllocDefault | cudaHostAllocPortable);
+
+        if (error != cudaSuccess) {
+            ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
+            return NULL;
+        }
+
         break;
 #else
         ctx->error = HMLL_ERR(HMLL_ERR_CUDA_NOT_ENABLED);
@@ -54,41 +78,9 @@ struct hmll_iobuf hmll_get_buffer_for_range(struct hmll *ctx, const enum hmll_de
         return (struct hmll_iobuf) {0};
 
     const size_t size = hmll_range_size(range);
-    void *ptr = hmll_get_buffer(ctx, device, size);
+    void *ptr = hmll_get_buffer(ctx, device, size, HMLL_MEM_DEVICE);
     if (hmll_check(ctx->error))
         return (struct hmll_iobuf) {0};
 
     return (struct hmll_iobuf) {size, ptr, device};
-}
-
-void *hmll_get_io_buffer(struct hmll *ctx, const enum hmll_device device, const size_t size)
-{
-    void *ptr = NULL;
-    switch (device)
-    {
-    case HMLL_DEVICE_CPU:
-        ;
-        // MAP_POPULATE to avoid page fault on the first IO wri
-        int flags = MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE;
-        if (size > 2U * 1024 * 1024)  flags |= MAP_HUGETLB | MAP_HUGE_2MB;
-
-        ptr = mmap(0, size, PROT_READ | PROT_WRITE, flags, -1, 0);
-        if (ptr == MAP_FAILED) ptr = hmll_get_buffer(ctx, device, size);
-        return ptr;
-
-    case HMLL_DEVICE_CUDA:
-#if defined(__HMLL_CUDA_ENABLED__)
-        ;
-        const enum cudaError error = cudaHostAlloc(&ptr, size, cudaHostAllocMapped);
-        if (error == cudaSuccess)
-            return ptr;
-
-#else
-        ctx->error = HMLL_ERR(HMLL_ERR_CUDA_NOT_ENABLED);
-        return ptr;
-#endif
-    }
-
-    ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
-    return ptr;
 }

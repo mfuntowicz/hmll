@@ -67,10 +67,11 @@ HMLL_EXTERN struct hmll_error hmll_source_open(const char *path, struct hmll_sou
 HMLL_EXTERN void hmll_source_close(const struct hmll_source *src) NO_EXCEPT;
 
 /** Memory handling stubs **/
-static inline size_t hmll_range_size(struct hmll_range range) NO_EXCEPT { return range.end - range.start; }
-HMLL_EXTERN void *hmll_get_buffer(struct hmll *ctx, enum hmll_device device, size_t size) NO_EXCEPT;
+HMLL_EXTERN void hmll_free_buffer(struct hmll_iobuf *buffer) NO_EXCEPT;
+HMLL_EXTERN void *hmll_get_buffer(struct hmll *ctx, enum hmll_device device, size_t size, int flags) NO_EXCEPT;
 HMLL_EXTERN struct hmll_iobuf hmll_get_buffer_for_range(struct hmll *ctx, enum hmll_device device, struct hmll_range range) NO_EXCEPT;
 void *hmll_get_io_buffer(struct hmll *ctx, enum hmll_device device, size_t size) NO_EXCEPT;
+static inline size_t hmll_range_size(struct hmll_range range) NO_EXCEPT { return range.end - range.start; }
 
 /** Fetching stubs **/
 HMLL_EXTERN struct hmll_error hmll_loader_init(
