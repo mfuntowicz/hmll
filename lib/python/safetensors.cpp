@@ -93,11 +93,11 @@ public:
             {
                 specs = registry->tensors[index];
                 const auto iofile = registry->indexes[index];
-                const auto nbytes = ALIGN_UP(specs.end, 4096) - ALIGN_DOWN(specs.start, 4096);
 
                 // Allocate buffer for the tensor
                 const auto dev = device();
-                buffer->ptr = hmll_get_buffer(ctx, dev, nbytes);
+                const auto nbytes = specs.end - specs.start;
+                buffer->ptr = hmll_get_buffer(ctx, dev, nbytes, HMLL_MEM_DEVICE);
                 buffer->size = nbytes;
                 buffer->device = dev;
 

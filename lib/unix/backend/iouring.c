@@ -17,10 +17,10 @@ static struct hmll_error hmll_io_uring_register_staging_buffers(
     struct hmll_io_uring *fetcher,
     const enum hmll_device device
 ) {
-    fetcher->iovecs = hmll_get_io_buffer(ctx, device, HMLL_URING_QUEUE_DEPTH * sizeof(struct iovec));
+    fetcher->iovecs = hmll_get_buffer(ctx, HMLL_DEVICE_CPU, HMLL_URING_QUEUE_DEPTH * sizeof(struct iovec), HMLL_MEM_DEVICE);
     if (hmll_check(ctx->error)) return ctx->error;
 
-    void *arena = hmll_get_io_buffer(ctx, device, HMLL_URING_QUEUE_DEPTH * HMLL_URING_BUFFER_SIZE);
+    void *arena = hmll_get_buffer(ctx, device, HMLL_URING_QUEUE_DEPTH * HMLL_URING_BUFFER_SIZE, HMLL_MEM_STAGING);
     if (hmll_check(ctx->error)) return ctx->error;
 
     for (size_t i = 0; i < HMLL_URING_QUEUE_DEPTH; ++i) {
@@ -287,7 +287,6 @@ static struct hmll_range *hmll_io_uring_fetchv_range_impl(
     while (n_completed < n) {
 
         while (1) {
-            // 1. Find work (Round-Robin)
             size_t current_idx = -1;
             size_t checked = 0;
             size_t idx = submit_cursor;
@@ -308,11 +307,9 @@ static struct hmll_range *hmll_io_uring_fetchv_range_impl(
             submit_cursor = current_idx + 1;
             if (submit_cursor == n) submit_cursor = 0;
 
-            // 2. Get SQE
             struct io_uring_sqe *sqe = io_uring_get_sqe(&fetcher->ioring);
             if (!sqe) break;
 
-            // 3. Prepare SQE
             if (!states[current_idx].fadvise_sent) {
                 io_uring_prep_fadvise(
                     sqe, iofile, ranges[current_idx].start, states[current_idx].size,
@@ -326,7 +323,6 @@ static struct hmll_range *hmll_io_uring_fetchv_range_impl(
                 continue;
             }
 
-            // Data Read
             int slot = hmll_io_uring_slot_find_available(fetcher->iobusy);
             if (slot == -1) {
                 hmll_io_uring_reclaim_slots(fetcher, dsts[0].device);
@@ -359,7 +355,6 @@ static struct hmll_range *hmll_io_uring_fetchv_range_impl(
             n_in_flight_data++;
         }
 
-        // --- WAITING PHASE ---
         size_t nwait = 0;
         if (n_in_flight_data > 0) {
             nwait = MIN(n_in_flight_data, fetcher->iocca.window);
@@ -378,7 +373,6 @@ static struct hmll_range *hmll_io_uring_fetchv_range_impl(
             hmll_io_uring_cca_update(&fetcher->iocca, HMLL_URING_BUFFER_SIZE * nwait, ts_start, ts_end);
         }
 
-        // --- COMPLETION PHASE ---
         unsigned count = 0;
         while ((count = io_uring_peek_batch_cqe(&fetcher->ioring, cqes, HMLL_URING_CQE_BATCH_SIZE)) > 0) {
             for (unsigned i = 0; i < count; i++) {
@@ -485,7 +479,6 @@ struct hmll_error hmll_io_uring_init(struct hmll *ctx, const enum hmll_device de
             CHECK_CUDA(cudaStreamCreateWithFlags(&data[i].stream, cudaStreamNonBlocking));
             CHECK_CUDA(cudaEventCreateWithFlags(&data[i].done, cudaEventDisableTiming));
         }
-
 
         int res = 0;
         if ((res = io_uring_queue_init_params(HMLL_URING_QUEUE_DEPTH, &backend->ioring, &params)) < 0) {

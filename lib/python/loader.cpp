@@ -47,11 +47,11 @@ nb::ndarray<nb::ndim<1>, nb::c_contig> WeightLoader::fetch(
 
     {
         nb::gil_scoped_release release;
-        const size_t nbytes = ALIGN_UP(end, 4096) - ALIGN_DOWN(start, 4096);
 
         // Allocate buffer for the tensor
         const auto dev = device();
-        buffer->ptr = hmll_get_buffer(ctx_.get(), dev, nbytes);
+        const auto nbytes = end - start;
+        buffer->ptr = hmll_get_buffer(ctx_.get(), dev, nbytes, HMLL_MEM_DEVICE);
         buffer->size = nbytes;
         buffer->device = dev;
 
