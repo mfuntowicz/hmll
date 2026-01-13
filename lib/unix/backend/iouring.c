@@ -17,10 +17,10 @@ static struct hmll_error hmll_io_uring_register_staging_buffers(
     struct hmll_io_uring *fetcher,
     const enum hmll_device device
 ) {
-    fetcher->iovecs = hmll_get_buffer(ctx, HMLL_DEVICE_CPU, HMLL_URING_QUEUE_DEPTH * sizeof(struct iovec), HMLL_MEM_DEVICE);
+  fetcher->iovecs = hmll_alloc(HMLL_URING_QUEUE_DEPTH * sizeof(struct iovec), HMLL_DEVICE_CPU, HMLL_MEM_DEVICE);
     if (hmll_check(ctx->error)) return ctx->error;
 
-    void *arena = hmll_get_buffer(ctx, device, HMLL_URING_QUEUE_DEPTH * HMLL_URING_BUFFER_SIZE, HMLL_MEM_STAGING);
+    void *arena = hmll_alloc(HMLL_URING_QUEUE_DEPTH * HMLL_URING_BUFFER_SIZE, device, HMLL_MEM_STAGING);
     if (hmll_check(ctx->error)) return ctx->error;
 
     for (size_t i = 0; i < HMLL_URING_QUEUE_DEPTH; ++i) {
@@ -145,14 +145,14 @@ static inline void hmll_io_uring_handle_completion(
 #endif
 }
 
-static struct hmll_range hmll_io_uring_fetch_range_impl(
+static ssize_t hmll_io_uring_fetch_range_impl(
     struct hmll *ctx,
     struct hmll_io_uring *fetcher,
     const struct hmll_iobuf *dst,
     const struct hmll_range range,
     const int iofile
 ) {
-    if (hmll_check(ctx->error)) return (struct hmll_range) {0};
+    if (hmll_check(ctx->error)) return -1;
 
     size_t n_dma = 0;
     size_t b_read = 0;
@@ -195,7 +195,7 @@ static struct hmll_range hmll_io_uring_fetch_range_impl(
             if (io_uring_submit_and_wait(&fetcher->ioring, nwait) < 0) {
                 // todo: do we need to reset the cca? hmll_io_uring_cca_init(&fetcher->iocca)
                 ctx->error = HMLL_ERR(HMLL_ERR_IO_ERROR);
-                return (struct hmll_range) {0};
+                return -1;
             }
             clock_gettime(CLOCK_MONOTONIC_COARSE, &ts_end);
 
@@ -213,7 +213,7 @@ static struct hmll_range hmll_io_uring_fetch_range_impl(
                 if (cqe->res < 0) {
                     ctx->error = HMLL_ERR(HMLL_ERR_IO_ERROR);
                     io_uring_cq_advance(&fetcher->ioring, i + 1);
-                    return (struct hmll_range) {0};
+                    return -1;
                 }
 
                 b_read += cqe->res;
@@ -224,10 +224,10 @@ static struct hmll_range hmll_io_uring_fetch_range_impl(
         }
     }
 
-    return (struct hmll_range){0};
+    return (ssize_t)b_read;
 }
 
-static struct hmll_range *hmll_io_uring_fetchv_range_impl(
+static ssize_t hmll_io_uring_fetchv_range_impl(
     struct hmll *ctx,
     struct hmll_io_uring *fetcher,
     const struct hmll_iobuf *dsts,
@@ -235,13 +235,13 @@ static struct hmll_range *hmll_io_uring_fetchv_range_impl(
     const int iofile,
     const size_t n
 ) {
-    if (hmll_check(ctx->error)) return NULL;
+    if (hmll_check(ctx->error)) return -1;
 
     // Allocate result array
     struct hmll_range *results = calloc(n, sizeof(struct hmll_range));
     if (!results) {
         ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
-        return NULL;
+        return -1;
     }
 
     // Use stack for small batches (common in tensor chunking)
@@ -262,7 +262,7 @@ static struct hmll_range *hmll_io_uring_fetchv_range_impl(
         if (!states) {
             free(results);
             ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
-            return NULL;
+            return -1;
         }
     }
 
@@ -422,37 +422,37 @@ static struct hmll_range *hmll_io_uring_fetchv_range_impl(
     }
 
     if (n > 64) free(states);
-    return results;
+    return -1;
 
 cleanup:
     if (n > 64) free(states);
     free(results);
-    return NULL;
+    return -1;
 }
 
-static struct hmll_range hmll_io_uring_fetch_range(
+static ssize_t hmll_io_uring_fetch_range(
     struct hmll *ctx,
     void *fetcher,
+    const int iofile,
     const struct hmll_iobuf *dst,
-    const struct hmll_range range,
-    const int iofile
+    const struct hmll_range range
 ) {
     if (hmll_check(ctx->error))
-        return (struct hmll_range){0};
+        return -1;
 
     return hmll_io_uring_fetch_range_impl(ctx, fetcher, dst, range, iofile);
 }
 
-static struct hmll_range *hmll_io_uring_fetchv_range(
+static ssize_t hmll_io_uring_fetchv_range(
     struct hmll *ctx,
     void *fetcher,
+    const int iofile,
     const struct hmll_iobuf *dsts,
     const struct hmll_range *ranges,
-    const int iofile,
     const size_t n
 ) {
     if (hmll_check(ctx->error))
-        return NULL;
+        return -1;
 
     return hmll_io_uring_fetchv_range_impl(ctx, fetcher, dsts, ranges, iofile, n);
 }

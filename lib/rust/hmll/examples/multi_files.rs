@@ -65,7 +65,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             print!("  [{}] Fetching {} bytes... ", i, fetch_size);
 
             let start_time = Instant::now();
-            match loader.fetch(0..fetch_size, i) {
+            match loader.fetch(0..fetch_size, i as i32) {
                 Ok(buffer) => {
                     let elapsed = start_time.elapsed();
                     total_fetch_time += elapsed.as_secs_f64();
@@ -110,7 +110,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 for (start, end) in ranges {
                     if end <= info.size {
                         print!("  [{}] Range {}..{}... ", i, start, end);
-                        match loader.fetch(start..end, i) {
+                        match loader.fetch(start..end, i as i32) {
                             Ok(buffer) => println!("✓ {} bytes", buffer.len()),
                             Err(e) => println!("✗ {}", e),
                         }

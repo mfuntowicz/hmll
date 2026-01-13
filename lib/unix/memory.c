@@ -1,0 +1,79 @@
+//
+// Created by mfuntowicz on 1/13/26.
+//
+
+#ifdef __unix__
+#include <linux/mman.h>
+#include <sys/mman.h>
+#include "hmll/hmll.h"
+
+#if defined(__HMLL_CUDA_ENABLED__)
+#include <cuda_runtime_api.h>
+#endif
+
+void *hmll_alloc(const size_t size, const enum hmll_device device, const int flags)
+{
+    if (device == HMLL_DEVICE_CPU)
+        return mmap(0, size, PROT_READ | PROT_WRITE, flags, -1, 0);
+
+    void *ptr = NULL;
+#if defined(__HMLL_CUDA_ENABLED__)
+    enum cudaError error;
+    if (device == HMLL_DEVICE_CUDA && flags == HMLL_MEM_DEVICE)
+        if ((error = cudaMalloc(&ptr, size)) != cudaSuccess) return NULL;
+
+    if (device == HMLL_DEVICE_CUDA && flags == HMLL_MEM_STAGING)
+        if ((error = cudaHostAlloc(&ptr, size, cudaHostAllocDefault | cudaHostAllocPortable)) != cudaSuccess) return NULL;
+#endif
+
+    return ptr;
+}
+
+void hmll_free_buffer(struct hmll_iobuf *buffer)
+{
+    if (!buffer) return;
+
+#if defined(__HMLL_CUDA_ENABLED__)
+    if (buffer->device == HMLL_DEVICE_CUDA) cudaFreeHost(buffer->ptr);
+#endif
+
+    if (buffer->device == HMLL_DEVICE_CPU) munmap(buffer->ptr, buffer->size);
+
+    buffer->ptr = NULL;
+    buffer->size = 0;
+}
+
+struct hmll_iobuf hmll_get_buffer(struct hmll *ctx, const enum hmll_device device, const size_t size, const int flags)
+{
+    void* ptr = NULL;
+
+#if defined(__linux) || defined(__unix__) || defined(__APPLE__)
+    switch (device)
+    {
+    case HMLL_DEVICE_CPU:
+        if ((ptr = hmll_alloc(size, device, MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE| MAP_HUGETLB | MAP_HUGE_8MB)) == MAP_FAILED) {
+            if((ptr = hmll_alloc(size, device, MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE)) == MAP_FAILED) {
+                ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
+                return (struct hmll_iobuf){0};
+            }
+        }
+        break;
+
+    case HMLL_DEVICE_CUDA:
+#if defined(__HMLL_CUDA_ENABLED__)
+        ptr = hmll_alloc(size, device, flags);
+        if (!ptr) {
+            ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
+            return (struct hmll_iobuf){0};
+        }
+
+        break;
+#else
+        ctx->error = HMLL_ERR(HMLL_ERR_CUDA_NOT_ENABLED);
+#endif
+    }
+#endif
+    return (struct hmll_iobuf){size, ptr, device};
+}
+
+#endif

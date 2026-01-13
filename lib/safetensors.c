@@ -7,7 +7,7 @@
 #include <sys/mman.h>
 
 char *hmll_safetensors_path_create(const char *path, const char *file) {
-    if (path == NULL || file == NULL)
+    if (!path || !file)
         return NULL;
 
     // TODO: handle windows separators
@@ -19,7 +19,7 @@ char *hmll_safetensors_path_create(const char *path, const char *file) {
 
     const size_t file_len = strlen(file);
     char *new_path = malloc(dir_len + file_len + 1);
-    if (new_path == NULL)
+    if (!new_path)
         return NULL;
 
     if (dir_len > 0)

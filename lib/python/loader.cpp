@@ -42,7 +42,7 @@ WeightLoader::WeightLoader(std::unique_ptr<hmll_t> ctx, std::vector<hmll_source_
 nb::ndarray<nb::ndim<1>, nb::c_contig> WeightLoader::fetch(
     const size_t start, const size_t end, const hmll_dtype_t dtype, const int iofile) const
 {
-    auto buffer = std::make_unique<hmll_iobuf_t>();
+    auto* buffer = new hmll_iobuf;
     hmll_range_t offsets;
 
     {
@@ -60,23 +60,19 @@ nb::ndarray<nb::ndim<1>, nb::c_contig> WeightLoader::fetch(
 
         // Fetch the tensor data
         const auto range = hmll_range_t{start, end};
-        offsets = hmll_fetch(ctx_.get(), buffer.get(), range, iofile);
-        if (hmll_check(ctx_->error)) {
-            munmap(buffer->ptr, buffer->size);
+        if (const auto res = hmll_fetch(ctx_.get(), buffer, range, iofile); res <= 0) {
+            hmll_free_buffer(buffer);
             throw std::runtime_error("Failed to read data");
         }
     }
 
     // Let's make sure we are not deleting the buffer before PyTorch releases it
-    const hmll_iobuf_t* handle = buffer.release();
-    const nb::capsule deleter(handle, [](void* p) noexcept {
-        if (const auto* b = static_cast<hmll_iobuf_t*>(p)) {
-            munmap(b->ptr, b->size);
-            delete b;
-        }
+    const nb::capsule deleter(buffer, [](void* p) noexcept {
+        if (auto* b = static_cast<hmll_iobuf_t*>(p))
+            hmll_free_buffer(b);
     });
 
-    return hmll_to_ndarray({start, end}, *handle, offsets, dtype, deleter);
+    return hmll_to_ndarray({start, end}, *buffer, dtype, deleter);
 }
 
 void init_loader(nb::module_& m)

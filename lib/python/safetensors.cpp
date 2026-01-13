@@ -75,14 +75,12 @@ public:
                 "Failed to read tensor definition in file " + path.string() + ": " + hmll_strerr(base_ctx_->error));
     }
 
-    hmll_device_t device() const { return device_; }
-    size_t size() const { return registry_->num_tensors; }
-
-    nb::ndarray<nb::ndim<1>, nb::c_contig> fetch(const std::string& name) const
+    [[nodiscard]] hmll_device_t device() const { return device_; }
+    [[nodiscard]] size_t size() const { return registry_->num_tensors; }
+    [[nodiscard]] nb::ndarray<nb::ndim<1>, nb::c_contig> fetch(const std::string& name) const
     {
         auto buffer = std::make_unique<hmll_iobuf_t>();
-        auto offsets = hmll_range_t();
-        auto specs = hmll_tensor_specs_t();
+        hmll_tensor_specs_t specs;
 
         {
             nb::gil_scoped_release release;
@@ -106,8 +104,7 @@ public:
 
                 // Fetch the tensor data
                 const auto range = hmll_range_t{specs.start, specs.end};
-                offsets = hmll_fetch(ctx, buffer.get(), range, iofile);
-                if (hmll_check(ctx->error)) {
+                if (const auto res = hmll_fetch(ctx, buffer.get(), range, iofile); res < 0) {
                     munmap(buffer->ptr, buffer->size);
                     throw std::runtime_error("Failed to read data");
                 }
@@ -125,8 +122,7 @@ public:
             }
         });
 
-        return hmll_to_ndarray({specs.start, specs.end}, *handle, offsets, specs.dtype, deleter);
-
+        return hmll_to_ndarray({specs.start, specs.end}, *handle, specs.dtype, deleter);
     }
 };
 

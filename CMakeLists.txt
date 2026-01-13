@@ -67,10 +67,10 @@ set(LIBHMLL_SOURCES
         lib/errors.c
         lib/loader.c
         lib/memory.c
-#        lib/tensors.c
         lib/unix/loader.c
         lib/unix/file.c
         lib/unix/backend/iouring.c
+        lib/unix/memory.c
 )
 
 if(${HMLL_ENABLE_SAFETENSORS})
