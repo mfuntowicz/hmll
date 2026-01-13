@@ -34,7 +34,7 @@ int main(const int argc, const char** argv)
     if (hmll_success(ctx.error) && lookup.specs != NULL)
     {
         const hmll_range_t range = (struct hmll_range){ lookup.specs->start, lookup.specs->end };
-        hmll_iobuf_t buffer = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
+        const hmll_iobuf_t buffer = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
         if (hmll_success(ctx.error)) {
             // Start timing
             struct timespec start, end;

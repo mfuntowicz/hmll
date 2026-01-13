@@ -118,8 +118,10 @@ if(${HMLL_BUILD_EXAMPLES})
         target_link_libraries(hmll_safetensors_ex PRIVATE libhmll ${HMLL_EXAMPLES_EXTRA_LIBS})
     endif()
 
-    add_executable(hmll_examples_universal examples/universal.c)
-    target_link_libraries(hmll_examples_universal PRIVATE libhmll ${HMLL_EXAMPLES_EXTRA_LIBS})
+    add_executable(hmll_examples_fetch examples/fetch.c)
+    add_executable(hmll_examples_fetchv examples/fetchv.c)
+    target_link_libraries(hmll_examples_fetch PRIVATE libhmll ${HMLL_EXAMPLES_EXTRA_LIBS})
+    target_link_libraries(hmll_examples_fetchv PRIVATE libhmll ${HMLL_EXAMPLES_EXTRA_LIBS})
 endif()
 
 ###########################################################

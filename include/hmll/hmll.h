@@ -39,6 +39,9 @@ extern "C" {
 #include "unix/loader.h"
 #endif
 
+#define likely(x)      __builtin_expect(!!(x), 1)
+#define unlikely(x)    __builtin_expect(!!(x), 0)
+
 /** Error handling stubs **/
 #define HMLL_RES(...) (struct hmll_error){ __VA_ARGS__ }
 #define HMLL_OK  HMLL_RES(.code = HMLL_ERR_SUCCESS, .sys_err = 0)
