@@ -4,6 +4,7 @@
 #include "hmll/cuda.h"
 #include "hmll/memory.h"
 #include "hmll/unix/backend/iouring.h"
+#include "sys/mman.h"
 
 #define HMLL_IO_URING_ADVISORY_FLAG UINT64_MAX
 
@@ -17,14 +18,14 @@ static struct hmll_error hmll_io_uring_register_staging_buffers(
     struct hmll_io_uring *fetcher,
     const enum hmll_device device
 ) {
-  fetcher->iovecs = hmll_alloc(HMLL_URING_QUEUE_DEPTH * sizeof(struct iovec), HMLL_DEVICE_CPU, HMLL_MEM_DEVICE);
+   fetcher->iovecs = hmll_alloc(HMLL_URING_QUEUE_DEPTH * sizeof(struct iovec), HMLL_DEVICE_CPU, MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE);
     if (hmll_check(ctx->error)) return ctx->error;
 
-    void *arena = hmll_alloc(HMLL_URING_QUEUE_DEPTH * HMLL_URING_BUFFER_SIZE, device, HMLL_MEM_STAGING);
+    unsigned char *arena = hmll_alloc(HMLL_URING_QUEUE_DEPTH * HMLL_URING_BUFFER_SIZE, device, HMLL_MEM_STAGING);
     if (hmll_check(ctx->error)) return ctx->error;
 
     for (size_t i = 0; i < HMLL_URING_QUEUE_DEPTH; ++i) {
-        fetcher->iovecs[i].iov_base = (char *)arena + i * HMLL_URING_BUFFER_SIZE;
+        fetcher->iovecs[i].iov_base = arena + i * HMLL_URING_BUFFER_SIZE;
         fetcher->iovecs[i].iov_len = HMLL_URING_BUFFER_SIZE;
     }
 

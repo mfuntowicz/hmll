@@ -245,6 +245,7 @@ struct hmll_error hmll_safetensors_populate_registry(
     uint64_t hsize;
     memcpy(&hsize, content, sizeof(uint64_t));
     char *header = content + sizeof(uint64_t);
+    int tidx = 0;
 
     // Parse JSON
     yyjson_read_err error;
@@ -285,7 +286,7 @@ struct hmll_error hmll_safetensors_populate_registry(
     unsigned short *indexes = reg->indexes;
     hmll_tensor_specs_t *tensors = reg->tensors;
 
-    size_t idx, max, tidx = 0;
+    size_t idx, max;
     yyjson_val *key, *val;
     yyjson_obj_foreach(root, idx, max, key, val) {
 

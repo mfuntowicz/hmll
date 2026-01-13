@@ -13,17 +13,23 @@
 
 void *hmll_alloc(const size_t size, const enum hmll_device device, const int flags)
 {
-    if (device == HMLL_DEVICE_CPU)
-        return mmap(0, size, PROT_READ | PROT_WRITE, flags, -1, 0);
-
     void *ptr = NULL;
+    if (device == HMLL_DEVICE_CPU) {
+        if ((ptr = mmap(0, size, PROT_READ | PROT_WRITE, flags, -1, 0)) == MAP_FAILED)
+            return NULL;
+
+        return ptr;
+    }
+
 #if defined(__HMLL_CUDA_ENABLED__)
     enum cudaError error;
     if (device == HMLL_DEVICE_CUDA && flags == HMLL_MEM_DEVICE)
-        if ((error = cudaMalloc(&ptr, size)) != cudaSuccess) return NULL;
+        if ((error = cudaMalloc(&ptr, size)) != cudaSuccess)
+            return NULL;
 
     if (device == HMLL_DEVICE_CUDA && flags == HMLL_MEM_STAGING)
-        if ((error = cudaHostAlloc(&ptr, size, cudaHostAllocDefault | cudaHostAllocPortable)) != cudaSuccess) return NULL;
+        if ((error = cudaHostAlloc(&ptr, size, cudaHostAllocDefault | cudaHostAllocPortable)) != cudaSuccess)
+            return NULL;
 #endif
 
     return ptr;
