@@ -42,14 +42,14 @@ int main(const int argc, const char** argv)
     printf("Successfully initialized HMLL (n_sources=%zu)\n", ctx.num_sources);
 
     struct hmll_iobuf buf = hmll_get_buffer_for_range(&ctx, HMLL_DEVICE_CUDA, (struct hmll_range){0, 1024});
-    struct hmll_range offsets = hmll_fetch(&ctx, &buf, (struct hmll_range){0, 1024}, 0);
+    ssize_t res = hmll_fetch(&ctx, 0, &buf, (struct hmll_range){0, 1024});
     if (hmll_check(ctx.error)) {
         fprintf(stderr, "Failed to fetch tensor: %s\n", hmll_strerr(ctx.error));
         status = 4;
         goto clean;
     }
 
-    printf("Successfully fetched tensor (start=%zu, end=%zu)", offsets.start, offsets.end);
+    printf("Successfully fetched tensor\n");
 clean:
     hmll_destroy(&ctx);
 
