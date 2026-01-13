@@ -170,7 +170,7 @@ impl<'a> WeightLoader<'a> {
             return Ok(unsafe { Buffer::from_raw_parts(ptr::null_mut(), 0, self.device, false) });
         }
 
-        // Get buffer for the requested range
+        // Get the buffer for the requested range
         let mut iobuf = unsafe {
             hmll_sys::hmll_get_buffer_for_range(
                 self.context.as_mut(),
@@ -185,17 +185,17 @@ impl<'a> WeightLoader<'a> {
         }
 
         // Perform the actual fetch
-        let _ = unsafe {
+        let res = unsafe {
             hmll_sys::hmll_fetch(
                 self.context.as_mut(),
+                file_index,
                 &mut iobuf,
                 range.to_raw(),
-                file_index,
             )
         };
 
         // Check for errors (less common error path)
-        if self.context.error.code != hmll_sys::HMLL_ERR_SUCCESS {
+        if res < 0 {
             let err = self.context.error;
             self.context.error = hmll_sys::hmll_error {
                 code: hmll_sys::HMLL_ERR_SUCCESS,
@@ -204,7 +204,6 @@ impl<'a> WeightLoader<'a> {
             return Err(Error::from_hmll_error(err));
         }
 
-        // Success path: create buffer
         Ok(unsafe {
             Buffer::from_raw_parts(
                 iobuf.ptr as *mut u8,
