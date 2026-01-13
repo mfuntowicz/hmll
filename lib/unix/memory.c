@@ -15,9 +15,8 @@ void *hmll_alloc(const size_t size, const enum hmll_device device, const int fla
 {
     void *ptr = NULL;
     if (device == HMLL_DEVICE_CPU) {
-        if ((ptr = mmap(0, size, PROT_READ | PROT_WRITE, flags, -1, 0)) == MAP_FAILED)
-            return NULL;
-
+        if ((ptr = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE| MAP_ANONYMOUS | MAP_HUGETLB | MAP_HUGE_2MB, -1, 0)) == MAP_FAILED)
+            ptr = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         return ptr;
     }
 
@@ -57,12 +56,7 @@ struct hmll_iobuf hmll_get_buffer(struct hmll *ctx, const enum hmll_device devic
     switch (device)
     {
     case HMLL_DEVICE_CPU:
-        if ((ptr = hmll_alloc(size, device, MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE| MAP_HUGETLB | MAP_HUGE_8MB)) == MAP_FAILED) {
-            if((ptr = hmll_alloc(size, device, MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE)) == MAP_FAILED) {
-                ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
-                return (struct hmll_iobuf){0};
-            }
-        }
+        ptr = hmll_alloc(size, device, HMLL_MEM_DEVICE);
         break;
 
     case HMLL_DEVICE_CUDA:

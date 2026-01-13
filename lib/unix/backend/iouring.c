@@ -18,7 +18,7 @@ static struct hmll_error hmll_io_uring_register_staging_buffers(
     struct hmll_io_uring *fetcher,
     const enum hmll_device device
 ) {
-   fetcher->iovecs = hmll_alloc(HMLL_URING_QUEUE_DEPTH * sizeof(struct iovec), HMLL_DEVICE_CPU, MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE);
+   fetcher->iovecs = hmll_alloc(HMLL_URING_QUEUE_DEPTH * sizeof(struct iovec), HMLL_DEVICE_CPU, HMLL_MEM_DEVICE);
     if (hmll_check(ctx->error)) return ctx->error;
 
     unsigned char *arena = hmll_alloc(HMLL_URING_QUEUE_DEPTH * HMLL_URING_BUFFER_SIZE, device, HMLL_MEM_STAGING);
