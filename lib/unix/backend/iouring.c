@@ -5,6 +5,7 @@
 #include "hmll/memory.h"
 #include "hmll/unix/backend/iouring.h"
 #include "sys/mman.h"
+#include <sys/utsname.h>
 
 #define HMLL_IO_URING_ADVISORY_FLAG UINT64_MAX
 
@@ -12,6 +13,24 @@
 #include <cuda_runtime_api.h>
 #include <driver_types.h>
 #endif
+
+
+static inline int hmll_io_uring_get_setup_flags(void)
+{
+    int flags = IORING_SETUP_SQPOLL;
+
+    // retrieve the current kernel version so we can adjust io_uring flags
+    struct utsname unamedata;
+    uname(&unamedata);
+
+    int major, minor, revision = 0;
+    if (sscanf(unamedata.release, "%d.%d.%d", &major, &minor, &revision)) {
+        if (major >= 6)
+            flags |= IORING_SETUP_SINGLE_ISSUER;
+    }
+
+    return flags;
+}
 
 static struct hmll_error hmll_io_uring_register_staging_buffers(
     struct hmll *ctx,
@@ -467,7 +486,7 @@ struct hmll_error hmll_io_uring_init(struct hmll *ctx, const enum hmll_device de
     hmll_io_uring_cca_init(&backend->iocca);
 
     struct io_uring_params params = {
-        .flags = IORING_SETUP_SQPOLL | IORING_SETUP_SINGLE_ISSUER,
+        .flags = hmll_io_uring_get_setup_flags(),
         .sq_thread_idle = 500
     };
 
