@@ -25,8 +25,7 @@ static inline int hmll_io_uring_get_setup_flags(void)
 
     int major, minor, revision = 0;
     if (sscanf(unamedata.release, "%d.%d.%d", &major, &minor, &revision)) {
-        if (major >= 6)
-            flags |= IORING_SETUP_SINGLE_ISSUER;
+        if (major >= 6) flags |= IORING_SETUP_SINGLE_ISSUER;
     }
 
     return flags;
