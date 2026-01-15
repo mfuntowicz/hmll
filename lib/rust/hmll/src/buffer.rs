@@ -1,7 +1,9 @@
 //! Buffer and range types for data operations.
 
 use crate::Device;
+use hmll_sys::{hmll_free_buffer, hmll_iobuf};
 use std::ops;
+use std::os::raw::c_void;
 
 /// Represents a range of bytes to fetch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -164,8 +166,11 @@ unsafe impl Sync for Buffer {}
 
 impl Drop for Buffer {
     fn drop(&mut self) {
-        // Note: In hmll, buffers are managed by the context
-        // We don't manually free them here as they're part of the arena allocator
-        // This is why we track `owned` - in the future we might need to handle this differently
+        if !self.ptr.is_null() {
+            let mut buf = hmll_iobuf { size: self.size, ptr: self.ptr.cast::<c_void>(), device: self.device.to_raw() };
+            unsafe { hmll_free_buffer(&mut buf as *mut hmll_iobuf) };
+            self.ptr = std::ptr::null_mut();
+            self.size = 0;
+        }
     }
 }
