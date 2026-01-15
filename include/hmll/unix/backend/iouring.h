@@ -7,11 +7,11 @@
 #endif
 
 #ifndef HMLL_URING_BUFFER_SIZE
-#define HMLL_URING_BUFFER_SIZE (64U * 1024)
+#define HMLL_URING_BUFFER_SIZE (2U * 1024 * 1024)
 #endif
 
 #ifndef HMLL_URING_CQE_BATCH_SIZE
-#define HMLL_URING_CQE_BATCH_SIZE 32
+#define HMLL_URING_CQE_BATCH_SIZE 16
 #endif
 
 #ifndef MIN
