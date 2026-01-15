@@ -2,17 +2,24 @@
 name = "hmll"
 version = "0.1.0"
 edition = "2021"
-authors = ["HMLL Contributors"]
+authors = ["Morgan Funtowicz <morgan@huggingface.co>", "Luc Georges <luc@huggingface.co>"]
 description = "Safe, idiomatic Rust bindings to the hmll library for high-performance ML model loading"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/huggingface/hmll"
+homepage = "https://github.com/huggingface/hmll"
+documentation = "https://docs.rs/hmll"
+readme = "README.md"
+keywords = ["ml", "machine-learning", "huggingface", "model-loading", "safetensors"]
+categories = ["science", "api-bindings"]
+rust-version = "1.70"
 
 [dependencies]
-hmll-sys = { path = "../hmll-sys" }
+hmll-sys = { version = "0.1.0", path = "../hmll-sys", default-features = false }
 thiserror = "2.0"
 
 [features]
-default = ["io_uring"]
+default = ["vendored", "io_uring"]
+vendored = ["hmll-sys/vendored"]
 io_uring = ["hmll-sys/io_uring"]
 safetensors = ["hmll-sys/safetensors"]
 cuda = ["hmll-sys/cuda"]

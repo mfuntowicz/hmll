@@ -1,0 +1,120 @@
+name: Rust Publish
+
+on:
+  push:
+    tags:
+      - 'rust-v*'
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: 'Dry run (do not actually publish)'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt:
+    name: Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Check formatting (hmll-sys)
+        run: cargo fmt --manifest-path lib/rust/hmll-sys/Cargo.toml --check
+
+      - name: Check formatting (hmll)
+        run: cargo fmt --manifest-path lib/rust/hmll/Cargo.toml --check
+
+  clippy:
+    name: Clippy Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libclang-dev
+
+      - name: Clippy (hmll-sys)
+        run: cargo clippy --manifest-path lib/rust/hmll-sys/Cargo.toml --all-features -- -D warnings
+
+      - name: Clippy (hmll)
+        run: cargo clippy --manifest-path lib/rust/hmll/Cargo.toml --all-features -- -D warnings
+
+  # Uncomment when documentation is ready
+  # docs:
+  #   name: Documentation
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v6
+  #
+  #     - uses: dtolnay/rust-toolchain@stable
+  #
+  #     - name: Install dependencies
+  #       run: sudo apt-get update && sudo apt-get install -y libclang-dev
+  #
+  #     - name: Build docs (hmll-sys)
+  #       run: cargo doc --manifest-path lib/rust/hmll-sys/Cargo.toml --no-deps --all-features
+  #       env:
+  #         RUSTDOCFLAGS: -D warnings
+  #
+  #     - name: Build docs (hmll)
+  #       run: cargo doc --manifest-path lib/rust/hmll/Cargo.toml --no-deps --all-features
+  #       env:
+  #         RUSTDOCFLAGS: -D warnings
+
+  publish:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    needs: [fmt, clippy]
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry-run)
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libclang-dev
+
+      - name: Publish hmll-sys
+        run: cargo publish --manifest-path lib/rust/hmll-sys/Cargo.toml
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Wait for crates.io index update
+        run: sleep 30
+
+      - name: Publish hmll
+        run: cargo publish --manifest-path lib/rust/hmll/Cargo.toml
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  dry-run:
+    name: Publish Dry Run
+    runs-on: ubuntu-latest
+    needs: [fmt, clippy]
+    if: github.event_name == 'workflow_dispatch' && inputs.dry-run
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libclang-dev
+
+      - name: Dry run publish hmll-sys
+        run: cargo publish --manifest-path lib/rust/hmll-sys/Cargo.toml --dry-run
+
+      - name: Dry run publish hmll
+        run: cargo publish --manifest-path lib/rust/hmll/Cargo.toml --dry-run
+

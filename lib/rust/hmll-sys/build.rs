@@ -2,6 +2,19 @@ use std::env;
 use std::path::PathBuf;
 
 fn main() {
+    println!("cargo:rerun-if-changed=build.rs");
+
+    let include_path = if cfg!(feature = "vendored") {
+        build_vendored()
+    } else {
+        find_system_library()
+    };
+
+    generate_bindings(&include_path);
+}
+
+#[cfg(feature = "vendored")]
+fn build_vendored() -> PathBuf {
     // Get the project root (3 levels up from hmll-sys: lib/rust/hmll-sys -> .)
     let project_root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap())
         .parent()
@@ -13,7 +26,6 @@ fn main() {
         .to_path_buf();
 
     println!("cargo:rerun-if-changed=../../..");
-    println!("cargo:rerun-if-changed=build.rs");
 
     // Detect Rust build profile and map to CMake build type
     let profile = env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
@@ -66,42 +78,101 @@ fn main() {
     // Link io_uring if enabled
     #[cfg(all(target_os = "linux", feature = "io_uring"))]
     {
-        println!("cargo:rustc-link-search=native={}/build/_deps/liburing-src/src", dst.display());
+        println!(
+            "cargo:rustc-link-search=native={}/build/_deps/liburing-src/src",
+            dst.display()
+        );
         println!("cargo:rustc-link-lib=static=uring");
     }
 
     // Link yyjson if safetensors is enabled
     #[cfg(feature = "safetensors")]
     {
-        println!("cargo:rustc-link-search=native={}/build/_deps/yyjson-build", dst.display());
+        println!(
+            "cargo:rustc-link-search=native={}/build/_deps/yyjson-build",
+            dst.display()
+        );
         println!("cargo:rustc-link-lib=static=yyjson");
     }
 
     // Link CUDA runtime if enabled
     #[cfg(feature = "cuda")]
-    {
-        // Try to find CUDA installation
-        if let Ok(cuda_path) = env::var("CUDA_PATH") {
-            println!("cargo:rustc-link-search=native={}/lib64", cuda_path);
-            println!("cargo:rustc-link-search=native={}/lib", cuda_path);
-        } else if let Ok(cuda_home) = env::var("CUDA_HOME") {
-            println!("cargo:rustc-link-search=native={}/lib64", cuda_home);
-            println!("cargo:rustc-link-search=native={}/lib", cuda_home);
-        } else {
-            // Try common default locations
-            println!("cargo:rustc-link-search=native=/usr/local/cuda/lib64");
-            println!("cargo:rustc-link-search=native=/usr/local/cuda/lib");
-            println!("cargo:rustc-link-search=native=/opt/cuda/lib64");
-            println!("cargo:rustc-link-search=native=/opt/cuda/lib");
-        }
+    link_cuda();
 
-        println!("cargo:rustc-link-lib=dylib=cudart");
-        println!("cargo:rustc-link-lib=dylib=cuda");
+    project_root.join("include")
+}
+
+#[cfg(not(feature = "vendored"))]
+fn build_vendored() -> PathBuf {
+    unreachable!("vendored feature is not enabled")
+}
+
+#[cfg(not(feature = "vendored"))]
+fn find_system_library() -> PathBuf {
+    // Try pkg-config first
+    let library = pkg_config::Config::new()
+        .atleast_version("0.1.0")
+        .probe("hmll")
+        .expect(
+            "Could not find system hmll library. \
+             Either install libhmll or enable the 'vendored' feature to build from source.",
+        );
+
+    // pkg-config handles linking automatically, but we need additional libraries
+    // based on features
+
+    #[cfg(all(target_os = "linux", feature = "io_uring"))]
+    {
+        // Try to find liburing via pkg-config, fall back to direct linking
+        if pkg_config::probe_library("liburing").is_err() {
+            println!("cargo:rustc-link-lib=uring");
+        }
     }
 
-    // Generate bindings
-    let include_path = project_root.join("include");
+    #[cfg(feature = "safetensors")]
+    {
+        // yyjson is typically statically linked into hmll, but try pkg-config
+        let _ = pkg_config::probe_library("yyjson");
+    }
 
+    #[cfg(feature = "cuda")]
+    link_cuda();
+
+    // Return the first include path from pkg-config, or fall back to standard paths
+    library
+        .include_paths
+        .first()
+        .cloned()
+        .unwrap_or_else(|| PathBuf::from("/usr/include"))
+}
+
+#[cfg(feature = "vendored")]
+fn find_system_library() -> PathBuf {
+    unreachable!("vendored feature is enabled")
+}
+
+#[cfg(feature = "cuda")]
+fn link_cuda() {
+    // Try to find CUDA installation
+    if let Ok(cuda_path) = env::var("CUDA_PATH") {
+        println!("cargo:rustc-link-search=native={}/lib64", cuda_path);
+        println!("cargo:rustc-link-search=native={}/lib", cuda_path);
+    } else if let Ok(cuda_home) = env::var("CUDA_HOME") {
+        println!("cargo:rustc-link-search=native={}/lib64", cuda_home);
+        println!("cargo:rustc-link-search=native={}/lib", cuda_home);
+    } else {
+        // Try common default locations
+        println!("cargo:rustc-link-search=native=/usr/local/cuda/lib64");
+        println!("cargo:rustc-link-search=native=/usr/local/cuda/lib");
+        println!("cargo:rustc-link-search=native=/opt/cuda/lib64");
+        println!("cargo:rustc-link-search=native=/opt/cuda/lib");
+    }
+
+    println!("cargo:rustc-link-lib=dylib=cudart");
+    println!("cargo:rustc-link-lib=dylib=cuda");
+}
+
+fn generate_bindings(include_path: &PathBuf) {
     let builder = bindgen::Builder::default()
         .header(include_path.join("hmll/hmll.h").to_str().unwrap())
         .clang_arg(format!("-I{}", include_path.display()))
@@ -128,9 +199,7 @@ fn main() {
     #[cfg(feature = "cuda")]
     let builder = builder.clang_arg("-D__HMLL_CUDA_ENABLED__=1");
 
-    let bindings = builder
-        .generate()
-        .expect("Unable to generate bindings");
+    let bindings = builder.generate().expect("Unable to generate bindings");
 
     // Write the bindings to the $OUT_DIR/bindings.rs file
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());

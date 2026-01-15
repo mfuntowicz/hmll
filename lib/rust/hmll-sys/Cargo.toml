@@ -2,20 +2,28 @@
 name = "hmll-sys"
 version = "0.1.0"
 edition = "2021"
-authors = ["Morgan Funtowicz <morgan@huggingface.co>"]
-description = "Low-level FFI bindings to the hmll library"
+authors = ["Morgan Funtowicz <morgan@huggingface.co>", "Luc Georges <luc@huggingface.co>"]
+description = "Low-level FFI bindings to the hmll library for high-performance ML model loading"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/huggingface/hmll"
+homepage = "https://github.com/huggingface/hmll"
+documentation = "https://docs.rs/hmll-sys"
+readme = "README.md"
+keywords = ["ffi", "bindings", "ml", "machine-learning", "huggingface"]
+categories = ["external-ffi-bindings", "science"]
 links = "hmll"
+rust-version = "1.70"
 
 [dependencies]
 
 [build-dependencies]
 bindgen = "0.72.1"
-cmake = "0.1"
+cmake = { version = "0.1", optional = true }
+pkg-config = { version = "0.3", optional = true }
 
 [features]
-default = ["io_uring"]
+default = ["vendored", "io_uring"]
+vendored = ["cmake"]
 io_uring = []
 safetensors = []
 cuda = []
