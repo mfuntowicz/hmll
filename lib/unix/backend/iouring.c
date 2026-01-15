@@ -37,7 +37,7 @@ static struct hmll_error hmll_io_uring_register_staging_buffers(
     struct hmll_io_uring *fetcher,
     const enum hmll_device device
 ) {
-   fetcher->iovecs = hmll_alloc(HMLL_URING_QUEUE_DEPTH * sizeof(struct iovec), HMLL_DEVICE_CPU, HMLL_MEM_DEVICE);
+    fetcher->iovecs = hmll_alloc(HMLL_URING_QUEUE_DEPTH * sizeof(struct iovec), HMLL_DEVICE_CPU, HMLL_MEM_DEVICE);
     if (hmll_check(ctx->error)) return ctx->error;
 
     unsigned char *arena = hmll_alloc(HMLL_URING_QUEUE_DEPTH * HMLL_URING_BUFFER_SIZE, device, HMLL_MEM_STAGING);
@@ -267,13 +267,10 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
     uint32_t *active_indices;
     size_t *slot_offsets;
 
-    // --- 1. Aligned Stack Allocation ---
     _Alignas(16) uint8_t stack_mem[8192];
 
-    // Calculate memory requirements
     const size_t state_mem_req = sizeof(struct fetch_state) * n;
     const size_t idx_mem_req   = sizeof(uint32_t) * n;
-    // We allocate offset tracking for the full ring depth to allow O(1) slot lookup
     const size_t slot_mem_req  = sizeof(size_t) * HMLL_URING_QUEUE_DEPTH;
     const size_t total_req     = state_mem_req + idx_mem_req + slot_mem_req;
 
@@ -287,11 +284,8 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
         ptr += idx_mem_req;
 
         slot_offsets = (size_t *)ptr;
-
-        // Zero memory to prevent garbage data
         memset(stack_mem, 0, total_req);
     } else {
-        // Fallback to heap for very large batches
         states = calloc(1, total_req);
         if (unlikely(!states)) {
             ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
@@ -301,7 +295,6 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
         slot_offsets = (size_t *)((char *)active_indices + idx_mem_req);
     }
 
-    // --- 2. Setup Active List ---
     size_t n_active = 0;
     for (size_t i = 0; i < n; ++i) {
         const size_t sz = ranges[i].end - ranges[i].start;
@@ -319,10 +312,7 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
     const uint64_t MASK_SLOT      = 0xFFFFFFFFULL;
     const unsigned char is_cuda = dsts[0].device == HMLL_DEVICE_CUDA;
 
-    size_t n_in_flight = 0;
-    size_t nbytes = 0;
-    size_t active_cursor = 0;
-
+    size_t n_in_flight = 0, nbytes = 0, active_cursor = 0;
     struct io_uring_cqe *cqes[HMLL_URING_CQE_BATCH_SIZE];
 
     while (n_active > 0 || n_in_flight > 0) {
@@ -352,7 +342,6 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
             hmll_io_uring_slot_set_busy(&fetcher->iobusy, slot);
 
             slot_offsets[slot] = st->submitted;
-
             const size_t remaining = st->size - st->submitted;
             const size_t to_read = remaining < HMLL_URING_BUFFER_SIZE ? remaining : HMLL_URING_BUFFER_SIZE;
             const size_t file_offset = ranges[current_idx].start + st->submitted;
@@ -399,7 +388,6 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
 
         if (nwait > 0) hmll_io_uring_cca_update(&fetcher->iocca, HMLL_URING_BUFFER_SIZE * nwait, ts_start, ts_end);
 
-        // --- Completion Phase ---
         unsigned count;
         while ((count = io_uring_peek_batch_cqe(&fetcher->ioring, cqes, HMLL_URING_CQE_BATCH_SIZE)) > 0) {
             for (unsigned i = 0; i < count; i++) {
@@ -426,8 +414,6 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
                 }
 #if defined(__HMLL_CUDA_ENABLED__)
                 else {
-                    // CUDA Path: Bounce Buffer.
-                    // Data is in fetcher->iovecs[s_idx]. Move to GPU dst + offset.
                     struct hmll_io_uring_cuda_context *cctx = &((struct hmll_io_uring_cuda_context *)fetcher->device_ctx)[s_idx];
 
                     void *to = (char *)dsts[r_idx].ptr + slot_offsets[s_idx];
@@ -517,21 +503,23 @@ struct hmll_error hmll_io_uring_init(struct hmll *ctx, const enum hmll_device de
         return ctx->error;
 #endif
     } else {
-        io_uring_queue_init_params(HMLL_URING_QUEUE_DEPTH, &backend->ioring, &params);
-    }
-
-    {
-        int *iofiles = calloc(ctx->num_sources, sizeof(int));
-        for (size_t i = 0; i < ctx->num_sources; ++i)
-            iofiles[i] = ctx->sources[i].fd;
-
-        const int res = io_uring_register_files(&backend->ioring, iofiles, ctx->num_sources);
-        free(iofiles);
-
-        if (res != 0) {
-            ctx->error = HMLL_ERR(HMLL_ERR_IO_BUFFER_REGISTRATION_FAILED);
+        int res;
+        if ((res = io_uring_queue_init_params(HMLL_URING_QUEUE_DEPTH, &backend->ioring, &params)) < 0) {
+            ctx->error = HMLL_SYS_ERR(res);
             goto cleanup;
         }
+    }
+
+    int *iofiles = calloc(ctx->num_sources, sizeof(int));
+    for (size_t i = 0; i < ctx->num_sources; ++i)
+        iofiles[i] = ctx->sources[i].fd;
+
+    const int res = io_uring_register_files(&backend->ioring, iofiles, ctx->num_sources);
+    free(iofiles);
+
+    if (res != 0) {
+        ctx->error = HMLL_ERR(HMLL_ERR_FILE_REGISTRATION_FAILED);
+        goto cleanup;
     }
 
     if (ctx->fetcher == NULL) {
@@ -541,7 +529,6 @@ struct hmll_error hmll_io_uring_init(struct hmll *ctx, const enum hmll_device de
         ctx->fetcher->fetch_range_impl_ = hmll_io_uring_fetch_range;
         ctx->fetcher->fetchv_range_impl_ = hmll_io_uring_fetchv_range;
     }
-
 
     return HMLL_OK;
 
