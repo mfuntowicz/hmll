@@ -15,8 +15,8 @@ void *hmll_alloc(const size_t size, const enum hmll_device device, const int fla
 {
     void *ptr = NULL;
     if (device == HMLL_DEVICE_CPU) {
-        if ((ptr = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE| MAP_ANONYMOUS | MAP_HUGETLB | MAP_HUGE_2MB, -1, 0)) == MAP_FAILED)
-            ptr = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if ((ptr = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE | MAP_HUGETLB | MAP_HUGE_2MB, -1, 0)) == MAP_FAILED)
+            ptr = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
         return ptr;
     }
 
