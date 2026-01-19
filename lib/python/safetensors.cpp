@@ -1,12 +1,7 @@
 //
 // Created by mfuntowicz on 1/8/26.
 //
-#if defined(__linux__) || defined(__unix__)
-#include <sys/mman.h>
-#endif
 #include <filesystem>
-#include <iostream>
-#include <mutex>
 #include <unordered_map>
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
