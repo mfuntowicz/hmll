@@ -1,5 +1,6 @@
 #include "loader.hpp"
 #include <format>
+#include <utility>
 #include <sys/mman.h>
 #include <hmll/hmll.h>
 #include <nanobind/nanobind.h>
@@ -30,13 +31,19 @@ std::unique_ptr<WeightLoader> WeightLoader::from_paths(const std::vector<std::st
         }
     }
 
-    return std::make_unique<WeightLoader>(std::move(ctx), srcs, device);
+    return std::make_unique<WeightLoader>(srcs, device, std::move(ctx));
 }
 
-WeightLoader::WeightLoader(std::unique_ptr<hmll_t> ctx, std::vector<hmll_source_t>& srcs, const hmll_device_t device)
+WeightLoader::WeightLoader(std::vector<hmll_source_t> srcs, const hmll_device_t device)
+    : WeightLoader(std::move(srcs), device, std::make_unique<hmll_t>()) {}
+
+WeightLoader::WeightLoader(std::vector<hmll_source_t> srcs, const hmll_device_t device, std::unique_ptr<hmll_t> ctx)
     : ctx_(std::move(ctx)), srcs_(std::move(srcs))
 {
-    hmll_loader_init(ctx_.get(), srcs_.data(), srcs_.size(), device, HMLL_FETCHER_AUTO);
+    if (hmll_check(hmll_loader_init(ctx_.get(), srcs_.data(), srcs_.size(), device, HMLL_FETCHER_AUTO))) {
+        const std::string err = hmll_strerr(ctx_->error);
+        throw std::runtime_error("Failed to initialize loader: " + err);
+    }
 }
 
 nb::ndarray<nb::ndim<1>, nb::c_contig> WeightLoader::fetch(const int iofile, const size_t start, const size_t end, const hmll_dtype_t dtype) const
@@ -44,7 +51,6 @@ nb::ndarray<nb::ndim<1>, nb::c_contig> WeightLoader::fetch(const int iofile, con
     const auto ctx = ctx_.get();
     const auto dev = device();
 
-    // Allocate buffer for the tensor
     auto buf_guard = std::make_unique<hmll_iobuf_t>();
     {
         nb::gil_scoped_release release;
@@ -52,7 +58,6 @@ nb::ndarray<nb::ndim<1>, nb::c_contig> WeightLoader::fetch(const int iofile, con
         const auto nbytes = end - start;
         *buf_guard = hmll_get_buffer(ctx, dev, nbytes, HMLL_MEM_DEVICE);
 
-        // Fetch the tensor data
         const auto range = hmll_range_t{start, end};
         if (const auto res = hmll_fetch(ctx, iofile, buf_guard.get(), range); res <= 0) {
             hmll_free_buffer(buf_guard.get());
