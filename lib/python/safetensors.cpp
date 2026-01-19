@@ -73,7 +73,7 @@ void init_safetensors(nb::module_& m)
         nb::arg("traceback").none()
     )
     .def_prop_ro("device", &SafetensorsAccessor::device)
-    .def("fetch", &SafetensorsAccessor::fetch, "name"_a.sig("str"));
+    .def("fetch", &SafetensorsAccessor::fetch);
 
     m.def("safetensors", [](const std::filesystem::path& path, const hmll_device_t device) {
         return new SafetensorsAccessor(path, device);

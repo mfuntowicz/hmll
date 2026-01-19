@@ -111,7 +111,7 @@ void init_loader(nb::module_& m)
     .def(nb::new_(&WeightLoader::from_paths), "paths"_a.sig("list[str]"), "device"_a.sig("Device"))
     .def_prop_ro("device", &WeightLoader::device)
     .def_prop_ro("kind", &WeightLoader::kind)
-    .def("fetch", &WeightLoader::fetch, "start"_a.sig("int"), "end"_a.sig("int"), "dtype"_a.sig("dtype"), "iofile"_a.sig("int"))
+    .def("fetch", &WeightLoader::fetch)
     .def("__repr__", [](const WeightLoader& self)
     {
         return std::format("WeightLoader(kind={}, device={})", self.kind(), self.device());
