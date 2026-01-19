@@ -83,17 +83,17 @@ public:
     [[nodiscard]] size_t size() const { return registry_->num_tensors; }
     [[nodiscard]] nb::ndarray<nb::ndim<1>, nb::c_contig> fetch(const std::string& name) const
     {
-        hmll_tensor_specs_t specs;
+        // const auto ctx = get_thread_context();
         auto buf_guard = std::make_unique<hmll_iobuf_t>();
         {
             nb::gil_scoped_release release;
-            // const auto ctx = get_thread_context();
+
             const auto ctx = base_ctx_.get();
             const auto registry = registry_.get();
 
             if (const auto index = hmll_find_by_name(ctx, registry, name.c_str()); index >= 0 && index < registry->num_tensors)
             {
-                specs = registry->tensors[index];
+                const auto specs = registry->tensors[index];
                 const auto iofile = registry->indexes[index];
 
                 // Allocate buffer for the tensor
@@ -107,21 +107,22 @@ public:
                     hmll_free_buffer(buf_guard.get());
                     throw std::runtime_error("Failed to read data");
                 }
-            } else {
-                throw nb::key_error(name.c_str());
+
+                nb::gil_scoped_acquire py;
+
+                // Let's make sure we are not deleting the buffer before PyTorch releases it
+                const auto buffer = buf_guard.release();
+                const nb::capsule deleter(buffer, [](void* p) noexcept {
+                    if (auto* b = static_cast<hmll_iobuf_t*>(p)) {
+                        hmll_free_buffer(b);
+                        delete b;
+                    }
+                });
+                return hmll_to_ndarray({specs.start, specs.end}, buffer, specs.dtype, deleter);
             }
         }
 
-        // Let's make sure we are not deleting the buffer before PyTorch releases it
-        const auto buffer = buf_guard.release();
-        const nb::capsule deleter(buffer, [](void* p) noexcept {
-            if (auto* b = static_cast<hmll_iobuf_t*>(p)) {
-                hmll_free_buffer(b);
-                delete b;
-            }
-        });
-
-        return hmll_to_ndarray({specs.start, specs.end}, buffer, specs.dtype, deleter);
+        throw nb::key_error(name.c_str());
     }
 };
 

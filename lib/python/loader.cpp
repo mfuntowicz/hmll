@@ -39,16 +39,16 @@ WeightLoader::WeightLoader(std::unique_ptr<hmll_t> ctx, std::vector<hmll_source_
     hmll_loader_init(ctx_.get(), srcs_.data(), srcs_.size(), device, HMLL_FETCHER_AUTO);
 }
 
-nb::ndarray<nb::ndim<1>, nb::c_contig> WeightLoader::fetch(
-    const int iofile, const size_t start, const size_t end, const hmll_dtype_t dtype) const
+nb::ndarray<nb::ndim<1>, nb::c_contig> WeightLoader::fetch(const int iofile, const size_t start, const size_t end, const hmll_dtype_t dtype) const
 {
+    const auto ctx = ctx_.get();
+    const auto dev = device();
+
+    // Allocate buffer for the tensor
     auto buf_guard = std::make_unique<hmll_iobuf_t>();
     {
-        const auto ctx = ctx_.get();
         nb::gil_scoped_release release;
 
-        // Allocate buffer for the tensor
-        const auto dev = device();
         const auto nbytes = end - start;
         *buf_guard = hmll_get_buffer(ctx, dev, nbytes, HMLL_MEM_DEVICE);
 
@@ -68,7 +68,6 @@ nb::ndarray<nb::ndim<1>, nb::c_contig> WeightLoader::fetch(
             delete b;
         }
     });
-
     return hmll_to_ndarray({start, end}, buffer, dtype, deleter);
 }
 
