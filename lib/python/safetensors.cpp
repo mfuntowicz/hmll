@@ -84,7 +84,7 @@ public:
     [[nodiscard]] nb::ndarray<nb::ndim<1>, nb::c_contig> fetch(const std::string& name) const
     {
         hmll_tensor_specs_t specs;
-        const auto buffer = new hmll_iobuf_t();
+        auto buf_guard = std::make_unique<hmll_iobuf_t>();
         {
             nb::gil_scoped_release release;
             // const auto ctx = get_thread_context();
@@ -99,13 +99,12 @@ public:
                 // Allocate buffer for the tensor
                 const auto dev = device();
                 const auto nbytes = specs.end - specs.start;
-                *buffer = hmll_get_buffer(ctx, dev, nbytes, HMLL_MEM_DEVICE);
+                *buf_guard = hmll_get_buffer(ctx, dev, nbytes, HMLL_MEM_DEVICE);
 
                 // Fetch the tensor data
                 const auto range = hmll_range_t{specs.start, specs.end};
-                if (const auto res = hmll_fetch(ctx, iofile, buffer, range); res < 0) {
-                    hmll_free_buffer(buffer);
-                    delete buffer;
+                if (const auto res = hmll_fetch(ctx, iofile, buf_guard.get(), range); res < 0) {
+                    hmll_free_buffer(buf_guard.get());
                     throw std::runtime_error("Failed to read data");
                 }
             } else {
@@ -114,6 +113,7 @@ public:
         }
 
         // Let's make sure we are not deleting the buffer before PyTorch releases it
+        const auto buffer = buf_guard.release();
         const nb::capsule deleter(buffer, [](void* p) noexcept {
             if (auto* b = static_cast<hmll_iobuf_t*>(p)) {
                 hmll_free_buffer(b);
