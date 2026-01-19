@@ -15,10 +15,8 @@
 
 namespace nb = nanobind;
 
-class SafetensorsAccessor;
 class WeightLoader
 {
-    friend SafetensorsAccessor;
     std::unique_ptr<hmll_t> ctx_;
     std::vector<hmll_source_t> srcs_;
 
@@ -31,6 +29,9 @@ public:
     WeightLoader& operator=(const WeightLoader&) = delete;
     WeightLoader(std::vector<hmll_source_t> srcs, hmll_device_t device, std::unique_ptr<hmll_t> ctx);
     WeightLoader(std::vector<hmll_source_t> srcs, hmll_device_t device);
+
+    [[nodiscard]]
+    hmll_t* context() const;
 
     [[nodiscard]]
     hmll_device_t device() const;

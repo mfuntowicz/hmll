@@ -35,7 +35,7 @@ public:
             throw std::runtime_error("Failed to open file: " + path.string());
 
         loader_ = std::make_unique<WeightLoader>(std::vector{source}, device);
-        if (const auto ctx = loader_->ctx_.get(); hmll_check(hmll_safetensors_populate_registry(ctx, registry_.get(), source, 0, 0)))
+        if (const auto ctx = loader_->context(); hmll_check(hmll_safetensors_populate_registry(ctx, registry_.get(), source, 0, 0)))
             throw std::runtime_error(
                 "Failed to read tensor definition in file " + path.string() + ": " + hmll_strerr(ctx->error));
     }
@@ -44,10 +44,9 @@ public:
     [[nodiscard]] size_t size() const { return registry_->num_tensors; }
     
     [[nodiscard]] nb::ndarray<nb::ndim<1>, nb::c_contig> fetch(const std::string& name) const
-    {
-        const auto ctx = loader_->ctx_.get();
+    {;
         const auto registry = registry_.get();
-        const auto index = hmll_find_by_name(ctx, registry, name.c_str());
+        const auto index = hmll_find_by_name(loader_->context(), registry, name.c_str());
         
         if (index < 0 || index >= registry->num_tensors)
             throw nb::key_error(name.c_str());

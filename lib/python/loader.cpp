@@ -13,6 +13,7 @@
 namespace nb = nanobind;
 using namespace nb::literals;
 
+hmll_t* WeightLoader::context() const { return ctx_.get(); }
 hmll_device_t WeightLoader::device() const { return ctx_->fetcher->device; }
 hmll_fetcher_kind_t WeightLoader::kind() const { return ctx_->fetcher->kind; }
 
