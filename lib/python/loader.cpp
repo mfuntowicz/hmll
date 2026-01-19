@@ -40,39 +40,36 @@ WeightLoader::WeightLoader(std::unique_ptr<hmll_t> ctx, std::vector<hmll_source_
 }
 
 nb::ndarray<nb::ndim<1>, nb::c_contig> WeightLoader::fetch(
-    const size_t start, const size_t end, const hmll_dtype_t dtype, const int iofile) const
+    const int iofile, const size_t start, const size_t end, const hmll_dtype_t dtype) const
 {
-    auto* buffer = new hmll_iobuf;
-    hmll_range_t offsets;
-
+    const auto buffer = new hmll_iobuf_t();
     {
+        const auto ctx = ctx_.get();
         nb::gil_scoped_release release;
 
         // Allocate buffer for the tensor
         const auto dev = device();
         const auto nbytes = end - start;
-        buffer->ptr = hmll_get_buffer(ctx_.get(), dev, nbytes, HMLL_MEM_DEVICE);
-        buffer->size = nbytes;
-        buffer->device = dev;
-
-        if (!buffer->ptr)
-            throw std::runtime_error("Failed to allocate buffer");
+        *buffer = hmll_get_buffer(ctx, dev, nbytes, HMLL_MEM_DEVICE);
 
         // Fetch the tensor data
         const auto range = hmll_range_t{start, end};
-        if (const auto res = hmll_fetch(ctx_.get(), buffer, range, iofile); res <= 0) {
+        if (const auto res = hmll_fetch(ctx, iofile, buffer, range); res <= 0) {
             hmll_free_buffer(buffer);
+            delete buffer;
             throw std::runtime_error("Failed to read data");
         }
     }
 
     // Let's make sure we are not deleting the buffer before PyTorch releases it
     const nb::capsule deleter(buffer, [](void* p) noexcept {
-        if (auto* b = static_cast<hmll_iobuf_t*>(p))
+        if (auto* b = static_cast<hmll_iobuf_t*>(p)) {
             hmll_free_buffer(b);
+            delete b;
+        }
     });
 
-    return hmll_to_ndarray({start, end}, *buffer, dtype, deleter);
+    return hmll_to_ndarray({start, end}, buffer, dtype, deleter);
 }
 
 void init_loader(nb::module_& m)

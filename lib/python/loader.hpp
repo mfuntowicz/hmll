@@ -36,10 +36,10 @@ public:
     hmll_fetcher_kind_t kind() const;
 
     [[nodiscard]] nb::ndarray<nb::ndim<1>, nb::c_contig>
-    fetch(size_t start, size_t end, hmll_dtype_t dtype, int iofile) const;
+    fetch(int iofile, size_t start, size_t end, hmll_dtype_t dtype) const;
 
     [[nodiscard]] nb::ndarray<nb::ndim<1>, nb::c_contig>
-    fetchv(const std::vector<std::tuple<size_t, size_t>>& ranges, hmll_dtype_t dtype, int iofile) const;
+    fetchv(int iofile, const std::vector<std::tuple<size_t, size_t>>& ranges, hmll_dtype_t dtype) const;
 };
 
 #endif // PYHMLL_FETCHER_HPP

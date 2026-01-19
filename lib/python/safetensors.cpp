@@ -5,6 +5,7 @@
 #include <sys/mman.h>
 #endif
 #include <filesystem>
+#include <iostream>
 #include <mutex>
 #include <unordered_map>
 #include <nanobind/nanobind.h>
@@ -25,6 +26,7 @@ class SafetensorsAccessor
     std::shared_ptr<hmll_registry_t> registry_;
     std::shared_ptr<hmll_source_t> sources_;
 
+    [[nodiscard]]
     hmll_t* get_thread_context() const {
         // cache the thread accessing this instance, if single-threaded, will skip all map lookups and stuff
         thread_local const SafetensorsAccessor* t_last_owner_ = nullptr;
@@ -67,8 +69,10 @@ public:
         base_ctx_->sources = sources_.get();
         base_ctx_->num_sources = 1;
 
-        if (hmll_check(hmll_loader_init(base_ctx_.get(), sources_.get(), 1, device, HMLL_FETCHER_AUTO)))
+        if (hmll_check(hmll_loader_init(base_ctx_.get(), sources_.get(), 1, device, HMLL_FETCHER_AUTO))) {
+            std::cout << hmll_strerr(base_ctx_->error) << std::endl;
             throw std::runtime_error("Failed to allocate loader");
+        }
 
         if (!hmll_success(hmll_safetensors_populate_registry(base_ctx_.get(), registry_.get(), *sources_, 0, 0)))
             throw std::runtime_error(
@@ -79,12 +83,12 @@ public:
     [[nodiscard]] size_t size() const { return registry_->num_tensors; }
     [[nodiscard]] nb::ndarray<nb::ndim<1>, nb::c_contig> fetch(const std::string& name) const
     {
-        auto buffer = std::make_unique<hmll_iobuf_t>();
         hmll_tensor_specs_t specs;
-
+        const auto buffer = new hmll_iobuf_t();
         {
             nb::gil_scoped_release release;
-            const auto ctx = get_thread_context();
+            // const auto ctx = get_thread_context();
+            const auto ctx = base_ctx_.get();
             const auto registry = registry_.get();
 
             if (const auto index = hmll_find_by_name(ctx, registry, name.c_str()); index >= 0 && index < registry->num_tensors)
@@ -95,17 +99,13 @@ public:
                 // Allocate buffer for the tensor
                 const auto dev = device();
                 const auto nbytes = specs.end - specs.start;
-                buffer->ptr = hmll_get_buffer(ctx, dev, nbytes, HMLL_MEM_DEVICE);
-                buffer->size = nbytes;
-                buffer->device = dev;
-
-                if (!buffer->ptr)
-                    throw std::runtime_error("Failed to allocate buffer");
+                *buffer = hmll_get_buffer(ctx, dev, nbytes, HMLL_MEM_DEVICE);
 
                 // Fetch the tensor data
                 const auto range = hmll_range_t{specs.start, specs.end};
-                if (const auto res = hmll_fetch(ctx, buffer.get(), range, iofile); res < 0) {
-                    munmap(buffer->ptr, buffer->size);
+                if (const auto res = hmll_fetch(ctx, iofile, buffer, range); res < 0) {
+                    hmll_free_buffer(buffer);
+                    delete buffer;
                     throw std::runtime_error("Failed to read data");
                 }
             } else {
@@ -114,15 +114,14 @@ public:
         }
 
         // Let's make sure we are not deleting the buffer before PyTorch releases it
-        const hmll_iobuf_t* handle = buffer.release();
-        const nb::capsule deleter(handle, [](void* p) noexcept {
-            if (const auto* b = static_cast<hmll_iobuf_t*>(p)) {
-                munmap(b->ptr, b->size);
+        const nb::capsule deleter(buffer, [](void* p) noexcept {
+            if (auto* b = static_cast<hmll_iobuf_t*>(p)) {
+                hmll_free_buffer(b);
                 delete b;
             }
         });
 
-        return hmll_to_ndarray({specs.start, specs.end}, *handle, specs.dtype, deleter);
+        return hmll_to_ndarray({specs.start, specs.end}, buffer, specs.dtype, deleter);
     }
 };
 

@@ -89,13 +89,13 @@ static constexpr nb::dlpack::dtype hmll_dtype_to_dlpack(const hmll_dtype_t dtype
 
 static nb::ndarray<nb::ndim<1>, nb::c_contig> hmll_to_ndarray(
     const hmll_range_t range,
-    const hmll_iobuf_t& buffer,
+    const hmll_iobuf_t* buffer,
     const hmll_dtype_t dtype,
     const nb::object& owner
 ) {
 
     int32_t device_type, device_id;
-    switch (buffer.device)
+    switch (buffer->device)
     {
     case HMLL_DEVICE_CUDA:
         device_type = kDLPACK_DEVICE_CUDA;
@@ -109,7 +109,7 @@ static nb::ndarray<nb::ndim<1>, nb::c_contig> hmll_to_ndarray(
     const auto dtype_ = hmll_dtype_to_dlpack(dtype);
     const auto numel = (range.end - range.start) / (dtype_.bits / 8);
     return nb::ndarray<nb::ndim<1>, nb::c_contig> (
-        buffer.ptr,
+        buffer->ptr,
         {numel},
         owner,
         {},
