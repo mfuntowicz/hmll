@@ -112,13 +112,13 @@ public:
 
                 // Let's make sure we are not deleting the buffer before PyTorch releases it
                 const auto buffer = buf_guard.release();
-                const nb::capsule deleter(buffer, [](void* p) noexcept {
+                nb::capsule deleter(buffer, [](void* p) noexcept {
                     if (auto* b = static_cast<hmll_iobuf_t*>(p)) {
                         hmll_free_buffer(b);
                         delete b;
                     }
                 });
-                return hmll_to_ndarray({specs.start, specs.end}, buffer, specs.dtype, deleter);
+                return hmll_to_ndarray({specs.start, specs.end}, buffer, specs.dtype, std::move(deleter));
             }
         }
 

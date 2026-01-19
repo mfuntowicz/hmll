@@ -91,7 +91,7 @@ static nb::ndarray<nb::ndim<1>, nb::c_contig> hmll_to_ndarray(
     const hmll_range_t range,
     const hmll_iobuf_t* buffer,
     const hmll_dtype_t dtype,
-    const nb::object& owner
+    nb::object owner
 ) {
 
     int32_t device_type, device_id;

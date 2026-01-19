@@ -62,13 +62,13 @@ nb::ndarray<nb::ndim<1>, nb::c_contig> WeightLoader::fetch(const int iofile, con
 
     // Let's make sure we are not deleting the buffer before PyTorch releases it
     const auto buffer = buf_guard.release();
-    const nb::capsule deleter(buffer, [](void* p) noexcept {
+    nb::capsule deleter(buffer, [](void* p) noexcept {
         if (auto* b = static_cast<hmll_iobuf_t*>(p)) {
             hmll_free_buffer(b);
             delete b;
         }
     });
-    return hmll_to_ndarray({start, end}, buffer, dtype, deleter);
+    return hmll_to_ndarray({start, end}, buffer, dtype, std::move(deleter));
 }
 
 void init_loader(nb::module_& m)
