@@ -16,11 +16,13 @@ void *hmll_alloc(const size_t size, const enum hmll_device device, const int fla
 {
 #define HMLL_MAP_DEFAULT (MAP_PRIVATE | MAP_ANONYMOUS)
 
-    void *ptr = NULL;
+    void *ptr = 0;
     if (device == HMLL_DEVICE_CPU) {
         if ((ptr = mmap(0, size, PROT_READ | PROT_WRITE, HMLL_MAP_DEFAULT | MAP_HUGETLB | MAP_HUGE_2MB, -1, 0)) == MAP_FAILED) {
             if ((ptr = mmap(0, size, PROT_READ | PROT_WRITE, HMLL_MAP_DEFAULT, -1, 0)) != MAP_FAILED)
                 madvise(ptr, size, MADV_HUGEPAGE);
+            else
+                ptr = 0;
         }
         return ptr;
     }
@@ -29,11 +31,11 @@ void *hmll_alloc(const size_t size, const enum hmll_device device, const int fla
     enum cudaError error;
     if (device == HMLL_DEVICE_CUDA && flags == HMLL_MEM_DEVICE)
         if ((error = cudaMalloc(&ptr, size)) != cudaSuccess)
-            return NULL;
+            return 0;
 
     if (device == HMLL_DEVICE_CUDA && flags == HMLL_MEM_STAGING)
         if ((error = cudaHostAlloc(&ptr, size, cudaHostAllocDefault | cudaHostAllocPortable)) != cudaSuccess)
-            return NULL;
+            return 0;
 #endif
 
     return ptr;
