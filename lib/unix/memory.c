@@ -19,7 +19,7 @@ void *hmll_alloc(const size_t size, const enum hmll_device device, const int fla
     void *ptr = 0;
     if (device == HMLL_DEVICE_CPU) {
         if ((ptr = mmap(0, size, PROT_READ | PROT_WRITE, HMLL_MAP_DEFAULT | MAP_HUGETLB | MAP_HUGE_2MB, -1, 0)) == MAP_FAILED) {
-            if (unlikely((ptr = mmap(0, size, PROT_READ | PROT_WRITE, HMLL_MAP_DEFAULT, -1, 0)) != MAP_FAILED))
+            if ((ptr = mmap(0, size, PROT_READ | PROT_WRITE, HMLL_MAP_DEFAULT, -1, 0)) != MAP_FAILED)
                 madvise(ptr, size, MADV_HUGEPAGE);
             else
                 ptr = 0;
@@ -67,7 +67,7 @@ struct hmll_iobuf hmll_get_buffer(struct hmll *ctx, const enum hmll_device devic
     case HMLL_DEVICE_CUDA:
 #if defined(__HMLL_CUDA_ENABLED__)
         ptr = hmll_alloc(size, device, flags);
-        if (unlikely(!ptr)) {
+        if (!ptr) {
             ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
             return (struct hmll_iobuf){0};
         }
