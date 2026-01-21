@@ -37,10 +37,16 @@ static struct hmll_error hmll_io_uring_register_staging_buffers(
     const enum hmll_device device
 ) {
     fetcher->iovecs = hmll_alloc(HMLL_URING_QUEUE_DEPTH * sizeof(struct iovec), HMLL_DEVICE_CPU, HMLL_MEM_DEVICE);
-    if (hmll_check(ctx->error)) return ctx->error;
+    if (!fetcher->iovecs) {
+        ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
+        return ctx->error;
+    }
 
     unsigned char *arena = hmll_alloc(HMLL_URING_QUEUE_DEPTH * HMLL_URING_BUFFER_SIZE, device, HMLL_MEM_STAGING);
-    if (hmll_check(ctx->error)) return ctx->error;
+    if (!arena) {
+        ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
+        return ctx->error;
+    }
 
     for (size_t i = 0; i < HMLL_URING_QUEUE_DEPTH; ++i) {
         fetcher->iovecs[i].iov_base = arena + i * HMLL_URING_BUFFER_SIZE;
@@ -48,8 +54,10 @@ static struct hmll_error hmll_io_uring_register_staging_buffers(
     }
 
     int res;
-    if ((res = io_uring_register_buffers(&fetcher->ioring, fetcher->iovecs, HMLL_URING_QUEUE_DEPTH)) < 0)
-        return ctx->error = HMLL_SYS_ERR(res);
+    if ((res = io_uring_register_buffers(&fetcher->ioring, fetcher->iovecs, HMLL_URING_QUEUE_DEPTH)) < 0) {
+        ctx->error = HMLL_SYS_ERR(res);
+        return ctx->error;
+    }
 
     return HMLL_OK;
 }

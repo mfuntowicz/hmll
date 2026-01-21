@@ -7,18 +7,11 @@
 #endif
 
 #ifndef HMLL_URING_BUFFER_SIZE
-#define HMLL_URING_BUFFER_SIZE (2U * 1024 * 1024)
+#define HMLL_URING_BUFFER_SIZE (8U * 1024 * 1024)
 #endif
 
 #ifndef HMLL_URING_CQE_BATCH_SIZE
 #define HMLL_URING_CQE_BATCH_SIZE 16
-#endif
-
-#ifndef MIN
-#define MIN(a,b) (((a)<(b))?(a):(b))
-#endif
-#ifndef MAX
-#define MAX(a,b) (((a)>(b))?(a):(b))
 #endif
 
 #include <liburing.h>
@@ -81,18 +74,17 @@ static inline unsigned hmll_io_uring_cca_update(
     struct hmll_iouring_cca *cca, const size_t bytes, const struct timespec ts_start, const struct timespec ts_end)
 {
     const unsigned current = cca->window;
-    const size_t elapsed = MAX((ts_end.tv_sec - ts_start.tv_sec) * 1000000000L + (ts_end.tv_nsec - ts_start.tv_nsec), 1);
 
+    const size_t elapsed = (ts_end.tv_sec - ts_start.tv_sec) * 1000000000L + (ts_end.tv_nsec - ts_start.tv_nsec);
     const size_t throughput = hmll_iouring_throughput(bytes, elapsed);
     const size_t smoothed = ((throughput * 3) + cca->throughput) >> 2;
 
-    if (cca->throughput < throughput) {
-        cca->window = MIN(cca->window + 1, HMLL_URING_CQE_BATCH_SIZE);
-        cca->throughput = smoothed;
-    } else {
-        cca->window = MAX(cca->window - 1, 1);
-        cca->throughput = smoothed;
-    }
+    if (cca->throughput < throughput)
+        cca->window = cca->window + 1 >= HMLL_URING_CQE_BATCH_SIZE ? HMLL_URING_CQE_BATCH_SIZE : cca->window + 1;
+    else
+        cca->window = cca->window - 1 < 1 ? 1 : cca->window - 1;
+
+    cca->throughput = smoothed;
     return current;
 }
 
