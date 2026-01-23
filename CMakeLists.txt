@@ -23,6 +23,11 @@ option(HMLL_BUILD_TESTS "Flag indicating if cmake should build unit-tests" OFF)
 option(HMLL_ENABLE_SANITIZERS "Flag indicating if cmake should enable sanitizers" OFF)
 option(HMLL_ENABLE_IO_URING "Flag to include io_uring backend (only on Linux)" ON)
 
+if(${HMLL_ENABLE_CUDA} AND CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    message(STATUS "Disabled CUDA on unsupported ${CMAKE_SYSTEM_NAME} platform")
+    set(HMLL_ENABLE_CUDA OFF)
+endif()
+
 if(${HMLL_BUILD_STATIC})
     message(STATUS "Building libhmll statically")
     set(HMLL_STATIC ON)
@@ -60,19 +65,48 @@ set(LIBHMLL_HEADERS
         include/hmll/loader.h
         include/hmll/memory.h
         include/hmll/types.h
-        include/hmll/linux/loader.h
-        include/hmll/linux/backend/iouring.h
 )
 set(LIBHMLL_SOURCES
         lib/context.c
         lib/errors.c
         lib/loader.c
         lib/memory.c
-        lib/linux/loader.c
-        lib/linux/file.c
-        lib/linux/backend/iouring.c
-        lib/linux/memory.c
 )
+
+if(WIN32)
+    message(
+        FATAL_ERROR
+        "Windows operating system is not supported yet. Open an issue at https://github.com/mfuntowicz/hmll/issues"
+    )
+endif()
+
+if(LINUX)
+    list(APPEND LIBHMLL_HEADERS
+        include/hmll/linux/loader.h
+        include/hmll/linux/backend/iouring.h
+        include/hmll/unix/backend/mmap.h
+    )
+
+    list(APPEND LIBHMLL_SOURCES
+        lib/linux/loader.c
+        lib/linux/backend/iouring.c
+        lib/unix/file.c
+        lib/unix/memory.c
+        lib/unix/backend/mmap.c
+    )
+
+elseif(UNIX)
+    list(APPEND LIBHMLL_HEADERS
+        include/hmll/unix/loader.h
+        include/hmll/unix/backend/mmap.h
+    )
+    list(APPEND LIBHMLL_SOURCES
+        lib/unix/file.c
+        lib/unix/memory.c
+        lib/unix/loader.c
+        lib/unix/backend/mmap.c
+    )
+endif()
 
 if(${HMLL_ENABLE_SAFETENSORS})
     message(STATUS "Enabling safetensors format support")

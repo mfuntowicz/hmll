@@ -27,7 +27,7 @@ int main(const int argc, const char** argv)
     if (hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) == 0)
         return 2;
 
-    if (hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, HMLL_FETCHER_AUTO)))
+    if (hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CUDA, HMLL_FETCHER_AUTO)))
         return 3;
 
     const hmll_lookup_result_t lookup = hmll_lookup_tensor(&ctx, &registry, TENSOR_NAME);

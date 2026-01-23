@@ -8,8 +8,8 @@
 #define HMLL_MAX_TENSOR_RANK 5
 #endif
 
-#if defined(__linux)
-#include "linux/file.h"
+#if defined(__unix)
+#include "unix/file.h"
 #endif
 
 struct hmll;
@@ -29,6 +29,7 @@ enum hmll_status_code {
     HMLL_ERR_BUFFER_TOO_SMALL,
 
     HMLL_ERR_IO_ERROR,
+    HMLL_ERR_NO_SOURCE_PROVIDED,
     HMLL_ERR_FILE_NOT_FOUND,
     HMLL_ERR_FILE_EMPTY,
     HMLL_ERR_MMAP_FAILED,

@@ -4,6 +4,8 @@
 
 #if defined(__linux)
 #include "hmll/linux/loader.h"
+#elif defined(__unix)
+#include "hmll/unix/loader.h"
 #endif
 
 
@@ -17,7 +19,7 @@ struct hmll_error hmll_loader_init(
     if (n > 0 && srcs) {
         ctx->num_sources = n;
         ctx->sources = srcs;
-        return hmll_fetcher_init_impl(ctx, device, kind);;
+        return hmll_fetcher_init_impl(ctx, device, kind);
     }
 
     return HMLL_ERR(HMLL_ERR_FILE_EMPTY);
