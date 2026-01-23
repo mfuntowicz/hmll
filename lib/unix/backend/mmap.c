@@ -21,7 +21,7 @@ static ssize_t hmll_mmap_fetch_range_impl(
 {
     unsigned char *m_buf = fetcher->m_content[iofile];
     const size_t n_bytes = range.end - range.start;
-    madvise(m_buf, n_bytes, MADV_WILLNEED | MADV_SEQUENTIAL);
+    madvise(m_buf + range.start, n_bytes, MADV_WILLNEED | MADV_SEQUENTIAL);
 
     if (dst->size < n_bytes) {
         ctx->error = HMLL_ERR(HMLL_ERR_BUFFER_TOO_SMALL);
@@ -30,7 +30,8 @@ static ssize_t hmll_mmap_fetch_range_impl(
 
 #ifdef __HMLL_CUDA_ENABLED__
     if (ctx->fetcher->device == HMLL_DEVICE_CUDA) {
-        cudaMemcpy(dst->ptr, m_buf + range.start, n_bytes, cudaMemcpyHostToDevice);
+        const void *p_src = (void *) ((uintptr_t)m_buf + range.start);
+        cudaMemcpy(dst->ptr, p_src, n_bytes, cudaMemcpyHostToDevice);
     } else {
         memcpy(dst->ptr, m_buf + range.start, n_bytes);
     }
@@ -70,7 +71,7 @@ struct hmll_error hmll_mmap_init(struct hmll *ctx, const enum hmll_device device
     for (size_t i = 0; i < ctx->num_sources; i++) {
         const struct hmll_source src = ctx->sources[i];
         unsigned char *buf;
-        if ((buf = mmap(0, src.size, PROT_READ | PROT_WRITE, MAP_PRIVATE, src.fd, 0)) == MAP_FAILED) {
+        if ((buf = mmap(0, src.size, PROT_READ, MAP_PRIVATE, src.fd, 0)) == MAP_FAILED) {
             free(backend->m_content);
             ctx->error = HMLL_ERR(HMLL_ERR_MMAP_FAILED);
             goto exit;
