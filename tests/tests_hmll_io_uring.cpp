@@ -5,7 +5,7 @@
 #include <limits.h>
 #include "catch2/catch_all.hpp"
 #include "hmll/hmll.h"
-#include "../include/hmll/unix/backend/iouring.h"
+#include "../include/hmll/linux/backend/iouring.h"
 
 TEST_CASE("io_uring set slot busy", "[linux][io_uring][slot]")
 {

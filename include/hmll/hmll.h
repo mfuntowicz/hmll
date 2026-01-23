@@ -35,8 +35,8 @@ extern "C" {
 #include "types.h"
 
 #ifdef __linux__
-#include "unix/file.h"
-#include "unix/loader.h"
+#include "linux/file.h"
+#include "linux/loader.h"
 #endif
 
 #define likely(x)      __builtin_expect(!!(x), 1)

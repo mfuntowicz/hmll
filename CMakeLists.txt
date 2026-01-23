@@ -60,18 +60,18 @@ set(LIBHMLL_HEADERS
         include/hmll/loader.h
         include/hmll/memory.h
         include/hmll/types.h
-        include/hmll/unix/loader.h
-        include/hmll/unix/backend/iouring.h
+        include/hmll/linux/loader.h
+        include/hmll/linux/backend/iouring.h
 )
 set(LIBHMLL_SOURCES
         lib/context.c
         lib/errors.c
         lib/loader.c
         lib/memory.c
-        lib/unix/loader.c
-        lib/unix/file.c
-        lib/unix/backend/iouring.c
-        lib/unix/memory.c
+        lib/linux/loader.c
+        lib/linux/file.c
+        lib/linux/backend/iouring.c
+        lib/linux/memory.c
 )
 
 if(${HMLL_ENABLE_SAFETENSORS})

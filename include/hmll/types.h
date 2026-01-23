@@ -8,8 +8,8 @@
 #define HMLL_MAX_TENSOR_RANK 5
 #endif
 
-#if defined(__linux) || defined(__unix)
-#include "unix/file.h"
+#if defined(__linux)
+#include "linux/file.h"
 #endif
 
 struct hmll;

@@ -3,8 +3,8 @@
 
 #include "hmll/types.h"
 
-#if defined(__linux) || defined(__unix__) || defined(__APPLE__)
-#include "hmll/unix/loader.h"
+#if defined(__linux)
+#include "hmll/linux/loader.h"
 #endif
 
 struct hmll_loader
