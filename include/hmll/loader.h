@@ -3,6 +3,11 @@
 
 #include "hmll/types.h"
 
+#ifdef _WIN32
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#endif
+
 #if defined(__linux)
 #include "hmll/linux/loader.h"
 #endif

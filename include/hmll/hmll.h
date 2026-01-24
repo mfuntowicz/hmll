@@ -10,7 +10,11 @@ extern "C" {
 #ifndef HMLL_EXTERN
 #ifndef HMLL_STATIC
 #ifdef _WIN32
+#ifdef __HMLL_EXPORTS__
+#define HMLL_EXTERN __declspec(dllexport)
+#else
 #define HMLL_EXTERN __declspec(dllimport)
+#endif
 #elif defined(__GNUC__) && __GNUC__ >= 4
 #define HMLL_EXTERN __attribute__((visibility("default")))
 #else
