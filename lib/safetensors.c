@@ -256,7 +256,7 @@ cleanup:
     if (reg->names) { free(reg->names); reg->names = NULL; }
     if (reg->tensors) { free(reg->tensors); reg->tensors = NULL; }
 
-    free(document);
+    if (document) free(document);
     num_files = 0;
 
 exit:
