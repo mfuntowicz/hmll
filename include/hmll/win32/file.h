@@ -7,7 +7,7 @@
 
 struct hmll_source {
     HANDLE handle;
-    LONGLONG size;
+    size_t size;
 };
 typedef struct hmll_source hmll_source_t;
 

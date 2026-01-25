@@ -4,5 +4,6 @@
 
 struct hmll_error hmll_fetcher_init_impl(struct hmll *ctx, const enum hmll_device device, const enum hmll_loader_kind kind)
 {
+    HMLL_UNUSED(kind);
     return hmll_mmap_init(ctx, device);
 }

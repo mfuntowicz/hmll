@@ -66,7 +66,7 @@ struct hmll_error hmll_mmap_init(struct hmll *ctx, const enum hmll_device device
         const struct hmll_source src = ctx->sources[i];
 
         // Create file mapping using older, more compatible API
-        HANDLE hMapping = CreateFileMappingA(
+        const HANDLE h_mapping = CreateFileMappingA(
             src.handle,
             NULL,
             PAGE_READONLY,
@@ -75,20 +75,20 @@ struct hmll_error hmll_mmap_init(struct hmll *ctx, const enum hmll_device device
             NULL
         );
 
-        if (hMapping == NULL) {
+        if (!h_mapping) {
             ctx->error = HMLL_SYS_ERR(GetLastError());
             goto cleanup_mappings;
         }
 
         unsigned char *buf = MapViewOfFile(
-            hMapping,
+            h_mapping,
             FILE_MAP_READ,
             0,
             0,
             (SIZE_T)src.size
         );
 
-        CloseHandle(hMapping);
+        CloseHandle(h_mapping);
 
         if (buf == NULL) {
             ctx->error = HMLL_SYS_ERR(GetLastError());
@@ -108,13 +108,7 @@ struct hmll_error hmll_mmap_init(struct hmll *ctx, const enum hmll_device device
     goto exit;
 
 cleanup_mappings:
-    for (size_t i = 0; i < backend->n; i++) {
-        if (backend->m_content[i]) {
-            UnmapViewOfFile(backend->m_content[i]);
-        }
-    }
-    free(backend->m_content);
-    free(backend);
+    hmll_mmap_free(backend);
 
 exit:
     return ctx->error;
