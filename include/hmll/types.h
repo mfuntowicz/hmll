@@ -10,6 +10,11 @@
 
 #if defined(__unix)
 #include "unix/file.h"
+#elif defined(_WIN32)
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+
+#include "win32/file.h"
 #endif
 
 struct hmll;
@@ -32,8 +37,10 @@ enum hmll_status_code {
     HMLL_ERR_NO_SOURCE_PROVIDED,
     HMLL_ERR_FILE_NOT_FOUND,
     HMLL_ERR_FILE_EMPTY,
-    HMLL_ERR_MMAP_FAILED,
+    HMLL_ERR_FILE_OPEN_FAILED,
+    HMLL_ERR_FILE_READ_FAILED,
     HMLL_ERR_FILE_REGISTRATION_FAILED,
+    HMLL_ERR_MMAP_FAILED,
     HMLL_ERR_IO_BUFFER_REGISTRATION_FAILED,
 
     HMLL_ERR_SAFETENSORS_JSON_INVALID_HEADER,

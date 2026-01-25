@@ -3,13 +3,12 @@
 
 #include "hmll/types.h"
 
-#ifdef _WIN32
-#include <BaseTsd.h>
-typedef SSIZE_T ssize_t;
-#endif
-
 #if defined(__linux)
 #include "hmll/linux/loader.h"
+#elif defined(__unix)
+#include "hmll/unix/loader.h"
+#elif defined(_WIN32)
+#include "hmll/win32/loader.h"
 #endif
 
 struct hmll_loader

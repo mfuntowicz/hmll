@@ -33,12 +33,13 @@ public:
     {
         if (is_shared) {
             hmll_source index;
-            if (hmll_check(hmll_source_open(path.c_str(), &index)))
-                throw std::runtime_error("Failed to open file: " + path.string());
+            const auto path_str = path.string();
+            if (hmll_check(hmll_source_open(path_str.c_str(), &index)))
+                throw std::runtime_error("Failed to open file: " + path_str);
 
             const auto registry = std::make_shared<hmll_registry_t>();
             auto ctx = std::make_unique<hmll_t>();
-            auto num_files = 0, num_tensors = 0;
+            size_t num_files = 0, num_tensors = 0;
             if ((num_files = hmll_safetensors_index(ctx.get(), registry.get(), index)) == 0) {
                 throw std::runtime_error(fmt::format("Failed to read tensor definition in file {}: {}", path, hmll_strerr(ctx->error)));
             }
@@ -47,8 +48,9 @@ public:
             auto sources = std::vector<hmll_source_t>(num_files);
             for (size_t i = 0; i < num_files; ++i) {
                 const auto shard = parent / fmt::format(FMT_COMPILE("model-{:05}-of-{:05}.safetensors"), i + 1, num_files);
-                if (hmll_check(hmll_source_open(shard.c_str(), &sources[i]))) {
-                    throw std::runtime_error(fmt::format(FMT_COMPILE("Failed to open file: {}"), shard.string()));
+                const auto shard_str = shard.string();
+                if (hmll_check(hmll_source_open(shard_str.c_str(), &sources[i]))) {
+                    throw std::runtime_error(fmt::format(FMT_COMPILE("Failed to open file: {}"), shard_str));
                 }
 
                 if (const auto n_tensors = hmll_safetensors_populate_registry(ctx.get(), registry.get(), sources[i], i, num_tensors); n_tensors == 0) {
@@ -88,7 +90,7 @@ public:
 
     [[nodiscard]] std::vector<std::pair<std::string_view, hmll_tensor_specs_t*>> named_specs() const
     {
-        auto specs = std::result_of_t<decltype(&SafetensorsAccessor::named_specs)(SafetensorsAccessor)>(size());
+        auto specs = std::vector<std::pair<std::string_view, hmll_tensor_specs_t*>>(size());
         for (size_t i = 0; i < specs.size(); ++i) {
             const auto name = std::string_view(registry_->names[i]);
             specs[i] = std::make_pair(name, registry_->tensors + i);

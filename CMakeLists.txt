@@ -77,10 +77,15 @@ set(LIBHMLL_SOURCES
 if(WIN32)
     list(APPEND LIBHMLL_HEADERS
         include/hmll/win32/file.h
+        include/hmll/win32/loader.h
+        include/hmll/win32/backend/mmap.h
     )
 
     list(APPEND LIBHMLL_SOURCES
         lib/win32/file.c
+        lib/win32/loader.c
+        lib/win32/memory.c
+        lib/win32/backend/mmap.c
     )
 elseif(LINUX)
     list(APPEND LIBHMLL_HEADERS

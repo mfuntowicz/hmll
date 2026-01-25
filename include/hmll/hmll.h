@@ -34,6 +34,10 @@ extern "C" {
 #define HMLL_FALSE   0u
 #define HMLL_UNUSED(expr) (void)(expr)
 
+#if defined(_MSC_VER)
+#define __builtin_unreachable() __assume(0)
+#endif
+
 #include "loader.h"
 #include "memory.h"
 #include "types.h"
@@ -46,6 +50,8 @@ extern "C" {
 #include "linux/loader.h"
 #elif __unix
 #include "unix/loader.h"
+#elif _WIN32
+#include "win32/loader.h"
 #endif
 
 #define likely(x)      __builtin_expect(!!(x), 1)
