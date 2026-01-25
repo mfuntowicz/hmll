@@ -65,7 +65,10 @@ int main(const int argc, const char** argv)
             timespec_t start, end;
             tick(&start);
 
-            const ssize_t res = hmll_fetch(&ctx, lookup.file, &buffer, range);
+            if (hmll_fetch(&ctx, lookup.file, &buffer, range) < range.end - range.start) {
+                fprintf(stderr, "Failed to fetch data: %s", hmll_strerr(ctx.error));
+                return 4;
+            }
 
             // End timing and calculate elapsed time
             tick(&end);
@@ -93,7 +96,7 @@ int main(const int argc, const char** argv)
                 unsigned long sum = 0;
                 for (size_t i = 0; i < hmll_numel(lookup.specs); ++i) sum += bf16_ptr[i];
 
-                printf("Sum: %ul\n", sum);
+                printf("Sum: %lu\n", sum);
             } else {
                 printf("Got an error while reading the safetensors: %s\n", hmll_strerr(ctx.error));
             }
