@@ -42,7 +42,7 @@ char *hmll_safetensors_path_create(const char *path, const char *file) {
 
     if (dir_len > 0)
         memcpy(new_path, path, dir_len);
-    strcpy(new_path + dir_len, file);
+    strncpy(new_path + dir_len, file, dir_len + file_len + 1);
 
     return new_path;
 }
