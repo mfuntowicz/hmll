@@ -180,7 +180,7 @@ size_t hmll_safetensors_index(struct hmll *ctx, struct hmll_registry *reg, const
         goto cleanup;
     }
 
-    if (fread(content, source.size, 1, file) != (size_t)source.size) {
+    if (fread(content, 1, source.size, file) != (size_t)source.size) {
         ctx->error = HMLL_ERR(HMLL_ERR_FILE_READ_FAILED);
         goto cleanup;
     }
