@@ -293,7 +293,6 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
         ptr += idx_mem_req;
 
         slot_offsets = (size_t *)ptr;
-        memset(stack_mem, 0, total_req);
     } else {
         states = calloc(1, total_req);
         if (unlikely(!states)) {
