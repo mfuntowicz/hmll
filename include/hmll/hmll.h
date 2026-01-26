@@ -61,7 +61,13 @@ extern "C" {
 #define unlikely(x)    __builtin_expect(!!(x), 0)
 
 /** Error handling stubs **/
+#ifdef __cplusplus
+// C++ uses brace initialization (no parenthesized type)
+#define HMLL_RES(...) hmll_error{ __VA_ARGS__ }
+#else
+// C uses compound literals
 #define HMLL_RES(...) (struct hmll_error){ __VA_ARGS__ }
+#endif
 #define HMLL_OK  HMLL_RES(.code = HMLL_ERR_SUCCESS, .sys_err = 0)
 #define HMLL_ERR(c) HMLL_RES(.code = (c), .sys_err = 0)
 #define HMLL_SYS_ERR(e) HMLL_RES(.code = HMLL_ERR_SYSTEM, .sys_err = (e))
