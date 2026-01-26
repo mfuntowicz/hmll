@@ -1,0 +1,104 @@
+= Load and write AI models at wire speed
+
+[frame=none, grid=none]
+[cols="^1,^1,,^1"]
+|===
+a|image::https://img.shields.io/badge/C-00599C?logo=c&logoColor=white[C]
+a|image::https://img.shields.io/badge/C++-%2300599C.svg?logo=c%2B%2B&logoColor=white[C++]
+a|image::https://img.shields.io/pypi/pyversions/transformers?color=281158&label=pyhmll[Python]
+a|image::https://img.shields.io/crates/msrv/safetensors?label=hmll[Rust]
+|===
+
+'''
+
+The Hugging Face Model Loading Library (_aka HMLL_) provides a set of low-level, modern and highly-efficient routines to
+fetch bytes from a storage device to a machine learning framework such as PyTorch, JAX, etc.
+
+Along with the high-level, byte fetching, capabilities, it encapsulates the actual I/O method behind a consistent API
+hiding away the actual platform-specific implementation and complexities for the user.
+
+The library currently supports fetching implementations for the following platforms:
+
+
+[caption="Table 1. "]
+.Backend(s) supported per platform
+[cols="^1,^2,^3"]
+|===
+|Platform | Backend | Use case
+
+|Linux
+|memory-mapped file (*mmap*)
+<|Single-device, sequential reads
+
+|Linux
+|io_uring
+<|Multi-devices, scattered reads (Tensor parallelism, Mixture-of-Experts)
+
+|MacOS
+|memory-mapped file (*mmap*)
+<|Single-device, sequential reads
+
+|Windows
+|memory-mapped file (*mmap*)
+<|Single-device, sequential reads
+|===
+
+== Getting Started
+=== C/C++ project with CMake
+The most straightforward way to integrate the library is through CMake, using `FetchContent` module.
+
+[caption="Source 1. "]
+.Backend(s) CMakeLists.txt and main.c
+[source,cmake]
+----
+include(FetchContent)
+FetchContent_Declare(hmll
+    GIT_REPOSITORY https://github.com/mfuntowicz/hmll
+    GIT_TAG main
+)
+
+# Link your target against hmll
+target_link_libraries(<target_name> PRIVATE libhmll)
+----
+
+[source,c++]
+----
+// main.c
+#include <stdio.h>
+#include <hmll/hmll.h>
+
+int main(int argc, char **argv) {
+    hmll_t ctx = {0};
+    hmll_source_t src = {0};
+
+    // Create an hmll_source
+    if (hmll_check(hmll_source_open("/path/to/some/file", &src))) {
+        fprintf(stderr, "Failed to open file: %s\n", hmll_strerr(ctx.error));
+        return 1;
+    }
+
+    // Create an hmll loader instance, automatically choosing the right backend to use
+    if (hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, HMLL_FETCHER_AUTO))) {
+        fprintf(stderr, "Failed to initialize loader: %s\n", hmll_strerr(ctx.error));
+        return 2;
+    }
+
+    // Create the range you'd like to fetch and allocate a buffer to store the content
+    hmll_range_t range = (struct hmll_range){ 500, 4000 };
+    hmll_iobuf_t buffer = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
+
+    if (hmll_check(ctx.error)) {
+        fprintf(stderr, "Failed to allocate destination buffer: %s\n", hmll_strerr(ctx.error));
+        return 3;
+    }
+
+    // Fetch the bytes (0 here is the index of the file to fetch from)
+     if (hmll_fetch(&ctx, 0, &buffer, range) < range.end - range.start) {
+        fprintf(stderr, "Failed to fetch data: %s\n", hmll_strerr(ctx.error));
+        return 4;
+    }
+
+    printf("Successfully fetched %u bytes\n", range.end - range.start)
+    return 0;
+}
+----
