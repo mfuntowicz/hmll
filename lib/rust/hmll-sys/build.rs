@@ -177,6 +177,9 @@ fn generate_bindings(include_path: &Path) {
         .derive_eq(true)
         .derive_hash(true)
         .no_partialeq("hmll_loader")
+        // Exclude C stdlib types with function pointers from PartialEq/Eq
+        // (comparing function pointers is undefined behavior)
+        .no_partialeq("__sFILE")
         .impl_debug(true)
         .prepend_enum_name(false)
         .size_t_is_usize(true)
