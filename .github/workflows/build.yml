@@ -121,14 +121,14 @@ jobs:
       - name: Configure CMake MSVC
         if: matrix.os == 'windows-latest'
         run: |
-          winget install Kitware.CMake && \
-          cmake -B ${{ github.workspace }}/build \
-            -DCMAKE_BUILD_TYPE=${{ inputs.build-type }} \
-            -DHMLL_BUILD_STATIC=${{ inputs.static-build && 'ON' || 'OFF' }} \
-            -DHMLL_BUILD_TESTS=${{ inputs.run-tests && 'ON' || 'OFF' }} \
-            -DHMLL_ENABLE_SANITIZERS=${{ inputs.enable-sanitizers && 'ON' || 'OFF' }} \
-            -DHMLL_ENABLE_SAFETENSORS=${{ inputs.enable-safetensors && 'ON' || 'OFF' }} \
-            ${{ inputs.enable-cuda && '-DHMLL_ENABLE_CUDA=ON' || '' }}
+          winget install --id Kitware.CMake -e  
+          cmake -B "$env:GITHUB_WORKSPACE\build" `
+          -DCMAKE_BUILD_TYPE=Debug `
+          -DHMLL_BUILD_STATIC=OFF `
+          -DHMLL_BUILD_TESTS=ON `
+          -DHMLL_ENABLE_SANITIZERS=ON `
+          -DHMLL_ENABLE_SAFETENSORS=ON `
+          ${{ inputs.enable-cuda && '-DHMLL_ENABLE_CUDA=ON' || '' }}
 
       - name: Build C++ Library
         run: cmake --build ${{ github.workspace }}/build --config ${{ inputs.build-type }}
