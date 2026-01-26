@@ -105,9 +105,21 @@ jobs:
           pip install pytest numpy
 
       - name: Configure CMake
+        if: matrix.os != 'windows-latest'
         env:
           CC: ${{ inputs.compiler-cc }}
           CXX: ${{ inputs.compiler-cxx }}
+        run: |
+          cmake -B ${{ github.workspace }}/build \
+            -DCMAKE_BUILD_TYPE=${{ inputs.build-type }} \
+            -DHMLL_BUILD_STATIC=${{ inputs.static-build && 'ON' || 'OFF' }} \
+            -DHMLL_BUILD_TESTS=${{ inputs.run-tests && 'ON' || 'OFF' }} \
+            -DHMLL_ENABLE_SANITIZERS=${{ inputs.enable-sanitizers && 'ON' || 'OFF' }} \
+            -DHMLL_ENABLE_SAFETENSORS=${{ inputs.enable-safetensors && 'ON' || 'OFF' }} \
+            ${{ inputs.enable-cuda && '-DHMLL_ENABLE_CUDA=ON' || '' }}
+
+      - name: Configure CMake MSVC
+        if: matrix.os == 'windows-latest'
         run: |
           cmake -B ${{ github.workspace }}/build \
             -DCMAKE_BUILD_TYPE=${{ inputs.build-type }} \
