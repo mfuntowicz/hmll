@@ -164,11 +164,13 @@ size_t hmll_safetensors_index(struct hmll *ctx, struct hmll_registry *reg, const
     size_t num_files = 0;
     size_t num_allocated_files = 0;
     char **files = NULL;
+    char *content = NULL;
+    yyjson_doc *document = NULL;
 
     if (hmll_check(ctx->error))
         goto cleanup;
 
-    char *content = calloc(1, source.size);
+    content = calloc(1, source.size);
     if (!content) {
         ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
         goto cleanup;
@@ -188,7 +190,6 @@ size_t hmll_safetensors_index(struct hmll *ctx, struct hmll_registry *reg, const
     fclose(file);
 
     yyjson_read_err error;
-    yyjson_doc *document = NULL;
     if ((document = yyjson_read_opts(content, source.size, YYJSON_READ_NOFLAG, NULL, &error)) == NULL) {
         ctx->error = HMLL_ERR(HMLL_ERR_SAFETENSORS_JSON_MALFORMED_INDEX);
         goto cleanup;
@@ -241,7 +242,8 @@ size_t hmll_safetensors_index(struct hmll *ctx, struct hmll_registry *reg, const
         }
     }
 
-    free(document);
+    yyjson_doc_free(document);
+    document = NULL;
     ctx->num_sources = num_files;
     ctx->sources = calloc(ctx->num_sources, sizeof(struct hmll_source));
     goto exit;
@@ -256,10 +258,11 @@ cleanup:
     if (reg->names) { free(reg->names); reg->names = NULL; }
     if (reg->tensors) { free(reg->tensors); reg->tensors = NULL; }
 
-    if (document) free(document);
+    if (document) yyjson_doc_free(document);
     num_files = 0;
 
 exit:
+    if (content) free(content);
     return num_files;
 }
 
