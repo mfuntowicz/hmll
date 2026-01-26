@@ -1,14 +1,14 @@
 //
 // Created by mfuntowicz on 1/13/26.
 //
+#include <sys/mman.h>
+#include "hmll/hmll.h"
+
 #ifdef __linux
 #include "linux/mman.h"
 #elif __APPLE__
 #include "mach/mach_vm.h"
 #endif
-#include <sys/mman.h>
-#include "hmll/hmll.h"
-
 #if defined(__HMLL_CUDA_ENABLED__)
 #include <cuda_runtime_api.h>
 #endif
@@ -18,7 +18,7 @@
 #define HMLL_MAP_HUGETLB VM_FLAGS_SUPERPAGE_SIZE_2MB
 #else
 #define HMLL_MAP_ANONYMOUS MAP_ANONYMOUS
-#define HMLL_MAP_HUGETLB MAP_HUGETLB | MAP_HUGE_2M
+#define HMLL_MAP_HUGETLB (MAP_HUGETLB | MAP_HUGE_2MB)
 #endif
 
 void *hmll_alloc(const size_t size, const enum hmll_device device, const int flags)

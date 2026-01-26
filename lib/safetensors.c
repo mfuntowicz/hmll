@@ -274,6 +274,9 @@ size_t hmll_safetensors_populate_registry(
     if (hmll_check(ctx->error))
         goto exit;
 
+    yyjson_doc *document = NULL;
+    char *header = NULL;
+
     FILE *file = hmll_get_file_from_fd(source);
     if (!file) {
         ctx->error = HMLL_ERR(HMLL_ERR_FILE_OPEN_FAILED);
@@ -282,7 +285,7 @@ size_t hmll_safetensors_populate_registry(
 
     uint64_t hsize;
     fread(&hsize, sizeof(uint64_t), 1, file);
-    char *header = calloc(hsize, sizeof(unsigned char));
+    header = calloc(hsize, sizeof(unsigned char));
     if (!header) {
         ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
         goto freeup_and_exit;
@@ -295,7 +298,7 @@ size_t hmll_safetensors_populate_registry(
 
     // Parse JSON
     yyjson_read_err error;
-    yyjson_doc *document = yyjson_read_opts(header, hsize, YYJSON_READ_NOFLAG, NULL, &error);
+    document = yyjson_read_opts(header, hsize, YYJSON_READ_NOFLAG, NULL, &error);
     if (!document) {
         ctx->error = HMLL_ERR(HMLL_ERR_SAFETENSORS_JSON_INVALID_HEADER);
         goto freeup_and_exit;

@@ -12,7 +12,7 @@ typedef struct hmll_source hmll_source_t;
 
 // Duplicate the fd and return a FILE* that can be safely closed
 // without affecting the original fd in hmll_source
-static inline FILE *hmll_get_file_from_fd(const hmll_source_t source) {
+static FILE *hmll_get_file_from_fd(const hmll_source_t source) {
     int dup_fd = dup(source.fd);
     if (dup_fd == -1) {
         return NULL;
