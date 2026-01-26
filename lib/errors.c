@@ -1,7 +1,6 @@
 //
 // Created by mfuntowicz on 12/11/25.
 //
-#include <stdbool.h>
 #include <string.h>
 
 #include "hmll/hmll.h"
@@ -41,12 +40,12 @@ const char *hmll_strerr(const struct hmll_error err)
     return "No error";
 }
 
-bool hmll_error_is_os_error(const struct hmll_error err)
+unsigned char hmll_error_is_os_error(const struct hmll_error err)
 {
     return err.sys_err != HMLL_ERR_SUCCESS;
 }
 
-bool hmll_error_is_lib_error(const struct hmll_error err)
+unsigned char hmll_error_is_lib_error(const struct hmll_error err)
 {
     return err.code != HMLL_ERR_SUCCESS && err.code != HMLL_ERR_SYSTEM;
 }

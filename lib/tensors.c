@@ -1,4 +1,3 @@
-#include <stdbool.h>
 #include <string.h>
 #include "hmll/hmll.h"
 
@@ -15,7 +14,7 @@ int hmll_find_by_name(const struct hmll *ctx, const struct hmll_registry *reg, c
     return -1;
 }
 
-bool hmll_contains(const struct hmll *ctx, const struct hmll_registry *reg, const char *name)
+unsigned char hmll_contains(const struct hmll *ctx, const struct hmll_registry *reg, const char *name)
 {
     return hmll_find_by_name(ctx, reg, name) >= 0;
 }
