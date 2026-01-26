@@ -5,9 +5,6 @@
 #ifndef HMLL_UNIX_LOADER_H
 #define HMLL_UNIX_LOADER_H
 
-#ifndef HMLL_LINUX_FETCHER_H
-#define HMLL_LINUX_FETCHER_H
-
 #include "hmll/types.h"
 
 enum hmll_loader_kind
@@ -18,7 +15,5 @@ enum hmll_loader_kind
 typedef enum hmll_loader_kind hmll_fetcher_kind_t;
 
 struct hmll_error hmll_fetcher_init_impl(struct hmll *ctx, enum hmll_device device, enum hmll_loader_kind kind);
-
-#endif // HMLL_LINUX_FETCHER_H
 
 #endif //HMLL_UNIX_LOADER_H
