@@ -212,6 +212,10 @@ if(${HMLL_BUILD_TESTS})
     endif()
 
     add_executable(libhmll_tests ${HMLL_TESTS_SRC})
+    set_target_properties(libhmll_tests PROPERTIES
+        CXX_STANDARD 20
+        CXX_STANDARD_REQUIRED ON
+    )
     target_include_directories(libhmll_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/include)
     target_link_libraries(libhmll_tests PRIVATE Catch2::Catch2WithMain libhmll)
     catch_discover_tests(libhmll_tests)
