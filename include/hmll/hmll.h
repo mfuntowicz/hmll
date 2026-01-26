@@ -42,15 +42,17 @@ extern "C" {
 #include "memory.h"
 #include "types.h"
 
-#if defined(__unix)
-#include "unix/file.h"
+#if defined(__unix) || defined(__APPLE__)
 #endif
 
 #ifdef __linux
+#include "unix/file.h"
 #include "linux/loader.h"
-#elif __unix
+#elif __unix || defined(__APPLE__)
+#include "unix/file.h"
 #include "unix/loader.h"
 #elif _WIN32
+#include "win32/file.h"
 #include "win32/loader.h"
 #endif
 
