@@ -73,18 +73,17 @@ struct hmll_iobuf hmll_get_buffer(struct hmll *ctx, const enum hmll_device devic
         ptr = hmll_alloc(size, device, HMLL_MEM_DEVICE);
         break;
 
-#if defined(__HMLL_CUDA_ENABLED__)
     case HMLL_DEVICE_CUDA:
+#if defined(__HMLL_CUDA_ENABLED__)
         ptr = hmll_alloc(size, device, flags);
         if (!ptr) {
             ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
             return (struct hmll_iobuf){0};
         }
-
-        break;
 #else
         ctx->error = HMLL_ERR(HMLL_ERR_CUDA_NOT_ENABLED);
 #endif
+        break;
     }
     return (struct hmll_iobuf){size, ptr, device};
 }
