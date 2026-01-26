@@ -24,9 +24,9 @@
 void *hmll_alloc(const size_t size, const enum hmll_device device, const int flags)
 {
 #define HMLL_MAP_DEFAULT (MAP_PRIVATE | MAP_ANONYMOUS)
-
     void *ptr = 0;
     if (device == HMLL_DEVICE_CPU) {
+        HMLL_UNUSED(flags);
         if ((ptr = mmap(0, size, PROT_READ | PROT_WRITE, HMLL_MAP_ANONYMOUS | HMLL_MAP_HUGETLB, -1, 0)) == MAP_FAILED) {
             if ((ptr = mmap(0, size, PROT_READ | PROT_WRITE, HMLL_MAP_ANONYMOUS, -1, 0)) != MAP_FAILED) {
 #ifdef MADV_HUGEPAGE
@@ -66,12 +66,12 @@ void hmll_free_buffer(struct hmll_iobuf *buffer)
 
 struct hmll_iobuf hmll_get_buffer(struct hmll *ctx, const enum hmll_device device, const size_t size, const int flags)
 {
-    HMLL_UNUSED(flags);
 
     void* ptr = NULL;
     switch (device)
     {
     case HMLL_DEVICE_CPU:
+        HMLL_UNUSED(flags);
         ptr = hmll_alloc(size, device, HMLL_MEM_DEVICE);
         break;
 
