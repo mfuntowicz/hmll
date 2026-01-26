@@ -83,9 +83,9 @@ size_t WeightLoader::fetch(const int iofile, const size_t offset, const uintptr_
     const auto ctx = ctx_.get();
     const auto dev = device();
 
-    const auto buf_guard = std::make_unique<hmll_iobuf_t>(size, reinterpret_cast<void *>(dst), dev);
+    hmll_iobuf_t buf = {size, reinterpret_cast<void *>(dst), dev};
     const auto range = hmll_range_t{offset, offset + size};
-    if (const auto res = hmll_fetch(ctx, iofile, buf_guard.get(), range); res <= 0) {
+    if (const auto res = hmll_fetch(ctx, iofile, &buf, range); res <= 0) {
         const std::string err = hmll_strerr(ctx_->error);
         throw std::runtime_error("Failed to read data " + err);
     } else {
