@@ -119,3 +119,21 @@ jobs:
       python-version: ${{ matrix.python-version }}
       enable-safetensors: true
       run-tests: true
+
+  python-bindings-macos:
+    name: Python Bindings macOS (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ macos-13, macos-14 ]  # macos-13 is x86_64, macos-14 is arm64
+        python-version: [ '3.11', '3.12', '3.13' ]
+    uses: ./.github/workflows/build.yml
+    with:
+      os: ${{ matrix.os }}
+      compiler-cc: clang
+      compiler-cxx: clang++
+      build-type: Debug
+      enable-python: true
+      python-version: ${{ matrix.python-version }}
+      enable-safetensors: true
+      run-tests: true

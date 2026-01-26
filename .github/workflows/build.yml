@@ -115,7 +115,8 @@ jobs:
             -DHMLL_BUILD_TESTS=${{ inputs.run-tests && 'ON' || 'OFF' }} \
             -DHMLL_ENABLE_SANITIZERS=${{ inputs.enable-sanitizers && 'ON' || 'OFF' }} \
             -DHMLL_ENABLE_SAFETENSORS=${{ inputs.enable-safetensors && 'ON' || 'OFF' }} \
-            ${{ inputs.enable-cuda && '-DHMLL_ENABLE_CUDA=ON' || '' }}
+            ${{ inputs.enable-cuda && '-DHMLL_ENABLE_CUDA=ON' || '' }} \
+            ${{ inputs.enable-python && '-DHMLL_ENABLE_PYTHON=ON' || '' }}
 
       - name: Build C++ Library
         run: cmake --build ${{ github.workspace }}/build --config ${{ inputs.build-type }}

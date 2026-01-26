@@ -23,6 +23,10 @@
 
 void *hmll_alloc(const size_t size, const enum hmll_device device, const int flags)
 {
+#if !defined(__HMLL_CUDA_ENABLED__)
+    (void)flags;  // flags only used with CUDA
+#endif
+
     void *ptr = 0;
     if (device == HMLL_DEVICE_CPU) {
 #ifdef __linux__
@@ -68,6 +72,10 @@ void hmll_free_buffer(struct hmll_iobuf *buffer)
 
 struct hmll_iobuf hmll_get_buffer(struct hmll *ctx, const enum hmll_device device, const size_t size, const int flags)
 {
+#if !defined(__HMLL_CUDA_ENABLED__)
+    (void)flags;  // flags only used with CUDA
+#endif
+
     void* ptr = NULL;
 
 #if defined(__linux) || defined(__unix__) || defined(__APPLE__)

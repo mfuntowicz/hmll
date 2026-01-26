@@ -88,7 +88,7 @@ public:
 
     [[nodiscard]] std::vector<std::pair<std::string_view, hmll_tensor_specs_t*>> named_specs() const
     {
-        auto specs = std::result_of_t<decltype(&SafetensorsAccessor::named_specs)(SafetensorsAccessor)>(size());
+        auto specs = std::vector<std::pair<std::string_view, hmll_tensor_specs_t*>>(size());
         for (size_t i = 0; i < specs.size(); ++i) {
             const auto name = std::string_view(registry_->names[i]);
             specs[i] = std::make_pair(name, registry_->tensors + i);

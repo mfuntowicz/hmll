@@ -415,7 +415,6 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
 
                 nbytes += cqe->res;
 
-                const uint32_t r_idx = (uint32_t)(data >> SHIFT_RANGE);
                 const uint32_t s_idx = (uint32_t)(data & MASK_SLOT);
 
                 if (!is_cuda) {
@@ -423,6 +422,7 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
                 }
 #if defined(__HMLL_CUDA_ENABLED__)
                 else {
+                    const uint32_t r_idx = (uint32_t)(data >> SHIFT_RANGE);
                     struct hmll_io_uring_cuda_context *cctx = &((struct hmll_io_uring_cuda_context *)fetcher->device_ctx)[s_idx];
 
                     void *to = (char *)dsts[r_idx].ptr + slot_offsets[s_idx];
