@@ -105,7 +105,7 @@ jobs:
           pip install pytest numpy
 
       - name: Configure CMake
-        if: matrix.os != 'windows-latest'
+        if: inputs.os != 'windows-latest'
         env:
           CC: ${{ inputs.compiler-cc }}
           CXX: ${{ inputs.compiler-cxx }}
@@ -120,7 +120,7 @@ jobs:
             ${{ inputs.enable-python && '-DHMLL_ENABLE_PYTHON=ON' || '' }}
 
       - name: Configure CMake MSVC
-        if: matrix.os == 'windows-latest'
+        if: inputs.os == 'windows-latest'
         run: |
           winget install --id Kitware.CMake -e  
           cmake -B "$env:GITHUB_WORKSPACE\build" `
