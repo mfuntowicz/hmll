@@ -66,6 +66,8 @@ void hmll_free_buffer(struct hmll_iobuf *buffer)
 
 struct hmll_iobuf hmll_get_buffer(struct hmll *ctx, const enum hmll_device device, const size_t size, const int flags)
 {
+    HMLL_UNUSED(flags);
+
     void* ptr = NULL;
     switch (device)
     {
