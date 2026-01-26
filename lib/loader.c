@@ -2,9 +2,9 @@
 #include "hmll/loader.h"
 #include "hmll/hmll.h"
 
-#if defined(__linux)
+#if defined(__linux__)
 #include "hmll/linux/loader.h"
-#elif defined(__unix) || defined(__APPLE__)
+#elif defined(__unix__) || defined(__APPLE__)
 #include "hmll/unix/loader.h"
 #endif
 

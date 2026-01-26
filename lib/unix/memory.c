@@ -4,9 +4,9 @@
 #include <sys/mman.h>
 #include "hmll/hmll.h"
 
-#ifdef __linux
+#if defined(__linux__)
 #include "linux/mman.h"
-#elif __APPLE__
+#elif defined(__APPLE__)
 #include "mach/mach_vm.h"
 #endif
 #if defined(__HMLL_CUDA_ENABLED__)
@@ -23,24 +23,19 @@
 
 void *hmll_alloc(const size_t size, const enum hmll_device device, const int flags)
 {
-#define HMLL_MAP_DEFAULT (MAP_PRIVATE | MAP_ANONYMOUS)
+    HMLL_UNUSED(flags);
     void *ptr = 0;
     if (device == HMLL_DEVICE_CPU) {
-        HMLL_UNUSED(flags);
-        if ((ptr = mmap(0, size, PROT_READ | PROT_WRITE, HMLL_MAP_ANONYMOUS | HMLL_MAP_HUGETLB, -1, 0)) == MAP_FAILED) {
-            if ((ptr = mmap(0, size, PROT_READ | PROT_WRITE, HMLL_MAP_ANONYMOUS, -1, 0)) != MAP_FAILED) {
-#ifdef MADV_HUGEPAGE
+        // Try huge pages first, fall back to regular mmap
+        if ((ptr = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | HMLL_MAP_ANONYMOUS | HMLL_MAP_HUGETLB, -1, 0)) == MAP_FAILED) {
+            if ((ptr = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | HMLL_MAP_ANONYMOUS, -1, 0)) != MAP_FAILED) {
+#if defined(MADV_HUGEPAGE)
                 madvise(ptr, size, MADV_HUGEPAGE);
 #endif
             } else {
                 ptr = 0;
             }
         }
-#else
-        ptr = mmap(0, size, PROT_READ | PROT_WRITE, HMLL_MAP_DEFAULT, -1, 0);
-        if (ptr == MAP_FAILED)
-            ptr = 0;
-#endif
         return ptr;
     }
 

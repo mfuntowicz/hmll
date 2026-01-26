@@ -8,9 +8,9 @@
 
 #if defined(_WIN32)
 #include "hmll/win32/backend/mmap.h"
-#elif defined(__linux)
+#elif defined(__linux__)
 // TODO(mfuntowicz): include io_uring cleanup when implemented
-#elif defined(__unix)
+#elif defined(__unix__)
 // TODO(mfuntowicz): include unix mmap cleanup when implemented
 #endif
 
@@ -22,9 +22,9 @@ void hmll_destroy(struct hmll *ctx)
             if (ctx->fetcher->kind == HMLL_FETCHER_MMAP && ctx->fetcher->backend_impl_) {
                 hmll_mmap_free(ctx->fetcher->backend_impl_);
             }
-#elif defined(__linux)
+#elif defined(__linux__)
             // TODO(mfuntowicz): handle io_uring cleanup
-#elif defined(__unix)
+#elif defined(__unix__)
             // TODO(mfuntowicz): handle unix mmap cleanup
 #endif
             free(ctx->fetcher);

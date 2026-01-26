@@ -3,9 +3,9 @@
 
 #include "hmll/types.h"
 
-#if defined(__linux)
+#if defined(__linux__)
 #include "hmll/linux/loader.h"
-#elif defined(__unix) || defined(__APPLE__)
+#elif defined(__unix__) || defined(__APPLE__)
 #include "hmll/unix/loader.h"
 #elif defined(_WIN32)
 #include "hmll/win32/loader.h"

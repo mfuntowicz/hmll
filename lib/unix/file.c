@@ -3,7 +3,7 @@
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#ifdef __APPLE__
+#if defined(__APPLE__)
 #include <fcntl.h>
 #endif
 #include "hmll/hmll.h"
@@ -18,7 +18,7 @@ struct hmll_error hmll_source_open(const char *path, struct hmll_source *src)
         goto exit;
     }
 
-#ifdef __APPLE__
+#if defined(__APPLE__)
     // Disable file caching on macOS (similar to O_DIRECT on Linux)
     fcntl(fd, F_NOCACHE, 1);
 #endif
