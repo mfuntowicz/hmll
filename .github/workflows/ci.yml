@@ -7,12 +7,12 @@ on:
     branches: [ "main" ]
 
 jobs:
-  cpu-build-matrix:
-    name: CPU Build (${{ matrix.os }}, ${{ matrix.compiler.cc }}, static=${{ matrix.static }})
+  linux:
+    name: Linux (${{ matrix.os }}, ${{ matrix.compiler.cc }}, static=${{ matrix.static }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-latest ]
+        os: [ ubuntu-latest, ubuntu-24.04-arm ]
         compiler: [
           { cc: gcc, cxx: g++ },
           { cc: clang, cxx: clang++ }
@@ -23,117 +23,72 @@ jobs:
       os: ${{ matrix.os }}
       compiler-cc: ${{ matrix.compiler.cc }}
       compiler-cxx: ${{ matrix.compiler.cxx }}
-      build-type: Debug
       static-build: ${{ matrix.static }}
       enable-sanitizers: true
-      enable-safetensors: true
-      run-tests: true
 
-  macos-build:
-    name: macOS Build (${{ matrix.os }}, static=${{ matrix.static }})
+  macos:
+    name: macOS (${{ matrix.os }}, static=${{ matrix.static }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ macos-14, macos-15, macos-26 ]
+        os: [ macos-14, macos-15 ]
         static: [ false, true ]
     uses: ./.github/workflows/build.yml
     with:
       os: ${{ matrix.os }}
-      compiler-cc: clang
-      compiler-cxx: clang++
-      build-type: Debug
+      # Uses default: clang
       static-build: ${{ matrix.static }}
-      enable-sanitizers: false  # sanitizers can be problematic on macOS CI
-      enable-safetensors: true
-      run-tests: true
 
-  cuda-build:
-    name: CUDA Build (${{ matrix.os }}, ${{ matrix.cuda-version }})
+  windows:
+    name: Windows (static=${{ matrix.static }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-latest ]
-        cuda-version: [ '12.6.0', '12.8.0', '13.0.0']
+        static: [ false, true ]
     uses: ./.github/workflows/build.yml
     with:
-      os: ${{ matrix.os }}
-      compiler-cc: clang
-      compiler-cxx: clang++
-      build-type: Debug
+      os: windows-latest
+      # Uses default: MSVC auto-detect
+      static-build: ${{ matrix.static }}
+
+  cuda:
+    name: CUDA ${{ matrix.cuda-version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        cuda-version: [ '12.6.0', '12.8.0', '13.0.0' ]
+    uses: ./.github/workflows/build.yml
+    with:
+      os: ubuntu-latest
       enable-cuda: true
       cuda-version: ${{ matrix.cuda-version }}
-      enable-safetensors: true
       enable-sanitizers: true
       run-tests: false
 
-  rust-bindings:
-    name: Rust Bindings (${{ matrix.os }}, ${{ matrix.rust-toolchain }})
+  rust:
+    name: Rust (${{ matrix.os }}, ${{ matrix.toolchain }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-latest, ubuntu-24.04-arm ]
-        rust-toolchain: [ stable, nightly ]
+        os: [ ubuntu-latest, ubuntu-24.04-arm, macos-14, macos-15 ]
+        toolchain: [ stable, nightly ]
     uses: ./.github/workflows/build.yml
     with:
       os: ${{ matrix.os }}
-      compiler-cc: gcc
-      compiler-cxx: g++
-      build-type: Debug
+      # Uses platform defaults for compiler
       enable-rust: true
-      rust-toolchain: ${{ matrix.rust-toolchain }}
-      enable-safetensors: true
-      run-tests: true
+      rust-toolchain: ${{ matrix.toolchain }}
 
-  rust-bindings-macos:
-    name: Rust Bindings macOS (${{ matrix.os }}, ${{ matrix.rust-toolchain }})
+  python:
+    name: Python (${{ matrix.os }}, ${{ matrix.python-version }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ macos-14, macos-15, macos-26 ]
-        rust-toolchain: [ stable, nightly ]
-    uses: ./.github/workflows/build.yml
-    with:
-      os: ${{ matrix.os }}
-      compiler-cc: clang
-      compiler-cxx: clang++
-      build-type: Debug
-      enable-rust: true
-      rust-toolchain: ${{ matrix.rust-toolchain }}
-      enable-safetensors: true
-      run-tests: true
-
-  python-bindings:
-    name: Python Bindings (${{ matrix.os }}, Python ${{ matrix.python-version }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ ubuntu-latest, ubuntu-24.04-arm ]
-        python-version: [ '3.11', '3.12', '3.13', '3.13t' ]
-    uses: ./.github/workflows/build.yml
-    with:
-      os: ${{ matrix.os }}
-      compiler-cc: gcc
-      compiler-cxx: g++
-      build-type: Debug
-      enable-python: true
-      python-version: ${{ matrix.python-version }}
-      enable-safetensors: true
-      run-tests: true
-
-  python-bindings-macos:
-    name: Python Bindings macOS (${{ matrix.os }}, Python ${{ matrix.python-version }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ macos-14, macos-15, macos-26 ]
+        os: [ ubuntu-latest, ubuntu-24.04-arm, macos-14, macos-15 ]
         python-version: [ '3.11', '3.12', '3.13' ]
     uses: ./.github/workflows/build.yml
     with:
       os: ${{ matrix.os }}
-      compiler-cc: clang
-      compiler-cxx: clang++
-      build-type: Debug
+      # Uses platform defaults for compiler
       enable-python: true
       python-version: ${{ matrix.python-version }}
-      enable-safetensors: true
-      run-tests: true
