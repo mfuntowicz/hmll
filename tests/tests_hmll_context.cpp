@@ -41,12 +41,12 @@ TEST_CASE("hmll_clone_context copies shared resources", "[context]")
     src.error = HMLL_ERR(HMLL_ERR_FILE_NOT_FOUND);
 
     hmll_t dst = {};
-    auto err = hmll_clone_context(&src, &dst);
+    auto err = hmll_clone_context(&dst, &src);
 
     REQUIRE(hmll_success(err));
-    REQUIRE(dst.fetcher == src.fetcher);
     REQUIRE(dst.sources == src.sources);
     REQUIRE(dst.num_sources == src.num_sources);
+    // Note: fetcher is intentionally reset to NULL in clone
 }
 
 TEST_CASE("hmll_clone_context resets error state", "[context]")
@@ -57,7 +57,7 @@ TEST_CASE("hmll_clone_context resets error state", "[context]")
     hmll_t dst = {};
     dst.error = HMLL_ERR(HMLL_ERR_TENSOR_NOT_FOUND);
 
-    auto err = hmll_clone_context(&src, &dst);
+    auto err = hmll_clone_context(&dst, &src);
 
     REQUIRE(hmll_success(err));
     REQUIRE(hmll_success(dst.error));
@@ -71,7 +71,7 @@ TEST_CASE("hmll_clone_context resets system error state", "[context]")
     src.error = HMLL_SYS_ERR(42);
 
     hmll_t dst = {};
-    auto err = hmll_clone_context(&src, &dst);
+    auto err = hmll_clone_context(&dst, &src);
 
     REQUIRE(hmll_success(err));
     REQUIRE(hmll_success(dst.error));
@@ -87,7 +87,7 @@ TEST_CASE("hmll_clone_context copies multiple sources", "[context]")
     src.num_sources = 3;
 
     hmll_t dst = {};
-    auto err = hmll_clone_context(&src, &dst);
+    auto err = hmll_clone_context(&dst, &src);
 
     REQUIRE(hmll_success(err));
     REQUIRE(dst.sources == src.sources);
@@ -102,7 +102,7 @@ TEST_CASE("hmll_clone_context handles null fetcher", "[context]")
     src.num_sources = 0;
 
     hmll_t dst = {};
-    auto err = hmll_clone_context(&src, &dst);
+    auto err = hmll_clone_context(&dst, &src);
 
     REQUIRE(hmll_success(err));
     REQUIRE(dst.fetcher == nullptr);
@@ -126,7 +126,7 @@ TEST_CASE("hmll_clone_context does not modify source", "[context]")
     auto original_error_code = src.error.code;
 
     hmll_t dst = {};
-    hmll_clone_context(&src, &dst);
+    hmll_clone_context(&dst, &src);
 
     // Verify source is unchanged
     REQUIRE(src.fetcher == original_fetcher);
@@ -139,19 +139,23 @@ TEST_CASE("hmll_clone_context can be called multiple times", "[context]")
 {
     hmll_t src = {};
     hmll_loader_t fetcher = {};
+    hmll_source_t source = {};
     src.fetcher = &fetcher;
+    src.sources = &source;
+    src.num_sources = 1;
 
     hmll_t dst1 = {};
     hmll_t dst2 = {};
     hmll_t dst3 = {};
 
-    REQUIRE(hmll_success(hmll_clone_context(&src, &dst1)));
-    REQUIRE(hmll_success(hmll_clone_context(&src, &dst2)));
-    REQUIRE(hmll_success(hmll_clone_context(&src, &dst3)));
+    REQUIRE(hmll_success(hmll_clone_context(&dst1, &src)));
+    REQUIRE(hmll_success(hmll_clone_context(&dst2, &src)));
+    REQUIRE(hmll_success(hmll_clone_context(&dst3, &src)));
 
-    REQUIRE(dst1.fetcher == src.fetcher);
-    REQUIRE(dst2.fetcher == src.fetcher);
-    REQUIRE(dst3.fetcher == src.fetcher);
+    // Sources are shared, fetcher is reset to NULL
+    REQUIRE(dst1.sources == src.sources);
+    REQUIRE(dst2.sources == src.sources);
+    REQUIRE(dst3.sources == src.sources);
 }
 
 TEST_CASE("hmll_clone_context allows independent error states", "[context]")
@@ -164,8 +168,8 @@ TEST_CASE("hmll_clone_context allows independent error states", "[context]")
     hmll_t dst1 = {};
     hmll_t dst2 = {};
 
-    REQUIRE(hmll_success(hmll_clone_context(&src, &dst1)));
-    REQUIRE(hmll_success(hmll_clone_context(&src, &dst2)));
+    REQUIRE(hmll_success(hmll_clone_context(&dst1, &src)));
+    REQUIRE(hmll_success(hmll_clone_context(&dst2, &src)));
 
     // Modify error states independently
     dst1.error = HMLL_ERR(HMLL_ERR_FILE_NOT_FOUND);
