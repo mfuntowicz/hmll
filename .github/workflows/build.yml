@@ -105,6 +105,7 @@ jobs:
           pip install pytest numpy
 
       - name: Configure CMake
+        if: matrix.os != 'windows-latest'
         env:
           CC: ${{ inputs.compiler-cc }}
           CXX: ${{ inputs.compiler-cxx }}
@@ -117,6 +118,18 @@ jobs:
             -DHMLL_ENABLE_SAFETENSORS=${{ inputs.enable-safetensors && 'ON' || 'OFF' }} \
             ${{ inputs.enable-cuda && '-DHMLL_ENABLE_CUDA=ON' || '' }} \
             ${{ inputs.enable-python && '-DHMLL_ENABLE_PYTHON=ON' || '' }}
+
+      - name: Configure CMake MSVC
+        if: matrix.os == 'windows-latest'
+        run: |
+          winget install --id Kitware.CMake -e  
+          cmake -B "$env:GITHUB_WORKSPACE\build" `
+          -DCMAKE_BUILD_TYPE=Debug `
+          -DHMLL_BUILD_STATIC=OFF `
+          -DHMLL_BUILD_TESTS=ON `
+          -DHMLL_ENABLE_SANITIZERS=ON `
+          -DHMLL_ENABLE_SAFETENSORS=ON `
+          ${{ inputs.enable-cuda && '-DHMLL_ENABLE_CUDA=ON' || '' }}
 
       - name: Build C++ Library
         run: cmake --build ${{ github.workspace }}/build --config ${{ inputs.build-type }}

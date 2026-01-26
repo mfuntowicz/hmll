@@ -10,7 +10,11 @@ extern "C" {
 #ifndef HMLL_EXTERN
 #ifndef HMLL_STATIC
 #ifdef _WIN32
+#ifdef __HMLL_EXPORTS__
+#define HMLL_EXTERN __declspec(dllexport)
+#else
 #define HMLL_EXTERN __declspec(dllimport)
+#endif
 #elif defined(__GNUC__) && __GNUC__ >= 4
 #define HMLL_EXTERN __attribute__((visibility("default")))
 #else
@@ -30,18 +34,26 @@ extern "C" {
 #define HMLL_FALSE   0u
 #define HMLL_UNUSED(expr) (void)(expr)
 
+#if defined(_MSC_VER)
+#define __builtin_unreachable() __assume(0)
+#endif
+
 #include "loader.h"
 #include "memory.h"
 #include "types.h"
 
-#if defined(__unix)
-#include "unix/file.h"
+#if defined(__unix) || defined(__APPLE__)
 #endif
 
 #ifdef __linux
+#include "unix/file.h"
 #include "linux/loader.h"
-#elif __unix
+#elif __unix || defined(__APPLE__)
+#include "unix/file.h"
 #include "unix/loader.h"
+#elif _WIN32
+#include "win32/file.h"
+#include "win32/loader.h"
 #endif
 
 #define likely(x)      __builtin_expect(!!(x), 1)

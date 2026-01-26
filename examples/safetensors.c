@@ -1,7 +1,32 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
 #include <hmll/hmll.h>
+
+#ifdef _WIN32
+#include <windows.h>
+typedef LARGE_INTEGER timespec_t;
+
+static void tick(timespec_t *ts) {
+    QueryPerformanceCounter(ts);
+}
+
+static double time_diff_ns(const timespec_t *start, const timespec_t *end) {
+    LARGE_INTEGER frequency;
+    QueryPerformanceFrequency(&frequency);
+    return (double)(end->QuadPart - start->QuadPart) * 1e9 / frequency.QuadPart;
+}
+#else
+#include <time.h>
+typedef struct timespec timespec_t;
+
+static void tick(timespec_t *ts) {
+    clock_gettime(CLOCK_MONOTONIC, ts);
+}
+
+static double time_diff_ns(const timespec_t *start, const timespec_t *end) {
+    return (end->tv_sec - start->tv_sec) * 1e9 + (end->tv_nsec - start->tv_nsec);
+}
+#endif
 
 #if defined(__HMLL_CUDA_ENABLED__)
 #include <cuda_runtime.h>
@@ -37,14 +62,17 @@ int main(const int argc, const char** argv)
         const hmll_iobuf_t buffer = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
         if (hmll_success(ctx.error)) {
             // Start timing
-            struct timespec start, end;
-            clock_gettime(CLOCK_MONOTONIC, &start);
+            timespec_t start, end;
+            tick(&start);
 
-            const ssize_t res = hmll_fetch(&ctx, lookup.file, &buffer, range);
+            if (hmll_fetch(&ctx, lookup.file, &buffer, range) < range.end - range.start) {
+                fprintf(stderr, "Failed to fetch data: %s", hmll_strerr(ctx.error));
+                return 4;
+            }
 
             // End timing and calculate elapsed time
-            clock_gettime(CLOCK_MONOTONIC, &end);
-            const double elapsed_ns = (end.tv_sec - start.tv_sec) * 1e9 + (end.tv_nsec - start.tv_nsec);
+            tick(&end);
+            const double elapsed_ns = time_diff_ns(&start, &end);
             const double elapsed_ms = elapsed_ns / 1e6;
             const double elapsed_s = elapsed_ns / 1e9;
 
@@ -57,18 +85,18 @@ int main(const int argc, const char** argv)
                 printf("Tensor size: %.2f MB\n", size_mb);
                 printf("Throughput: %.2f MB/s\n", throughput_mbps);
 
-                __bf16 *bf16_ptr;
+                unsigned short *bf16_ptr;
                 if (ctx.fetcher->device == HMLL_DEVICE_CUDA) {
                     bf16_ptr = malloc(buffer.size);
-                    cudaMemcpy(bf16_ptr, buffer.ptr, hmll_numel(lookup.specs) * sizeof(__bf16), cudaMemcpyDeviceToHost);
+                    cudaMemcpy(bf16_ptr, buffer.ptr, hmll_numel(lookup.specs) * sizeof(short), cudaMemcpyDeviceToHost);
                 } else {
                     bf16_ptr = buffer.ptr;
                 }
 
-                float sum = 0;
+                unsigned long sum = 0;
                 for (size_t i = 0; i < hmll_numel(lookup.specs); ++i) sum += bf16_ptr[i];
 
-                printf("Sum: %f\n", sum);
+                printf("Sum: %lu\n", sum);
             } else {
                 printf("Got an error while reading the safetensors: %s\n", hmll_strerr(ctx.error));
             }

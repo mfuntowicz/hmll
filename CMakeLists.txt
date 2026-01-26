@@ -73,14 +73,21 @@ set(LIBHMLL_SOURCES
         lib/memory.c
 )
 
-if(WIN32)
-    message(
-        FATAL_ERROR
-        "Windows operating system is not supported yet. Open an issue at https://github.com/mfuntowicz/hmll/issues"
-    )
-endif()
 
-if(LINUX)
+if(WIN32)
+    list(APPEND LIBHMLL_HEADERS
+        include/hmll/win32/file.h
+        include/hmll/win32/loader.h
+        include/hmll/win32/backend/mmap.h
+    )
+
+    list(APPEND LIBHMLL_SOURCES
+        lib/win32/file.c
+        lib/win32/loader.c
+        lib/win32/memory.c
+        lib/win32/backend/mmap.c
+    )
+elseif(LINUX)
     list(APPEND LIBHMLL_HEADERS
         include/hmll/linux/loader.h
         include/hmll/linux/backend/iouring.h
@@ -106,6 +113,8 @@ elseif(UNIX)
         lib/unix/loader.c
         lib/unix/backend/mmap.c
     )
+else()
+    message(FATAL_ERROR "Unsupported platform")
 endif()
 
 if(${HMLL_ENABLE_SAFETENSORS})
@@ -132,9 +141,16 @@ target_include_directories(libhmll PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
 )
-target_compile_options(libhmll PRIVATE $<$<COMPILE_LANGUAGE:C>:-Wall -Werror -Wextra -Wpedantic -Wno-unused-function>)
-target_link_libraries(libhmll ${HMLL_LIBRARIES})
+target_compile_definitions(libhmll PUBLIC __HMLL_EXPORTS__=1)
 
+if (MSVC)
+    # warning level 4
+    target_compile_options(libhmll PRIVATE /W4)
+else()
+    target_compile_options(libhmll PRIVATE $<$<COMPILE_LANGUAGE:C>:-Wall -Werror -Wextra -Wpedantic -Wno-unused-function>)
+endif()
+
+target_link_libraries(libhmll ${HMLL_LIBRARIES})
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     target_compile_definitions(libhmll PUBLIC DEBUG=1)
 endif()

@@ -1,10 +1,28 @@
 //
 // Created by mfuntowicz on 12/1/25.
 //
+#include <fcntl.h>
+#include <stdio.h>
 #include "hmll/hmll.h"
 #include "hmll/types.h"
 #include <yyjson.h>
-#include <sys/mman.h>
+
+#ifdef _WIN32
+#include "hmll/win32/file.h"
+
+// strndup is not available on Windows
+static char* strndup(const char* s, size_t n) {
+    size_t len = strnlen(s, n);
+    char* result = malloc(len + 1);
+    if (result) {
+        memcpy(result, s, len);
+        result[len] = '\0';
+    }
+    return result;
+}
+#else
+#include "hmll/unix/file.h"
+#endif
 
 char *hmll_safetensors_path_create(const char *path, const char *file) {
     if (!path || !file)
@@ -24,7 +42,7 @@ char *hmll_safetensors_path_create(const char *path, const char *file) {
 
     if (dir_len > 0)
         memcpy(new_path, path, dir_len);
-    strcpy(new_path + dir_len, file);
+    strncpy(new_path + dir_len, file, dir_len + file_len + 1);
 
     return new_path;
 }
@@ -150,7 +168,24 @@ size_t hmll_safetensors_index(struct hmll *ctx, struct hmll_registry *reg, const
     if (hmll_check(ctx->error))
         goto cleanup;
 
-    char *content = mmap(NULL, source.size, PROT_READ, MAP_PRIVATE, source.fd, 0);
+    char *content = calloc(1, source.size);
+    if (!content) {
+        ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
+        goto cleanup;
+    }
+
+    FILE *file = hmll_get_file_from_fd(source);
+    if (!file) {
+        ctx->error = HMLL_ERR(HMLL_ERR_FILE_OPEN_FAILED);
+        goto cleanup;
+    }
+
+    if (fread(content, 1, source.size, file) != (size_t)source.size) {
+        ctx->error = HMLL_ERR(HMLL_ERR_FILE_READ_FAILED);
+        goto cleanup;
+    }
+
+    fclose(file);
 
     yyjson_read_err error;
     yyjson_doc *document = NULL;
@@ -221,8 +256,7 @@ cleanup:
     if (reg->names) { free(reg->names); reg->names = NULL; }
     if (reg->tensors) { free(reg->tensors); reg->tensors = NULL; }
 
-    free(document);
-    munmap(content, source.size);
+    if (document) free(document);
     num_files = 0;
 
 exit:
@@ -240,15 +274,31 @@ size_t hmll_safetensors_populate_registry(
     if (hmll_check(ctx->error))
         goto exit;
 
-    char* content = mmap(0, source.size, PROT_READ, MAP_PRIVATE, source.fd, 0);
+    yyjson_doc *document = NULL;
+    char *header = NULL;
+
+    FILE *file = hmll_get_file_from_fd(source);
+    if (!file) {
+        ctx->error = HMLL_ERR(HMLL_ERR_FILE_OPEN_FAILED);
+        goto freeup_and_exit;
+    }
 
     uint64_t hsize;
-    memcpy(&hsize, content, sizeof(uint64_t));
-    char *header = content + sizeof(uint64_t);
+    fread(&hsize, sizeof(uint64_t), 1, file);
+    header = calloc(hsize, sizeof(unsigned char));
+    if (!header) {
+        ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
+        goto freeup_and_exit;
+    }
+    
+    if (fread(header, sizeof(unsigned char), hsize, file) < hsize) {
+        ctx->error = HMLL_ERR(HMLL_ERR_FILE_READ_FAILED);
+        goto freeup_and_exit;
+    }
 
     // Parse JSON
     yyjson_read_err error;
-    yyjson_doc *document = yyjson_read_opts(header, hsize, YYJSON_READ_NOFLAG, NULL, &error);
+    document = yyjson_read_opts(header, hsize, YYJSON_READ_NOFLAG, NULL, &error);
     if (!document) {
         ctx->error = HMLL_ERR(HMLL_ERR_SAFETENSORS_JSON_INVALID_HEADER);
         goto freeup_and_exit;
@@ -315,8 +365,8 @@ size_t hmll_safetensors_populate_registry(
     }
 
 freeup_and_exit:
-    yyjson_doc_free(document);
-    munmap(content, source.size);
+    if (header) free(header);
+    if (document) yyjson_doc_free(document);
 
 exit:
     if (hmll_check(ctx->error)) return 0;
