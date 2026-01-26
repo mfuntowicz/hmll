@@ -24,11 +24,10 @@ impl Device {
     /// Convert from the underlying C enum value.
     #[allow(dead_code)]
     #[inline(always)]
-    pub(crate) const fn from_raw(device: hmll_device) -> Option<Self> {
+    pub(crate) const fn from_raw(device: hmll_device) -> Self {
         match device {
-            HMLL_DEVICE_CPU => Some(Device::Cpu),
-            HMLL_DEVICE_CUDA => Some(Device::Cuda),
-            _ => None,
+            HMLL_DEVICE_CPU => Device::Cpu,
+            HMLL_DEVICE_CUDA => Device::Cuda,
         }
     }
 }

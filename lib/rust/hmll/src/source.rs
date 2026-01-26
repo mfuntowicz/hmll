@@ -34,10 +34,7 @@ impl Source {
         let c_path = CString::new(path_str)
             .map_err(|_| Error::FileNotFound("Path contains null byte".to_string()))?;
 
-        let mut source = hmll_sys::hmll_source {
-            fd: -1,
-            size: 0,
-        };
+        let mut source = hmll_sys::hmll_source { fd: -1, size: 0 };
 
         unsafe {
             let err = hmll_sys::hmll_source_open(c_path.as_ptr(), &mut source);
@@ -109,6 +106,16 @@ unsafe impl Sync for Source {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    fn create_test_file(content: &[u8]) -> NamedTempFile {
+        let mut file = NamedTempFile::new().expect("Failed to create temp file");
+        file.write_all(content)
+            .expect("Failed to write test content");
+        file.flush().expect("Failed to flush");
+        file
+    }
 
     #[test]
     fn test_source_invalid_path() {
@@ -120,5 +127,17 @@ mod tests {
     fn test_source_null_byte() {
         let result = Source::open("file\0name.safetensors");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_source_open_and_size() {
+        let content = b"Hello, HMLL! This is test data for the integration test.";
+        let temp_file = create_test_file(content);
+
+        let source = Source::open(temp_file.path()).expect("Failed to open source");
+
+        assert_eq!(source.size(), content.len());
+        assert!(source.fd() >= 0);
+        assert!(source.path().is_some());
     }
 }

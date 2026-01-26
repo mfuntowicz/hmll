@@ -2,28 +2,41 @@
 // Created by mfuntowicz on 1/13/26.
 //
 
-#ifdef __unix__
-#include <linux/mman.h>
+#if defined(__unix__) || defined(__APPLE__)
 #include <sys/mman.h>
 #include "hmll/hmll.h"
+
+#ifdef __linux__
+#include <linux/mman.h>
+#endif
 
 #if defined(__HMLL_CUDA_ENABLED__)
 #include <cuda_runtime_api.h>
 #endif
 
+// macOS uses MAP_ANON instead of MAP_ANONYMOUS
+#if defined(__APPLE__)
+#define MAP_ANONYMOUS MAP_ANON
+#endif
+
+#define HMLL_MAP_DEFAULT (MAP_PRIVATE | MAP_ANONYMOUS)
 
 void *hmll_alloc(const size_t size, const enum hmll_device device, const int flags)
 {
-#define HMLL_MAP_DEFAULT (MAP_PRIVATE | MAP_ANONYMOUS)
-
     void *ptr = 0;
     if (device == HMLL_DEVICE_CPU) {
+#ifdef __linux__
         if ((ptr = mmap(0, size, PROT_READ | PROT_WRITE, HMLL_MAP_DEFAULT | MAP_HUGETLB | MAP_HUGE_2MB, -1, 0)) == MAP_FAILED) {
             if ((ptr = mmap(0, size, PROT_READ | PROT_WRITE, HMLL_MAP_DEFAULT, -1, 0)) != MAP_FAILED)
                 madvise(ptr, size, MADV_HUGEPAGE);
             else
                 ptr = 0;
         }
+#else
+        ptr = mmap(0, size, PROT_READ | PROT_WRITE, HMLL_MAP_DEFAULT, -1, 0);
+        if (ptr == MAP_FAILED)
+            ptr = 0;
+#endif
         return ptr;
     }
 

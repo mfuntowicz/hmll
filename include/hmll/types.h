@@ -8,7 +8,7 @@
 #define HMLL_MAX_TENSOR_RANK 5
 #endif
 
-#if defined(__unix)
+#if defined(__unix) || defined(__APPLE__)
 #include "unix/file.h"
 #endif
 

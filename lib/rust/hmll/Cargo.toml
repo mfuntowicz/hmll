@@ -2,20 +2,32 @@
 name = "hmll"
 version = "0.1.0"
 edition = "2021"
-authors = ["Morgan Funtowicz <morgan@huggingface.co>", "Luc Georges <luc@huggingface.co>"]
+authors = [
+  "Morgan Funtowicz <morgan@huggingface.co>",
+  "Luc Georges <luc@huggingface.co>",
+]
 description = "Safe, idiomatic Rust bindings to the hmll library for high-performance ML model loading"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/huggingface/hmll"
 homepage = "https://github.com/huggingface/hmll"
 documentation = "https://docs.rs/hmll"
 readme = "README.md"
-keywords = ["ml", "machine-learning", "huggingface", "model-loading", "safetensors"]
+keywords = [
+  "ml",
+  "machine-learning",
+  "huggingface",
+  "model-loading",
+  "safetensors",
+]
 categories = ["science", "api-bindings"]
 rust-version = "1.70"
 
 [dependencies]
 hmll-sys = { version = "0.1.0", path = "../hmll-sys", default-features = false }
 thiserror = "2.0"
+
+[dev-dependencies]
+tempfile = "3"
 
 [features]
 default = ["vendored", "io_uring"]
@@ -25,14 +37,15 @@ safetensors = ["hmll-sys/safetensors"]
 cuda = ["hmll-sys/cuda"]
 
 [profile.release]
-lto = "fat"          # Full LTO for maximum optimization across crates
-opt-level = 3        # Maximum optimization level
-codegen-units = 1    # Single codegen unit for better optimization
-strip = true         # Strip symbols for smaller binary size
-panic = "abort"      # Abort on panic for smaller code size
+lto = "fat"       # Full LTO for maximum optimization across crates
+opt-level = 3     # Maximum optimization level
+codegen-units = 1 # Single codegen unit for better optimization
+strip = true      # Strip symbols for smaller binary size
+panic = "abort"   # Abort on panic for smaller code size
 
 [profile.bench]
 inherits = "release"
 lto = "fat"
 opt-level = 3
 codegen-units = 1
+

@@ -23,7 +23,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Open the source file
     let source = Source::open(file_path)?;
     println!("✓ File opened successfully");
-    println!("  Size: {} bytes ({:.2} MB)", source.size(), source.size() as f64 / 1_048_576.0);
+    println!(
+        "  Size: {} bytes ({:.2} MB)",
+        source.size(),
+        source.size() as f64 / 1_048_576.0
+    );
 
     // Store in an array to ensure proper lifetime
     let sources = [source];
@@ -38,7 +42,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Fetch some data from the beginning of the file
     let fetch_size = end - start;
     let actual_fetch_size = fetch_size.min(sources[0].size());
-    println!("\nFetching {} bytes ({:.2} MB)...", actual_fetch_size, actual_fetch_size as f32 / 1_048_576.0);
+    println!(
+        "\nFetching {} bytes ({:.2} MB)...",
+        actual_fetch_size,
+        actual_fetch_size as f64 / 1_048_576.0
+    );
 
     let start_time = Instant::now();
     let buffer = loader.fetch(start..end, 0)?;

@@ -1,14 +1,14 @@
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
-    let include_path = if cfg!(feature = "vendored") {
-        build_vendored()
-    } else {
-        find_system_library()
-    };
+    #[cfg(feature = "vendored")]
+    let include_path = build_vendored();
+
+    #[cfg(not(feature = "vendored"))]
+    let include_path = find_system_library();
 
     generate_bindings(&include_path);
 }
@@ -50,10 +50,11 @@ fn build_vendored() -> PathBuf {
         .define("HMLL_ENABLE_PYTHON", "OFF")
         .build_target("libhmll");
 
-    #[cfg(feature = "io_uring")]
+    // io_uring is Linux-only
+    #[cfg(all(target_os = "linux", feature = "io_uring"))]
     cmake_config.define("HMLL_ENABLE_IO_URING", "ON");
 
-    #[cfg(not(feature = "io_uring"))]
+    #[cfg(not(all(target_os = "linux", feature = "io_uring")))]
     cmake_config.define("HMLL_ENABLE_IO_URING", "OFF");
 
     #[cfg(feature = "safetensors")]
@@ -103,11 +104,6 @@ fn build_vendored() -> PathBuf {
 }
 
 #[cfg(not(feature = "vendored"))]
-fn build_vendored() -> PathBuf {
-    unreachable!("vendored feature is not enabled")
-}
-
-#[cfg(not(feature = "vendored"))]
 fn find_system_library() -> PathBuf {
     // Try pkg-config first
     let library = pkg_config::Config::new()
@@ -146,11 +142,6 @@ fn find_system_library() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("/usr/include"))
 }
 
-#[cfg(feature = "vendored")]
-fn find_system_library() -> PathBuf {
-    unreachable!("vendored feature is enabled")
-}
-
 #[cfg(feature = "cuda")]
 fn link_cuda() {
     // Try to find CUDA installation
@@ -172,7 +163,7 @@ fn link_cuda() {
     println!("cargo:rustc-link-lib=dylib=cuda");
 }
 
-fn generate_bindings(include_path: &PathBuf) {
+fn generate_bindings(include_path: &Path) {
     let builder = bindgen::Builder::default()
         .header(include_path.join("hmll/hmll.h").to_str().unwrap())
         .clang_arg(format!("-I{}", include_path.display()))
@@ -184,11 +175,16 @@ fn generate_bindings(include_path: &PathBuf) {
         .derive_default(true)
         .derive_copy(true)
         .derive_eq(true)
+        .derive_hash(true)
         .no_partialeq("hmll_loader")
         .impl_debug(true)
         .prepend_enum_name(false)
         .size_t_is_usize(true)
-        .layout_tests(false);
+        .layout_tests(false)
+        .rustified_enum("hmll_status_code")
+        .rustified_enum("hmll_device")
+        .rustified_enum("hmll_loader_kind")
+        .rustified_enum("hmll_dtype");
 
     // Add conditional defines based on features
     #[cfg(feature = "safetensors")]

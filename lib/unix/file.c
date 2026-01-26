@@ -3,6 +3,9 @@
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#ifdef __APPLE__
+#include <fcntl.h>
+#endif
 #include "hmll/hmll.h"
 
 struct hmll_error hmll_source_open(const char *path, struct hmll_source *src)
@@ -14,6 +17,11 @@ struct hmll_error hmll_source_open(const char *path, struct hmll_source *src)
         error = HMLL_SYS_ERR(errno);
         goto exit;
     }
+
+#ifdef __APPLE__
+    // Disable file caching on macOS (similar to O_DIRECT on Linux)
+    fcntl(fd, F_NOCACHE, 1);
+#endif
 
     struct stat sb;
     if (fstat(fd, &sb) == -1) {

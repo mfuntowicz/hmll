@@ -72,8 +72,8 @@ pub enum Error {
     #[error("Unknown data type")]
     UnknownDType,
 
-    #[error("Unknown error code: {0}")]
-    Unknown(u32),
+    #[error("Unknown error code")]
+    Unknown,
 }
 
 impl Error {
@@ -90,9 +90,7 @@ impl Error {
                 if ptr.is_null() {
                     format!("System error code: {}", err.sys_err)
                 } else {
-                    CStr::from_ptr(ptr)
-                        .to_string_lossy()
-                        .into_owned()
+                    CStr::from_ptr(ptr).to_string_lossy().into_owned()
                 }
             };
             return Error::SystemError(msg);
@@ -121,7 +119,7 @@ impl Error {
             HMLL_ERR_CUDA_NOT_ENABLED => Error::CudaNotEnabled,
             HMLL_ERR_CUDA_NO_DEVICE => Error::CudaNoDevice,
             HMLL_ERR_UNKNOWN_DTYPE => Error::UnknownDType,
-            code => Error::Unknown(code),
+            _ => Error::Unknown,
         }
     }
 

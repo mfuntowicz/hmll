@@ -29,29 +29,22 @@
 //! # }
 //! ```
 
-mod error;
-mod source;
-mod loader;
-mod device;
 mod buffer;
+mod device;
+mod error;
+mod loader;
+mod source;
 
-pub use error::{Error, Result};
-pub use source::Source;
-pub use loader::{WeightLoader, LoaderKind};
-pub use device::Device;
 pub use buffer::{Buffer, Range};
+pub use device::Device;
+pub use error::{Error, Result};
+pub use loader::{LoaderKind, WeightLoader};
+pub use source::Source;
 
 // Re-export common types
-pub use hmll_sys::{
-    HMLL_ERR_SUCCESS,
-    HMLL_DEVICE_CPU,
-    HMLL_DEVICE_CUDA,
-};
+pub use hmll_sys::{HMLL_DEVICE_CPU, HMLL_DEVICE_CUDA, HMLL_ERR_SUCCESS};
 
 #[cfg(feature = "safetensors")]
 pub use hmll_sys::{
-    hmll_dtype as DType,
-    HMLL_DTYPE_FLOAT32,
-    HMLL_DTYPE_FLOAT16,
-    HMLL_DTYPE_BFLOAT16,
+    hmll_dtype as DType, HMLL_DTYPE_BFLOAT16, HMLL_DTYPE_FLOAT16, HMLL_DTYPE_FLOAT32,
 };

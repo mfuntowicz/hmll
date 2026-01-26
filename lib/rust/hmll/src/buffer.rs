@@ -102,7 +102,12 @@ impl Buffer {
     ///
     /// The caller must ensure that `ptr` points to valid memory of at least `size` bytes.
     #[inline(always)]
-    pub(crate) unsafe fn from_raw_parts(ptr: *mut u8, size: usize, device: Device, owned: bool) -> Self {
+    pub(crate) unsafe fn from_raw_parts(
+        ptr: *mut u8,
+        size: usize,
+        device: Device,
+        owned: bool,
+    ) -> Self {
         Self {
             ptr,
             size,
@@ -167,7 +172,11 @@ unsafe impl Sync for Buffer {}
 impl Drop for Buffer {
     fn drop(&mut self) {
         if !self.ptr.is_null() {
-            let mut buf = hmll_iobuf { size: self.size, ptr: self.ptr.cast::<c_void>(), device: self.device.to_raw() };
+            let mut buf = hmll_iobuf {
+                size: self.size,
+                ptr: self.ptr.cast::<c_void>(),
+                device: self.device.to_raw(),
+            };
             unsafe { hmll_free_buffer(&mut buf as *mut hmll_iobuf) };
             self.ptr = std::ptr::null_mut();
             self.size = 0;
