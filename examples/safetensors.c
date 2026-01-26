@@ -10,7 +10,7 @@ static void tick(timespec_t *ts) {
     QueryPerformanceCounter(ts);
 }
 
-static double time_diff_ns(timespec_t *start, timespec_t *end) {
+static double time_diff_ns(const timespec_t *start, const timespec_t *end) {
     LARGE_INTEGER frequency;
     QueryPerformanceFrequency(&frequency);
     return (double)(end->QuadPart - start->QuadPart) * 1e9 / frequency.QuadPart;
@@ -19,11 +19,11 @@ static double time_diff_ns(timespec_t *start, timespec_t *end) {
 #include <time.h>
 typedef struct timespec timespec_t;
 
-static void get_time(timespec_t *ts) {
+static void tick(timespec_t *ts) {
     clock_gettime(CLOCK_MONOTONIC, ts);
 }
 
-static double time_diff_ns(timespec_t *start, timespec_t *end) {
+static double time_diff_ns(const timespec_t *start, const timespec_t *end) {
     return (end->tv_sec - start->tv_sec) * 1e9 + (end->tv_nsec - start->tv_nsec);
 }
 #endif
