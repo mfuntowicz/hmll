@@ -34,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ macos-13, macos-14 ]  # macos-13 is x86_64, macos-14 is arm64
+        os: [ macos-14, macos-15, macos-26 ]
         static: [ false, true ]
     uses: ./.github/workflows/build.yml
     with:
@@ -89,7 +89,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ macos-13, macos-14 ]  # macos-13 is x86_64, macos-14 is arm64
+        os: [ macos-14, macos-15, macos-26 ]
         rust-toolchain: [ stable, nightly ]
     uses: ./.github/workflows/build.yml
     with:
@@ -125,7 +125,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ macos-13, macos-14 ]  # macos-13 is x86_64, macos-14 is arm64
+        os: [ macos-14, macos-15, macos-26 ]
         python-version: [ '3.11', '3.12', '3.13' ]
     uses: ./.github/workflows/build.yml
     with:
