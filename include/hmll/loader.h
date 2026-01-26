@@ -5,7 +5,7 @@
 
 #if defined(__linux)
 #include "hmll/linux/loader.h"
-#elif defined(__unix)
+#elif defined(__unix) || defined(__APPLE__)
 #include "hmll/unix/loader.h"
 #elif defined(_WIN32)
 #include "hmll/win32/loader.h"
