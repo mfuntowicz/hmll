@@ -1,15 +1,28 @@
 //
 // Created by mfuntowicz on 12/11/25.
 //
+#include <stdbool.h>
 #include <string.h>
 
 #include "hmll/hmll.h"
 #include "hmll/types.h"
 
+#if defined(_WIN32)
+// Thread-local buffer for strerror on Windows
+static __declspec(thread) char strerror_buf[256];
+#endif
+
 const char *hmll_strerr(const struct hmll_error err)
 {
-    if (hmll_error_is_os_error(err))
+    if (hmll_error_is_os_error(err)) {
+#if defined(_WIN32)
+        if (strerror_s(strerror_buf, sizeof(strerror_buf), err.sys_err) == 0)
+            return strerror_buf;
+        return "Unknown system error";
+#else
         return strerror(err.sys_err);
+#endif
+    }
 
     if (hmll_error_is_lib_error(err))
     {
@@ -28,12 +41,12 @@ const char *hmll_strerr(const struct hmll_error err)
     return "No error";
 }
 
-unsigned char hmll_error_is_os_error(const struct hmll_error err)
+bool hmll_error_is_os_error(const struct hmll_error err)
 {
     return err.sys_err != HMLL_ERR_SUCCESS;
 }
 
-unsigned char hmll_error_is_lib_error(const struct hmll_error err)
+bool hmll_error_is_lib_error(const struct hmll_error err)
 {
     return err.code != HMLL_ERR_SUCCESS && err.code != HMLL_ERR_SYSTEM;
 }

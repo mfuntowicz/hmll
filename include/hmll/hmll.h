@@ -4,6 +4,7 @@
 #define NO_EXCEPT noexcept
 extern "C" {
 #else
+#include <stdbool.h>
 #define NO_EXCEPT
 #endif
 
@@ -65,18 +66,18 @@ extern "C" {
 #define HMLL_ERR(c) HMLL_RES(.code = (c), .sys_err = 0)
 #define HMLL_SYS_ERR(e) HMLL_RES(.code = HMLL_ERR_SYSTEM, .sys_err = (e))
 
-static inline unsigned char hmll_check(const struct hmll_error res) NO_EXCEPT
+static inline bool hmll_check(const struct hmll_error res) NO_EXCEPT
 {
     return res.code != HMLL_ERR_SUCCESS || res.sys_err != HMLL_ERR_SUCCESS;
 }
 
-static inline unsigned char hmll_success(const struct hmll_error error) NO_EXCEPT
+static inline bool hmll_success(const struct hmll_error error) NO_EXCEPT
 {
     return (int)error.code == HMLL_ERR_SUCCESS && error.sys_err == HMLL_ERR_SUCCESS;
 }
 
-HMLL_EXTERN unsigned char hmll_error_is_os_error(struct hmll_error err) NO_EXCEPT;
-HMLL_EXTERN unsigned char hmll_error_is_lib_error(struct hmll_error err) NO_EXCEPT;
+HMLL_EXTERN bool hmll_error_is_os_error(struct hmll_error err) NO_EXCEPT;
+HMLL_EXTERN bool hmll_error_is_lib_error(struct hmll_error err) NO_EXCEPT;
 HMLL_EXTERN const char *hmll_strerr(struct hmll_error err) NO_EXCEPT;
 HMLL_EXTERN void hmll_destroy(struct hmll *ctx) NO_EXCEPT;
 
@@ -104,7 +105,7 @@ HMLL_EXTERN ssize_t hmll_fetchv(struct hmll *ctx, int iofile, const struct hmll_
 #ifdef __HMLL_TENSORS_ENABLED__
 HMLL_EXTERN uint8_t hmll_nbits(enum hmll_dtype dtype) NO_EXCEPT;
 HMLL_EXTERN size_t hmll_numel(const struct hmll_tensor_specs *specs) NO_EXCEPT;
-HMLL_EXTERN unsigned char hmll_contains(const struct hmll *ctx, const struct hmll_registry *reg, const char *name) NO_EXCEPT;
+HMLL_EXTERN bool hmll_contains(const struct hmll *ctx, const struct hmll_registry *reg, const char *name) NO_EXCEPT;
 HMLL_EXTERN int hmll_find_by_name(const struct hmll *ctx, const struct hmll_registry *reg, const char *name) NO_EXCEPT;
 HMLL_EXTERN struct hmll_lookup_result hmll_lookup_tensor(const struct hmll *ctx, const struct hmll_registry *registry, const char *name) NO_EXCEPT;
 HMLL_EXTERN ssize_t hmll_fetch_tensor(struct hmll *ctx, const struct hmll_registry *registry, struct hmll_iobuf *dst, const char *name) NO_EXCEPT;

@@ -344,7 +344,7 @@ size_t hmll_safetensors_populate_registry(
 
         // Skip __metadata__ if the flag is set
         if (is_metadata != HMLL_FALSE) continue;
-        if (indexes != NULL) indexes[offset + tidx] = fid; // can be NULL if not chunked safetensors
+        if (indexes != NULL) indexes[offset + tidx] = (unsigned short)fid; // can be NULL if not chunked safetensors
 
         const size_t name_len = yyjson_get_len(key);
         names[offset + tidx] = strndup(keyval, name_len);

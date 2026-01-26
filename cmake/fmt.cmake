@@ -4,4 +4,14 @@ fetchcontent_declare(fmt
 )
 
 fetchcontent_makeavailable(fmt)
+
+# Suppress warnings from fmt (third-party dependency)
+if(TARGET fmt)
+    if(MSVC)
+        target_compile_options(fmt PRIVATE /w)
+    else()
+        target_compile_options(fmt PRIVATE -w)
+    endif()
+endif()
+
 message(STATUS "Enabling fmt")
