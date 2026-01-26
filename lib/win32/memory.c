@@ -14,6 +14,9 @@
 void *hmll_alloc(const size_t size, const enum hmll_device device, const int flags)
 {
     void *ptr = 0;
+#if !defined(__HMLL_CUDA_ENABLED__)
+    HMLL_UNUSED(flags);
+#endif
     if (device == HMLL_DEVICE_CPU) {
         // Use VirtualAlloc with MEM_COMMIT | MEM_RESERVE for Windows
         ptr = VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
@@ -56,6 +59,9 @@ void hmll_free_buffer(struct hmll_iobuf *buffer)
 struct hmll_iobuf hmll_get_buffer(struct hmll *ctx, const enum hmll_device device, const size_t size, const int flags)
 {
     void* ptr = NULL;
+#if !defined(__HMLL_CUDA_ENABLED__)
+    HMLL_UNUSED(flags);
+#endif
 
     switch (device)
     {
