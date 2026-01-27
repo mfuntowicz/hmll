@@ -13,7 +13,7 @@ pub struct Registry {
 }
 
 impl Registry {
-    /// Parse a safetensors file and return a registry of tensor metadata.
+    /// Parse a single safetensors file and return a registry of tensor metadata.
     ///
     /// # Example
     ///
@@ -24,7 +24,7 @@ impl Registry {
     /// let registry = Registry::from_safetensors(&source)?;
     ///
     /// for tensor in registry.iter() {
-    ///     println!("{}: {:?}", tensor.name, tensor.dtype);
+    ///     println!("{}: {}", tensor.name, tensor.dtype);
     /// }
     /// # Ok::<(), hmll::Error>(())
     /// ```
@@ -42,8 +42,71 @@ impl Registry {
             );
         }
 
-        // Check for errors
         Error::check_hmll_error(ctx.error)?;
+
+        if inner.num_tensors == 0 {
+            return Err(Error::TableEmpty);
+        }
+
+        Ok(Self { inner })
+    }
+
+    /// Parse sharded safetensors from an index file and shard sources.
+    ///
+    /// # Arguments
+    ///
+    /// * `index` - The `model.safetensors.index.json` file
+    /// * `shards` - The shard files in order (e.g., `model-00001-of-00002.safetensors`, ...)
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use hmll::{Source, Registry};
+    ///
+    /// let index = Source::open("model.safetensors.index.json")?;
+    /// let shard1 = Source::open("model-00001-of-00002.safetensors")?;
+    /// let shard2 = Source::open("model-00002-of-00002.safetensors")?;
+    ///
+    /// let registry = Registry::from_sharded_safetensors(&index, &[&shard1, &shard2])?;
+    /// # Ok::<(), hmll::Error>(())
+    /// ```
+    pub fn from_sharded_safetensors(index: &Source, shards: &[&Source]) -> Result<Self> {
+        let mut ctx: hmll_sys::hmll = unsafe { std::mem::zeroed() };
+        let mut inner: hmll_sys::hmll_registry = unsafe { std::mem::zeroed() };
+
+        // Parse the index file to get total tensor count and allocate registry
+        let num_files = unsafe {
+            hmll_sys::hmll_safetensors_index(&mut ctx, &mut inner, *index.as_raw())
+        };
+
+        Error::check_hmll_error(ctx.error)?;
+
+        if num_files == 0 {
+            return Err(Error::TableEmpty);
+        }
+
+        if shards.len() != num_files {
+            // Clean up allocated registry before returning error
+            unsafe { hmll_sys::hmll_free_registry(&mut inner) };
+            return Err(Error::InvalidRange);
+        }
+
+        // Populate registry from each shard
+        let mut offset = 0;
+        for (fid, shard) in shards.iter().enumerate() {
+            let count = unsafe {
+                hmll_sys::hmll_safetensors_populate_registry(
+                    &mut ctx,
+                    &mut inner,
+                    *shard.as_raw(),
+                    fid,
+                    offset,
+                )
+            };
+
+            Error::check_hmll_error(ctx.error)?;
+            offset += count;
+        }
 
         if inner.num_tensors == 0 {
             return Err(Error::TableEmpty);
@@ -81,12 +144,20 @@ impl Registry {
                 CStr::from_ptr(name_ptr).to_str().unwrap_or("")
             };
 
+            // Get source index if available (for sharded models)
+            let source_index = if self.inner.indexes.is_null() {
+                0
+            } else {
+                *self.inner.indexes.add(index) as usize
+            };
+
             Some(TensorInfo {
                 name,
                 dtype: DType::from_raw(specs.dtype),
                 shape: &specs.shape[..specs.rank as usize],
                 start: specs.start,
                 end: specs.end,
+                source_index,
             })
         }
     }
@@ -118,6 +189,8 @@ pub struct TensorInfo<'a> {
     pub start: usize,
     /// End offset in the file (after header).
     pub end: usize,
+    /// Index of the source file this tensor belongs to (for sharded models).
+    pub source_index: usize,
 }
 
 impl TensorInfo<'_> {

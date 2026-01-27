@@ -502,8 +502,6 @@ fn test_roundtrip_tensor_data() {
 
 #[test]
 fn test_sharded_safetensors() {
-    use std::ffi::CStr;
-
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
 
     // Create shard 1
@@ -561,75 +559,38 @@ fn test_sharded_safetensors() {
     });
     std::fs::write(&index_path, index_content.to_string()).unwrap();
 
-    // Open the index file
-    let index_source = Source::open(&index_path).expect("Failed to open index");
+    // Open all source files
+    let index = Source::open(&index_path).expect("Failed to open index");
+    let shard1 = Source::open(&shard1_path).expect("Failed to open shard 1");
+    let shard2 = Source::open(&shard2_path).expect("Failed to open shard 2");
 
-    // Parse using low-level FFI
-    unsafe {
-        let mut ctx: hmll_sys::hmll = std::mem::zeroed();
-        let mut registry: hmll_sys::hmll_registry = std::mem::zeroed();
+    // Parse using high-level API
+    let registry =
+        Registry::from_sharded_safetensors(&index, &[&shard1, &shard2]).expect("Failed to parse");
 
-        // Parse the index file
-        let num_files =
-            hmll_sys::hmll_safetensors_index(&mut ctx, &mut registry, *index_source.as_raw());
+    assert_eq!(registry.len(), 4, "Should have 4 tensors total");
 
-        assert_eq!(num_files, 2, "Should have 2 shard files");
-        assert_eq!(registry.num_tensors, 4, "Should have 4 tensors total");
+    // Verify all tensors are accessible
+    let names: Vec<_> = registry.iter().map(|t| t.name.to_string()).collect();
 
-        // Open and populate from shard files
-        let shard1_source = Source::open(&shard1_path).expect("Failed to open shard 1");
-        let shard2_source = Source::open(&shard2_path).expect("Failed to open shard 2");
+    assert_eq!(names.len(), 4);
+    assert!(names.contains(&"layer1.weight".to_string()));
+    assert!(names.contains(&"layer1.bias".to_string()));
+    assert!(names.contains(&"layer2.weight".to_string()));
+    assert!(names.contains(&"layer2.bias".to_string()));
 
-        let count1 = hmll_sys::hmll_safetensors_populate_registry(
-            &mut ctx,
-            &mut registry,
-            *shard1_source.as_raw(),
-            0,
-            0,
-        );
-        assert_eq!(count1, 2, "Shard 1 should have 2 tensors");
-
-        let count2 = hmll_sys::hmll_safetensors_populate_registry(
-            &mut ctx,
-            &mut registry,
-            *shard2_source.as_raw(),
-            1,
-            count1,
-        );
-        assert_eq!(count2, 2, "Shard 2 should have 2 tensors");
-
-        // Verify all tensors are accessible
-        let mut names = Vec::new();
-        for i in 0..registry.num_tensors {
-            let name_ptr = *registry.names.add(i);
-            if !name_ptr.is_null() {
-                let name = CStr::from_ptr(name_ptr).to_str().unwrap();
-                names.push(name.to_string());
-            }
-        }
-
-        assert_eq!(names.len(), 4);
-        assert!(names.contains(&"layer1.weight".to_string()));
-        assert!(names.contains(&"layer1.bias".to_string()));
-        assert!(names.contains(&"layer2.weight".to_string()));
-        assert!(names.contains(&"layer2.bias".to_string()));
-
-        // Verify file indexes
-        for i in 0..2 {
+    // Verify source indexes
+    for tensor in registry.iter() {
+        if tensor.name.starts_with("layer1") {
             assert_eq!(
-                *registry.indexes.add(i),
-                0,
-                "First two tensors should be from file 0"
+                tensor.source_index, 0,
+                "layer1 tensors should be from file 0"
+            );
+        } else {
+            assert_eq!(
+                tensor.source_index, 1,
+                "layer2 tensors should be from file 1"
             );
         }
-        for i in 2..4 {
-            assert_eq!(
-                *registry.indexes.add(i),
-                1,
-                "Last two tensors should be from file 1"
-            );
-        }
-
-        hmll_sys::hmll_free_registry(&mut registry);
     }
 }
