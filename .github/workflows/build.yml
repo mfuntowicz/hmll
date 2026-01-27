@@ -62,7 +62,7 @@ jobs:
       CXX: ${{ inputs.compiler-cxx || (contains(inputs.os, 'macos') && 'clang++' || (contains(inputs.os, 'ubuntu') && 'g++' || '')) }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup CUDA
         if: inputs.enable-cuda

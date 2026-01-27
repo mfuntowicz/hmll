@@ -23,9 +23,9 @@
 
 void *hmll_alloc(const size_t size, const enum hmll_device device, const int flags)
 {
-    HMLL_UNUSED(flags);
     void *ptr = 0;
     if (device == HMLL_DEVICE_CPU) {
+        HMLL_UNUSED(flags);
         // Try huge pages first, fall back to regular mmap
         if ((ptr = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | HMLL_MAP_ANONYMOUS | HMLL_MAP_HUGETLB, -1, 0)) == MAP_FAILED) {
             if ((ptr = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | HMLL_MAP_ANONYMOUS, -1, 0)) != MAP_FAILED) {
