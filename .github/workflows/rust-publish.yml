@@ -87,7 +87,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libclang-dev
 
       - name: Publish hmll-sys
-        run: cargo publish --manifest-path lib/rust/hmll-sys/Cargo.toml
+        run: cargo publish --manifest-path lib/rust/hmll-sys/Cargo.toml --features safetensors
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
@@ -95,7 +95,7 @@ jobs:
         run: sleep 30
 
       - name: Publish hmll
-        run: cargo publish --manifest-path lib/rust/hmll/Cargo.toml
+        run: cargo publish --manifest-path lib/rust/hmll/Cargo.toml --features safetensors
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
@@ -113,8 +113,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libclang-dev
 
       - name: Dry run publish hmll-sys
-        run: cargo publish --manifest-path lib/rust/hmll-sys/Cargo.toml --dry-run
+        run: cargo publish --manifest-path lib/rust/hmll-sys/Cargo.toml --dry-run --features safetensors
 
       - name: Dry run publish hmll
-        run: cargo publish --manifest-path lib/rust/hmll/Cargo.toml --dry-run
+        run: cargo publish --manifest-path lib/rust/hmll/Cargo.toml --dry-run --features safetensors
 
