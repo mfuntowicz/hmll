@@ -72,9 +72,7 @@ fn write_safetensors_to<W: Write>(writer: &mut W, tensors: &[TensorDef], metadat
     writer
         .write_all(header_bytes)
         .expect("Failed to write header");
-    writer
-        .write_all(&all_data)
-        .expect("Failed to write data");
+    writer.write_all(&all_data).expect("Failed to write data");
     writer.flush().expect("Failed to flush");
 }
 

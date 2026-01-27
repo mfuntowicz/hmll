@@ -12,11 +12,11 @@
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 // Re-export enum variants at module level for convenience
-pub use hmll_status_code::*;
 pub use hmll_device::*;
-pub use hmll_loader_kind::*;
 #[cfg(feature = "safetensors")]
 pub use hmll_dtype::*;
+pub use hmll_loader_kind::*;
+pub use hmll_status_code::*;
 
 // Optimized helper functions for zero-cost error checking
 
