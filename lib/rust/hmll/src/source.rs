@@ -67,8 +67,10 @@ impl Source {
     }
 
     /// Get a reference to the underlying hmll_source.
+    ///
+    /// This is useful for advanced use cases that require direct FFI access.
     #[inline(always)]
-    pub(crate) const fn as_raw(&self) -> &hmll_sys::hmll_source {
+    pub const fn as_raw(&self) -> &hmll_sys::hmll_source {
         &self.inner
     }
 
