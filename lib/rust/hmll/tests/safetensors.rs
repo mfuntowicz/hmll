@@ -96,11 +96,11 @@ fn test_registry_iteration() {
 
 #[test]
 fn test_dtype_display() {
-    assert_eq!(format!("{}", DType::Float32), "f32");
-    assert_eq!(format!("{}", DType::BFloat16), "bf16");
-    assert_eq!(format!("{}", DType::Float16), "f16");
-    assert_eq!(format!("{}", DType::Int8), "i8");
-    assert_eq!(format!("{}", DType::UInt8), "u8");
+    assert_eq!(format!("{}", DType::Float32), "F32");
+    assert_eq!(format!("{}", DType::BFloat16), "BF16");
+    assert_eq!(format!("{}", DType::Float16), "F16");
+    assert_eq!(format!("{}", DType::Int8), "I8");
+    assert_eq!(format!("{}", DType::UInt8), "U8");
 }
 
 #[test]

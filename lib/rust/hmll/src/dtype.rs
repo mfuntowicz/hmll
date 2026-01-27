@@ -172,29 +172,29 @@ impl DType {
 
 impl std::fmt::Display for DType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DType::Bool => write!(f, "bool"),
-            DType::BFloat16 => write!(f, "bf16"),
-            DType::Complex64 => write!(f, "c64"),
-            DType::Float4 => write!(f, "f4"),
-            DType::Float6E2M3 => write!(f, "f6e2m3"),
-            DType::Float6E3M2 => write!(f, "f6e3m2"),
-            DType::Float8E4M3 => write!(f, "f8e4m3"),
-            DType::Float8E5M2 => write!(f, "f8e5m2"),
-            DType::Float8E8M0 => write!(f, "f8e8m0"),
-            DType::Float16 => write!(f, "f16"),
-            DType::Float32 => write!(f, "f32"),
-            DType::Int4 => write!(f, "i4"),
-            DType::Int8 => write!(f, "i8"),
-            DType::Int16 => write!(f, "i16"),
-            DType::Int32 => write!(f, "i32"),
-            DType::Int64 => write!(f, "i64"),
-            DType::UInt4 => write!(f, "u4"),
-            DType::UInt8 => write!(f, "u8"),
-            DType::UInt16 => write!(f, "u16"),
-            DType::UInt32 => write!(f, "u32"),
-            DType::UInt64 => write!(f, "u64"),
-            DType::Unknown => write!(f, "unknown"),
-        }
+        f.write_str(match self {
+            DType::Bool => "BOOL",
+            DType::BFloat16 => "BF16",
+            DType::Complex64 => "C64",
+            DType::Float4 => "F4",
+            DType::Float6E2M3 => "F6_E2M3",
+            DType::Float6E3M2 => "F6_E3M2",
+            DType::Float8E4M3 => "F8_E4M3",
+            DType::Float8E5M2 => "F8_E5M2",
+            DType::Float8E8M0 => "F8_E8M0",
+            DType::Float16 => "F16",
+            DType::Float32 => "F32",
+            DType::Int4 => "I4",
+            DType::Int8 => "I8",
+            DType::Int16 => "I16",
+            DType::Int32 => "I32",
+            DType::Int64 => "I64",
+            DType::UInt4 => "U4",
+            DType::UInt8 => "U8",
+            DType::UInt16 => "U16",
+            DType::UInt32 => "U32",
+            DType::UInt64 => "U64",
+            DType::Unknown => "UNKNOWN",
+        })
     }
 }
