@@ -1,6 +1,6 @@
 [package]
 name = "hmll-sys"
-version = "0.1.0"
+version = "0.1.0-rc.1"
 edition = "2021"
 authors = ["Morgan Funtowicz <morgan@huggingface.co>", "Luc Georges <luc@huggingface.co>"]
 description = "Low-level FFI bindings to the hmll library for high-performance ML model loading"
