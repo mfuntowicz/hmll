@@ -53,35 +53,6 @@ pub enum DType {
 }
 
 impl DType {
-    /// Convert to the underlying C enum value.
-    #[inline(always)]
-    pub(crate) const fn to_raw(self) -> hmll_dtype {
-        match self {
-            DType::Bool => hmll_dtype::HMLL_DTYPE_BOOL,
-            DType::BFloat16 => hmll_dtype::HMLL_DTYPE_BFLOAT16,
-            DType::Complex64 => hmll_dtype::HMLL_DTYPE_COMPLEX,
-            DType::Float4 => hmll_dtype::HMLL_DTYPE_FLOAT4,
-            DType::Float6E2M3 => hmll_dtype::HMLL_DTYPE_FLOAT6_E2M3,
-            DType::Float6E3M2 => hmll_dtype::HMLL_DTYPE_FLOAT6_E3M2,
-            DType::Float8E4M3 => hmll_dtype::HMLL_DTYPE_FLOAT8_E4M3,
-            DType::Float8E5M2 => hmll_dtype::HMLL_DTYPE_FLOAT8_E5M2,
-            DType::Float8E8M0 => hmll_dtype::HMLL_DTYPE_FLOAT8_E8M0,
-            DType::Float16 => hmll_dtype::HMLL_DTYPE_FLOAT16,
-            DType::Float32 => hmll_dtype::HMLL_DTYPE_FLOAT32,
-            DType::Int4 => hmll_dtype::HMLL_DTYPE_SIGNED_INT4,
-            DType::Int8 => hmll_dtype::HMLL_DTYPE_SIGNED_INT8,
-            DType::Int16 => hmll_dtype::HMLL_DTYPE_SIGNED_INT16,
-            DType::Int32 => hmll_dtype::HMLL_DTYPE_SIGNED_INT32,
-            DType::Int64 => hmll_dtype::HMLL_DTYPE_SIGNED_INT64,
-            DType::UInt4 => hmll_dtype::HMLL_DTYPE_UNSIGNED_INT4,
-            DType::UInt8 => hmll_dtype::HMLL_DTYPE_UNSIGNED_INT8,
-            DType::UInt16 => hmll_dtype::HMLL_DTYPE_UNSIGNED_INT16,
-            DType::UInt32 => hmll_dtype::HMLL_DTYPE_UNSIGNED_INT32,
-            DType::UInt64 => hmll_dtype::HMLL_DTYPE_UNSIGNED_INT64,
-            DType::Unknown => hmll_dtype::HMLL_DTYPE_UNKNOWN,
-        }
-    }
-
     /// Convert from the underlying C enum value.
     #[inline(always)]
     pub const fn from_raw(dtype: hmll_dtype) -> Self {
