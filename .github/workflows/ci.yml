@@ -62,5 +62,4 @@ jobs:
     with:
       os: ${{ matrix.os }}
       enable-cuda: true
-      cuda-version: '13.0.0'
       run-tests: false
