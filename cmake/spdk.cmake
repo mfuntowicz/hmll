@@ -35,7 +35,17 @@ if(NOT spdk_POPULATED)
 
     # Build DPDK with meson - minimal build, no network drivers needed for SPDK NVMe
     add_custom_command(
-            OUTPUT "${spdk_SOURCE_DIR}/dpdk/install/lib64/librte_eal.a"
+            OUTPUT
+                "${spdk_SOURCE_DIR}/dpdk/install/lib64/librte_eal.a"
+                "${spdk_SOURCE_DIR}/dpdk/install/lib64/librte_log.a"
+                "${spdk_SOURCE_DIR}/dpdk/install/lib64/librte_mempool.a"
+                "${spdk_SOURCE_DIR}/dpdk/install/lib64/librte_mempool_ring.a"
+                "${spdk_SOURCE_DIR}/dpdk/install/lib64/librte_ring.a"
+                "${spdk_SOURCE_DIR}/dpdk/install/lib64/librte_mbuf.a"
+                "${spdk_SOURCE_DIR}/dpdk/install/lib64/librte_bus_pci.a"
+                "${spdk_SOURCE_DIR}/dpdk/install/lib64/librte_pci.a"
+                "${spdk_SOURCE_DIR}/dpdk/install/lib64/librte_kvargs.a"
+                "${spdk_SOURCE_DIR}/dpdk/install/lib64/librte_telemetry.a"
             COMMAND meson setup --prefix=${spdk_SOURCE_DIR}/dpdk/install
                     -Dplatform=native
                     -Denable_kmods=false
@@ -79,7 +89,20 @@ if(NOT spdk_POPULATED)
 
     # Build SPDK
     add_custom_command(
-            OUTPUT "${spdk_SOURCE_DIR}/build/lib/libspdk_nvme.a"
+            OUTPUT
+                "${spdk_SOURCE_DIR}/build/lib/libspdk_nvme.a"
+                "${spdk_SOURCE_DIR}/build/lib/libspdk_env_dpdk.a"
+                "${spdk_SOURCE_DIR}/build/lib/libspdk_util.a"
+                "${spdk_SOURCE_DIR}/build/lib/libspdk_log.a"
+                "${spdk_SOURCE_DIR}/build/lib/libspdk_sock.a"
+                "${spdk_SOURCE_DIR}/build/lib/libspdk_sock_posix.a"
+                "${spdk_SOURCE_DIR}/build/lib/libspdk_trace.a"
+                "${spdk_SOURCE_DIR}/build/lib/libspdk_dma.a"
+                "${spdk_SOURCE_DIR}/build/lib/libspdk_keyring.a"
+                "${spdk_SOURCE_DIR}/build/lib/libspdk_json.a"
+                "${spdk_SOURCE_DIR}/build/lib/libspdk_jsonrpc.a"
+                "${spdk_SOURCE_DIR}/build/lib/libspdk_rpc.a"
+                "${spdk_SOURCE_DIR}/build/lib/libspdk_thread.a"
             COMMAND make -j${NPROC}
             WORKING_DIRECTORY ${spdk_SOURCE_DIR}
             DEPENDS "${spdk_SOURCE_DIR}/mk/config.mk"
@@ -88,7 +111,20 @@ if(NOT spdk_POPULATED)
     )
 
     add_custom_target(build_spdk_target
-            DEPENDS "${spdk_SOURCE_DIR}/build/lib/libspdk_nvme.a"
+            DEPENDS
+                "${spdk_SOURCE_DIR}/build/lib/libspdk_nvme.a"
+                "${spdk_SOURCE_DIR}/build/lib/libspdk_env_dpdk.a"
+                "${spdk_SOURCE_DIR}/build/lib/libspdk_util.a"
+                "${spdk_SOURCE_DIR}/build/lib/libspdk_log.a"
+                "${spdk_SOURCE_DIR}/build/lib/libspdk_sock.a"
+                "${spdk_SOURCE_DIR}/build/lib/libspdk_sock_posix.a"
+                "${spdk_SOURCE_DIR}/build/lib/libspdk_trace.a"
+                "${spdk_SOURCE_DIR}/build/lib/libspdk_dma.a"
+                "${spdk_SOURCE_DIR}/build/lib/libspdk_keyring.a"
+                "${spdk_SOURCE_DIR}/build/lib/libspdk_json.a"
+                "${spdk_SOURCE_DIR}/build/lib/libspdk_jsonrpc.a"
+                "${spdk_SOURCE_DIR}/build/lib/libspdk_rpc.a"
+                "${spdk_SOURCE_DIR}/build/lib/libspdk_thread.a"
     )
 
     # Create imported libraries
