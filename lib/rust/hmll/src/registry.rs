@@ -75,9 +75,8 @@ impl Registry {
         let mut inner: hmll_sys::hmll_registry = unsafe { std::mem::zeroed() };
 
         // Parse the index file to get total tensor count and allocate registry
-        let num_files = unsafe {
-            hmll_sys::hmll_safetensors_index(&mut ctx, &mut inner, *index.as_raw())
-        };
+        let num_files =
+            unsafe { hmll_sys::hmll_safetensors_index(&mut ctx, &mut inner, *index.as_raw()) };
 
         Error::check_hmll_error(ctx.error)?;
 
