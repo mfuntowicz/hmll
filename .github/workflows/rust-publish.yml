@@ -32,8 +32,8 @@ jobs:
       - name: Check formatting (hmll)
         run: cargo fmt --manifest-path lib/rust/hmll/Cargo.toml --check
 
-  clippy:
-    name: Clippy Check
+  clippy-vendored:
+    name: Clippy (vendored)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -50,6 +50,39 @@ jobs:
 
       - name: Clippy (hmll)
         run: cargo clippy --manifest-path lib/rust/hmll/Cargo.toml --features safetensors -- -D warnings
+
+  clippy-system:
+    name: Clippy (system)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libclang-dev
+
+      - name: Build and install C library
+        run: |
+          cmake -B build -S . \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DHMLL_BUILD_STATIC=OFF \
+            -DHMLL_ENABLE_SAFETENSORS=ON \
+            -DCMAKE_INSTALL_PREFIX=/usr/local
+          cmake --build build --parallel
+          sudo cmake --install build
+
+      - name: Clippy (hmll-sys, system linking)
+        run: cargo clippy --manifest-path lib/rust/hmll-sys/Cargo.toml --no-default-features --features safetensors -- -D warnings
+        env:
+          PKG_CONFIG_PATH: /usr/local/lib/pkgconfig
+
+      - name: Clippy (hmll, system linking)
+        run: cargo clippy --manifest-path lib/rust/hmll/Cargo.toml --no-default-features --features safetensors -- -D warnings
+        env:
+          PKG_CONFIG_PATH: /usr/local/lib/pkgconfig
 
   # Uncomment when documentation is ready
   # docs:
@@ -76,7 +109,7 @@ jobs:
   publish:
     name: Publish to crates.io
     runs-on: ubuntu-latest
-    needs: [fmt, clippy]
+    needs: [fmt, clippy-vendored, clippy-system]
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry-run)
     steps:
       - uses: actions/checkout@v6
@@ -87,7 +120,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libclang-dev
 
       - name: Publish hmll-sys
-        run: cargo publish --manifest-path lib/rust/hmll-sys/Cargo.toml --features safetensors
+        # --no-verify: vendored build relies on C sources outside the crate directory
+        run: cargo publish --manifest-path lib/rust/hmll-sys/Cargo.toml --no-verify
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
@@ -95,14 +129,15 @@ jobs:
         run: sleep 30
 
       - name: Publish hmll
-        run: cargo publish --manifest-path lib/rust/hmll/Cargo.toml --features safetensors
+        # --no-verify: depends on hmll-sys which needs the full source tree
+        run: cargo publish --manifest-path lib/rust/hmll/Cargo.toml --no-verify
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   dry-run:
     name: Publish Dry Run
     runs-on: ubuntu-latest
-    needs: [fmt, clippy]
+    needs: [fmt, clippy-vendored, clippy-system]
     if: github.event_name == 'workflow_dispatch' && inputs.dry-run
     steps:
       - uses: actions/checkout@v6
@@ -113,8 +148,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libclang-dev
 
       - name: Dry run publish hmll-sys
-        run: cargo publish --manifest-path lib/rust/hmll-sys/Cargo.toml --dry-run --features safetensors
+        # --no-verify: vendored build relies on C sources outside the crate directory
+        run: cargo publish --manifest-path lib/rust/hmll-sys/Cargo.toml --dry-run --no-verify
 
       - name: Dry run publish hmll
-        run: cargo publish --manifest-path lib/rust/hmll/Cargo.toml --dry-run --features safetensors
+        # --no-verify: depends on hmll-sys which needs the full source tree
+        run: cargo publish --manifest-path lib/rust/hmll/Cargo.toml --dry-run --no-verify
 
