@@ -54,9 +54,8 @@ jobs:
   build:
     runs-on: ${{ inputs.os }}
     env:
-      CC: ${{ inputs.compiler-cc || (contains(inputs.os, 'macos') && 'clang' || (contains(inputs.os, 'ubuntu') && 'gcc' || '')) }}
-      CXX: ${{ inputs.compiler-cxx || (contains(inputs.os, 'macos') && 'clang++' || (contains(inputs.os, 'ubuntu') && 'g++' || '')) }}
-
+      CC: ${{ inputs.compiler-cc }}
+      CXX: ${{ inputs.compiler-cxx }}
     steps:
       - uses: actions/checkout@v6
 
