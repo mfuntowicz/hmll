@@ -65,7 +65,7 @@ jobs:
         with:
           cuda: ${{ inputs.cuda-version }}
           method: 'network'
-          sub-packages: ${{ runner.os == 'Windows' && '["nvcc", "cudart", "visual_studio_integration"]' || '["nvcc", "cudart"]' }}
+          sub-packages: ${{ runner.os == 'Windows' && '[]' || '["nvcc", "cudart"]' }}
 
       - name: Setup Python
         if: inputs.enable-python
