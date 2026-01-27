@@ -22,6 +22,7 @@ option(HMLL_BUILD_EXAMPLES "Flag indicating if cmake should build examples" OFF)
 option(HMLL_BUILD_TESTS "Flag indicating if cmake should build unit-tests" OFF)
 option(HMLL_ENABLE_SANITIZERS "Flag indicating if cmake should enable sanitizers" OFF)
 option(HMLL_ENABLE_IO_URING "Flag to include io_uring backend (only on Linux)" ON)
+option(HMLL_ENABLE_SPDK "Flag to include SPDK backend (only on Linux)" OFF)
 
 if(${HMLL_ENABLE_CUDA} AND CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     message(STATUS "Disabled CUDA on unsupported ${CMAKE_SYSTEM_NAME} platform")
@@ -52,6 +53,13 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND ${HMLL_ENABLE_IO_URING})
     message(STATUS "Enabling io_uring backend")
 endif()
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND ${HMLL_ENABLE_SPDK})
+    include(cmake/spdk.cmake)
+    list(APPEND HMLL_LIBRARIES spdk_interface)
+    add_compile_definitions("__HMLL_SPDK_ENABLED__")
+    message(STATUS "Enabling SPDK backend")
+endif()
+
 
 if(${HMLL_ENABLE_PYTHON})
     add_subdirectory(lib/python)
@@ -72,7 +80,6 @@ set(LIBHMLL_SOURCES
         lib/loader.c
         lib/memory.c
 )
-
 
 if(WIN32)
     list(APPEND LIBHMLL_HEADERS
@@ -101,6 +108,12 @@ elseif(LINUX)
         lib/unix/memory.c
         lib/unix/backend/mmap.c
     )
+
+    # SPDK backend is opt-in due to complex dependencies
+    if(${HMLL_ENABLE_SPDK})
+        list(APPEND LIBHMLL_HEADERS include/hmll/linux/backend/spdk.h)
+        list(APPEND LIBHMLL_SOURCES lib/linux/backend/spdk.c)
+    endif()
 
 elseif(UNIX)
     list(APPEND LIBHMLL_HEADERS

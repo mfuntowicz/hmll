@@ -7,7 +7,10 @@ enum hmll_loader_kind
 {
     HMLL_FETCHER_AUTO,
     HMLL_FETCHER_IO_URING,
-    HMLL_FETCHER_MMAP
+    HMLL_FETCHER_MMAP,
+#ifdef __HMLL_SPDK_ENABLED__
+    HMLL_FETCHER_SPDK
+#endif
 };
 typedef enum hmll_loader_kind hmll_fetcher_kind_t;
 
