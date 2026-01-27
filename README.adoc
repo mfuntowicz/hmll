@@ -14,11 +14,10 @@ a|image::https://img.shields.io/crates/msrv/safetensors?label=hmll[Rust]
 The Hugging Face Model Loading Library (_aka HMLL_) provides a set of low-level, modern and highly-efficient routines to
 fetch bytes from a storage device to a machine learning framework such as PyTorch, JAX, etc.
 
-Along with the high-level, byte fetching, capabilities, it encapsulates the actual I/O method behind a consistent API
-hiding away the actual platform-specific implementation and complexities for the user.
+Along with byte fetching capabilities, HMLL exposes functions to interact with high-level tensor formats such as
+https://github.com/huggingface/safetensors[safetensors] or https://github.com/ggml-org/llama.cpp[GGUF] through a consistent API.
 
 The library currently supports fetching implementations for the following platforms:
-
 
 [caption="Table 1. "]
 .Backend(s) supported per platform
@@ -93,7 +92,7 @@ int main(int argc, char **argv) {
     }
 
     // Fetch the bytes (0 here is the index of the file to fetch from)
-     if (hmll_fetch(&ctx, 0, &buffer, range) < range.end - range.start) {
+    if (hmll_fetch(&ctx, 0, &buffer, range) < range.end - range.start) {
         fprintf(stderr, "Failed to fetch data: %s\n", hmll_strerr(ctx.error));
         return 4;
     }
