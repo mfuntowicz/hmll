@@ -287,7 +287,10 @@ size_t hmll_safetensors_populate_registry(
     }
 
     uint64_t hsize;
-    fread(&hsize, sizeof(uint64_t), 1, file);
+    if (fread(&hsize, sizeof(uint64_t), 1, file) != 1) {
+        ctx->error = HMLL_ERR(HMLL_ERR_FILE_READ_FAILED);
+        goto freeup_and_exit;
+    }
     header = calloc(hsize, sizeof(unsigned char));
     if (!header) {
         ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);

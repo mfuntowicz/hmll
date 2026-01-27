@@ -54,6 +54,9 @@ jobs:
   clippy-system:
     name: Clippy (system)
     runs-on: ubuntu-latest
+    env:
+      CC: gcc
+      CXX: g++
     steps:
       - uses: actions/checkout@v6
 
