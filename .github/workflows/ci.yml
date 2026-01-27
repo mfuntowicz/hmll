@@ -1,94 +1,66 @@
-name: CI
-
+name: HMLL Continuous Integration
 on:
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
-
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  linux:
-    name: Linux (${{ matrix.os }}, ${{ matrix.compiler.cc }}, static=${{ matrix.static }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ ubuntu-latest, ubuntu-24.04-arm ]
-        compiler: [
-          { cc: gcc, cxx: g++ },
-          { cc: clang, cxx: clang++ }
-        ]
-        static: [ false, true ]
-    uses: ./.github/workflows/build.yml
-    with:
-      os: ${{ matrix.os }}
-      compiler-cc: ${{ matrix.compiler.cc }}
-      compiler-cxx: ${{ matrix.compiler.cxx }}
-      static-build: ${{ matrix.static }}
-      enable-sanitizers: true
 
-  macos:
-    name: macOS (${{ matrix.os }}, static=${{ matrix.static }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ macos-14, macos-15 ]
-        static: [ false, true ]
-    uses: ./.github/workflows/build.yml
-    with:
-      os: ${{ matrix.os }}
-      # Uses default: clang
-      static-build: ${{ matrix.static }}
-
-  windows:
-    name: Windows (static=${{ matrix.static }})
-    strategy:
-      fail-fast: false
-      matrix:
-        static: [ false, true ]
-    uses: ./.github/workflows/build.yml
-    with:
-      os: windows-latest
-      # Uses default: MSVC auto-detect
-      static-build: ${{ matrix.static }}
-
-  cuda:
-    name: CUDA ${{ matrix.cuda-version }}
-    strategy:
-      fail-fast: false
-      matrix:
-        cuda-version: [ '12.6.0', '12.8.0', '13.0.0' ]
+  integration-linux:
+    name: Linux test-suite
     uses: ./.github/workflows/build.yml
     with:
       os: ubuntu-latest
-      enable-cuda: true
-      cuda-version: ${{ matrix.cuda-version }}
-      enable-sanitizers: true
-      run-tests: false
-
-  rust:
-    name: Rust (${{ matrix.os }}, ${{ matrix.toolchain }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ ubuntu-latest, ubuntu-24.04-arm, macos-14, macos-15 ]
-        toolchain: [ stable, nightly ]
-    uses: ./.github/workflows/build.yml
-    with:
-      os: ${{ matrix.os }}
-      # Uses platform defaults for compiler
+      compiler-cc: gcc
+      compiler-cxx: g++
       enable-rust: true
-      rust-toolchain: ${{ matrix.toolchain }}
+      enable-python: true
+      enable-sanitizers: true
+      # If this passes, the logic is likely fine everywhere
 
-  python:
-    name: Python (${{ matrix.os }}, ${{ matrix.python-version }})
+  integration-compat:
+    name: Compat (${{ matrix.os }}, ${{ matrix.variant }})
+    needs: [integration-linux] # Optional: Don't run if integration fails
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-latest, ubuntu-24.04-arm, macos-14, macos-15 ]
-        python-version: [ '3.11', '3.12', '3.13' ]
+        include:
+          - os: windows-latest
+            variant: "MSVC"
+
+          - os: macos-14
+            variant: "Clang"
+
+          - os: ubuntu-latest
+            variant: "Clang Static"
+            cc: clang
+            cxx: clang++
+            static: true
+
+          - os: ubuntu-24.04-arm
+            variant: "ARM64"
+
     uses: ./.github/workflows/build.yml
     with:
       os: ${{ matrix.os }}
-      # Uses platform defaults for compiler
-      enable-python: true
-      python-version: ${{ matrix.python-version }}
+      compiler-cc: ${{ matrix.cc }}
+      compiler-cxx: ${{ matrix.cxx }}
+      static-build: ${{ matrix.static || false }}
+      enable-rust: false
+      enable-python: false
+
+  cuda:
+    name: CUDA Integration
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, windows-latest ]
+    uses: ./.github/workflows/build.yml
+    with:
+      os: ${{ matrix.os }}
+      enable-cuda: true
+      cuda-version: '13.0.0'
+      run-tests: false

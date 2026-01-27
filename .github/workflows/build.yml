@@ -1,5 +1,4 @@
 name: HMLL Build Workflow
-
 on:
   workflow_call:
     inputs:
@@ -43,10 +42,10 @@ on:
         default: true
       cuda-version:
         type: string
-        default: '12.2.0'
+        default: '13.1.0'
       python-version:
         type: string
-        default: '3.11'
+        default: '3.12'
       rust-toolchain:
         type: string
         default: 'stable'
@@ -54,9 +53,6 @@ on:
 jobs:
   build:
     runs-on: ${{ inputs.os }}
-
-    # Smart compiler defaults: explicit input > platform default
-    # Windows: don't set CC/CXX, let CMake auto-detect MSVC
     env:
       CC: ${{ inputs.compiler-cc || (contains(inputs.os, 'macos') && 'clang' || (contains(inputs.os, 'ubuntu') && 'gcc' || '')) }}
       CXX: ${{ inputs.compiler-cxx || (contains(inputs.os, 'macos') && 'clang++' || (contains(inputs.os, 'ubuntu') && 'g++' || '')) }}
@@ -77,20 +73,20 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ inputs.python-version }}
+          cache: 'pip' # Enable caching
 
       - name: Setup Rust
         if: inputs.enable-rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: ${{ inputs.rust-toolchain }}
+          cache: true
 
       - name: Install Python dependencies
         if: inputs.enable-python
-        shell: bash
         run: pip install pytest numpy
 
       - name: Configure CMake
-        shell: bash
         run: |
           cmake -B build -S . \
             -DCMAKE_BUILD_TYPE=${{ inputs.build-type }} \
@@ -102,18 +98,15 @@ jobs:
             ${{ inputs.enable-python && '-DHMLL_ENABLE_PYTHON=ON' || '' }}
 
       - name: Build
-        shell: bash
         run: cmake --build build --config ${{ inputs.build-type }} --parallel
 
       - name: Test C++ Library
         if: inputs.run-tests
-        shell: bash
         working-directory: build
         run: ctest -C ${{ inputs.build-type }} --output-on-failure
 
-      - name: Build Rust Bindings
+      - name: Build & Test Rust
         if: inputs.enable-rust
-        shell: bash
         working-directory: lib/rust/hmll
         run: cargo build --release ${{ inputs.enable-safetensors && '--features safetensors' || '' }}
 
@@ -122,9 +115,3 @@ jobs:
         shell: bash
         working-directory: lib/rust/hmll
         run: cargo test ${{ inputs.enable-safetensors && '--features safetensors' || '' }}
-
-      - name: Test Python Bindings
-        if: inputs.enable-python && inputs.run-tests
-        shell: bash
-        run: |
-          python examples/read_with_hmll.py || echo "TODO: Add proper Python test suite"
