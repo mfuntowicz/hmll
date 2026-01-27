@@ -84,7 +84,7 @@ impl DType {
 
     /// Convert from the underlying C enum value.
     #[inline(always)]
-    pub(crate) const fn from_raw(dtype: hmll_dtype) -> Self {
+    pub const fn from_raw(dtype: hmll_dtype) -> Self {
         match dtype {
             hmll_dtype::HMLL_DTYPE_BOOL => DType::Bool,
             hmll_dtype::HMLL_DTYPE_BFLOAT16 => DType::BFloat16,

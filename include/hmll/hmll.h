@@ -110,6 +110,7 @@ HMLL_EXTERN ssize_t hmll_fetchv(struct hmll *ctx, int iofile, const struct hmll_
 #ifdef __HMLL_TENSORS_ENABLED__
 HMLL_EXTERN uint8_t hmll_nbits(enum hmll_dtype dtype) NO_EXCEPT;
 HMLL_EXTERN size_t hmll_numel(const struct hmll_tensor_specs *specs) NO_EXCEPT;
+HMLL_EXTERN void hmll_free_registry(struct hmll_registry *reg) NO_EXCEPT;
 HMLL_EXTERN unsigned char hmll_contains(const struct hmll *ctx, const struct hmll_registry *reg, const char *name) NO_EXCEPT;
 HMLL_EXTERN int hmll_find_by_name(const struct hmll *ctx, const struct hmll_registry *reg, const char *name) NO_EXCEPT;
 HMLL_EXTERN struct hmll_lookup_result hmll_lookup_tensor(const struct hmll *ctx, const struct hmll_registry *registry, const char *name) NO_EXCEPT;

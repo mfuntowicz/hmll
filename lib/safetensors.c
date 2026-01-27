@@ -293,7 +293,7 @@ size_t hmll_safetensors_populate_registry(
         ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
         goto freeup_and_exit;
     }
-    
+
     if (fread(header, sizeof(unsigned char), hsize, file) < hsize) {
         ctx->error = HMLL_ERR(HMLL_ERR_FILE_READ_FAILED);
         goto freeup_and_exit;

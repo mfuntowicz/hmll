@@ -37,6 +37,8 @@ mod source;
 
 #[cfg(feature = "safetensors")]
 mod dtype;
+#[cfg(feature = "safetensors")]
+mod registry;
 
 pub use buffer::{Buffer, Range};
 pub use device::Device;
@@ -46,3 +48,5 @@ pub use source::Source;
 
 #[cfg(feature = "safetensors")]
 pub use dtype::DType;
+#[cfg(feature = "safetensors")]
+pub use registry::{Registry, TensorInfo};

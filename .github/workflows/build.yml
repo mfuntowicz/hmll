@@ -115,13 +115,13 @@ jobs:
         if: inputs.enable-rust
         shell: bash
         working-directory: lib/rust/hmll
-        run: cargo build --release
+        run: cargo build --release ${{ inputs.enable-safetensors && '--features safetensors' || '' }}
 
       - name: Test Rust Bindings
         if: inputs.enable-rust && inputs.run-tests
         shell: bash
         working-directory: lib/rust/hmll
-        run: cargo test
+        run: cargo test ${{ inputs.enable-safetensors && '--features safetensors' || '' }}
 
       - name: Test Python Bindings
         if: inputs.enable-python && inputs.run-tests

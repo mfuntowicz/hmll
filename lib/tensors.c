@@ -1,5 +1,34 @@
+#include <stdlib.h>
 #include <string.h>
 #include "hmll/hmll.h"
+
+void hmll_free_registry(struct hmll_registry *reg)
+{
+    if (!reg) return;
+
+    // Free each tensor name string
+    if (reg->names) {
+        for (size_t i = 0; i < reg->num_tensors; ++i) {
+            free(reg->names[i]);
+        }
+        free(reg->names);
+        reg->names = NULL;
+    }
+
+    // Free tensors array
+    if (reg->tensors) {
+        free(reg->tensors);
+        reg->tensors = NULL;
+    }
+
+    // Free indexes array
+    if (reg->indexes) {
+        free(reg->indexes);
+        reg->indexes = NULL;
+    }
+
+    reg->num_tensors = 0;
+}
 
 int hmll_find_by_name(const struct hmll *ctx, const struct hmll_registry *reg, const char *name)
 {
