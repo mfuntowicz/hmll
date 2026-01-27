@@ -20,9 +20,12 @@
 #include "cuda_runtime.h"
 #endif
 
-static ssize_t hmll_mmap_fetch_range_impl(
-    struct hmll *ctx, const struct hmll_mmap *fetcher, const int iofile, const struct hmll_iobuf *dst, const struct hmll_range range)
+static ssize_t
+hmll_mmap_fetch_range_impl(struct hmll *ctx, const int iofile, const struct hmll_iobuf *dst, const struct hmll_range range)
 {
+    if (hmll_check(ctx->error)) return -1;
+
+    const struct hmll_mmap *fetcher = ctx->fetcher->backend_impl_;
     unsigned char *m_buf = fetcher->m_content[iofile];
     const size_t n_bytes = range.end - range.start;
     madvise(m_buf + range.start, n_bytes, MADV_WILLNEED | MADV_SEQUENTIAL);
@@ -44,12 +47,6 @@ static ssize_t hmll_mmap_fetch_range_impl(
 #endif
 
     return (ssize_t) n_bytes;
-}
-
-ssize_t hmll_mmap_fetch_range(struct hmll *ctx, void *fetcher, const int iofile, const struct hmll_iobuf *dst, const struct hmll_range range)
-{
-    if (hmll_check(ctx->error)) return -1;
-    return hmll_mmap_fetch_range_impl(ctx, fetcher, iofile, dst, range);
 }
 
 struct hmll_error hmll_mmap_init(struct hmll *ctx, const enum hmll_device device)
@@ -89,7 +86,7 @@ struct hmll_error hmll_mmap_init(struct hmll *ctx, const enum hmll_device device
     ctx->fetcher->kind = HMLL_FETCHER_MMAP;
     ctx->fetcher->device = device;
     ctx->fetcher->backend_impl_ = backend;
-    ctx->fetcher->fetch_range_impl_ = hmll_mmap_fetch_range;
+    ctx->fetcher->fetch_range_impl_ = hmll_mmap_fetch_range_impl;
     ctx->fetcher->fetchv_range_impl_ = NULL;
 
 exit:

@@ -25,6 +25,6 @@ static inline void hmll_mmap_free(struct hmll_mmap *backend)
 }
 
 struct hmll_error hmll_mmap_init(struct hmll *ctx, enum hmll_device device);
-ssize_t hmll_mmap_fetch_range(struct hmll *ctx, void *fetcher, int iofile, const struct hmll_iobuf *dst, struct hmll_range range);
+ssize_t hmll_mmap_fetch_range(struct hmll *ctx, int iofile, const struct hmll_iobuf *dst, struct hmll_range range);
 
 #endif // HMLL_WIN32_BACKEND_MMAP_H

@@ -41,7 +41,7 @@ ssize_t hmll_fetch(struct hmll *ctx, const int iofile, const struct hmll_iobuf *
     }
 
     const struct hmll_loader *fetcher = ctx->fetcher;
-    return fetcher->fetch_range_impl_(ctx, fetcher->backend_impl_, iofile, dst, range);
+    return fetcher->fetch_range_impl_(ctx, iofile, dst, range);
 
 fail:
     return -1;
@@ -68,7 +68,7 @@ ssize_t hmll_fetchv(struct hmll *ctx, const int iofile, const struct hmll_iobuf 
     }
 
     const struct hmll_loader *fetcher = ctx->fetcher;
-    return fetcher->fetchv_range_impl_(ctx, fetcher->backend_impl_, iofile, dsts, ranges, n);
+    return fetcher->fetchv_range_impl_(ctx, iofile, dsts, ranges, n);
 
 fail:
     return -1;

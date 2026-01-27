@@ -174,12 +174,13 @@ static inline void hmll_io_uring_handle_completion(
 
 static ssize_t hmll_io_uring_fetch_range_impl(
     struct hmll *ctx,
-    struct hmll_io_uring *fetcher,
+    const int iofile,
     const struct hmll_iobuf *dst,
-    const struct hmll_range range,
-    const int iofile
+    const struct hmll_range range
 ) {
     if (hmll_check(ctx->error)) return -1;
+
+    struct hmll_io_uring *fetcher = ctx->fetcher->backend_impl_;
 
     size_t n_dma = 0;
     size_t b_read = 0;
@@ -258,13 +259,14 @@ static ssize_t hmll_io_uring_fetch_range_impl(
 
 static ssize_t hmll_io_uring_fetchv_range_impl(
     struct hmll *ctx,
-    struct hmll_io_uring *fetcher,
+    const int iofile,
     const struct hmll_iobuf *dsts,
     const struct hmll_range *ranges,
-    const int iofile,
     const size_t n
 ) {
-    if (unlikely(hmll_check(ctx->error))) return -1;
+    if (hmll_check(ctx->error)) return -1;
+
+    struct hmll_io_uring *fetcher = (struct hmll_io_uring *)ctx->fetcher;
 
     struct fetch_state {
         size_t submitted;
@@ -444,33 +446,6 @@ cleanup:
     return -1;
 }
 
-static ssize_t hmll_io_uring_fetch_range(
-    struct hmll *ctx,
-    void *fetcher,
-    const int iofile,
-    const struct hmll_iobuf *dst,
-    const struct hmll_range range
-) {
-    if (hmll_check(ctx->error))
-        return -1;
-
-    return hmll_io_uring_fetch_range_impl(ctx, fetcher, dst, range, iofile);
-}
-
-static ssize_t hmll_io_uring_fetchv_range(
-    struct hmll *ctx,
-    void *fetcher,
-    const int iofile,
-    const struct hmll_iobuf *dsts,
-    const struct hmll_range *ranges,
-    const size_t n
-) {
-    if (hmll_check(ctx->error))
-        return -1;
-
-    return hmll_io_uring_fetchv_range_impl(ctx, fetcher, dsts, ranges, iofile, n);
-}
-
 struct hmll_error hmll_io_uring_init(struct hmll *ctx, const enum hmll_device device) {
     if (hmll_check(ctx->error))
         return ctx->error;
@@ -531,10 +506,11 @@ struct hmll_error hmll_io_uring_init(struct hmll *ctx, const enum hmll_device de
 
     if (ctx->fetcher == NULL) {
         ctx->fetcher = calloc(1, sizeof(struct hmll_loader));
+        ctx->fetcher->kind = HMLL_FETCHER_IO_URING;
         ctx->fetcher->device = device;
         ctx->fetcher->backend_impl_ = backend;
-        ctx->fetcher->fetch_range_impl_ = hmll_io_uring_fetch_range;
-        ctx->fetcher->fetchv_range_impl_ = hmll_io_uring_fetchv_range;
+        ctx->fetcher->fetch_range_impl_ = hmll_io_uring_fetch_range_impl;
+        ctx->fetcher->fetchv_range_impl_ = hmll_io_uring_fetchv_range_impl;
     }
 
     return HMLL_OK;
