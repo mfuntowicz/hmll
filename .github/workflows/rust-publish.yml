@@ -2,7 +2,7 @@ name: Rust Publish
 
 on:
   push:
-    tags:
+    branches:
       - 'rust-v*'
   workflow_dispatch:
     inputs:
