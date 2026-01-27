@@ -118,7 +118,7 @@ jobs:
         working-directory: build
         run: ctest -C ${{ inputs.build-type }} --output-on-failure
 
-      - name: Build & Test Rust
+      - name: Build Rust
         if: inputs.enable-rust
         working-directory: lib/rust/hmll
         run: cargo build --release ${{ inputs.enable-safetensors && '--features safetensors' || '' }}
