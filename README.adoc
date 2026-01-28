@@ -6,7 +6,7 @@
 a|image::https://img.shields.io/badge/C-00599C?logo=c&logoColor=white[C]
 a|image::https://img.shields.io/badge/C++-%2300599C.svg?logo=c%2B%2B&logoColor=white[C++]
 a|image::https://img.shields.io/pypi/pyversions/transformers?color=281158&label=pyhmll[Python]
-a|image::https://img.shields.io/crates/msrv/safetensors?label=hmll[Rust]
+a|image::https://img.shields.io/crates/msrv/hmll?label=hmll[Rust]
 |===
 
 '''
@@ -77,7 +77,7 @@ int main(int argc, char **argv) {
     }
 
     // Create an hmll loader instance, automatically choosing the right backend to use
-    if (hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, HMLL_FETCHER_AUTO))) {
+    if (hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, HMLL_FETCHER_IO_URING))) {
         fprintf(stderr, "Failed to initialize loader: %s\n", hmll_strerr(ctx.error));
         return 2;
     }
@@ -92,7 +92,7 @@ int main(int argc, char **argv) {
     }
 
     // Fetch the bytes (0 here is the index of the file to fetch from)
-    if (hmll_fetch(&ctx, 0, &buffer, range) < range.end - range.start) {
+    if (hmll_fetch(&ctx, 0, &buffer, range.start) < range.end - range.start) {
         fprintf(stderr, "Failed to fetch data: %s\n", hmll_strerr(ctx.error));
         return 4;
     }
