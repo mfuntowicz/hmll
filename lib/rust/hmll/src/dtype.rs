@@ -28,6 +28,8 @@ pub enum DType {
     Float16,
     /// Single precision floating point (32-bit)
     Float32,
+    /// Double precision floating point (64-bit)
+    Float64,
     /// Signed 4-bit integer
     Int4,
     /// Signed 8-bit integer
@@ -68,6 +70,7 @@ impl DType {
             hmll_dtype::HMLL_DTYPE_FLOAT8_E8M0 => DType::Float8E8M0,
             hmll_dtype::HMLL_DTYPE_FLOAT16 => DType::Float16,
             hmll_dtype::HMLL_DTYPE_FLOAT32 => DType::Float32,
+            hmll_dtype::HMLL_DTYPE_FLOAT64 => DType::Float64,
             hmll_dtype::HMLL_DTYPE_SIGNED_INT4 => DType::Int4,
             hmll_dtype::HMLL_DTYPE_SIGNED_INT8 => DType::Int8,
             hmll_dtype::HMLL_DTYPE_SIGNED_INT16 => DType::Int16,
@@ -94,7 +97,7 @@ impl DType {
             DType::Float6E2M3 | DType::Float6E3M2 => 6,
             DType::BFloat16 | DType::Float16 | DType::Int16 | DType::UInt16 => 16,
             DType::Float32 | DType::Int32 | DType::UInt32 => 32,
-            DType::Complex64 | DType::Int64 | DType::UInt64 => 64,
+            DType::Float64 | DType::Complex64 | DType::Int64 | DType::UInt64 => 64,
             DType::Unknown => 0,
         }
     }
@@ -113,6 +116,7 @@ impl DType {
                 | DType::Float8E8M0
                 | DType::Float16
                 | DType::Float32
+                | DType::Float64
         )
     }
 
@@ -155,6 +159,7 @@ impl std::fmt::Display for DType {
             DType::Float8E8M0 => "F8_E8M0",
             DType::Float16 => "F16",
             DType::Float32 => "F32",
+            DType::Float64 => "F64",
             DType::Int4 => "I4",
             DType::Int8 => "I8",
             DType::Int16 => "I16",

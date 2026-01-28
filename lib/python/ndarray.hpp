@@ -23,6 +23,7 @@ constexpr nb::dlpack::dtype kFLOAT8_E4M3_DTYPE  = {static_cast<uint8_t>(nb::dlpa
 constexpr nb::dlpack::dtype kFLOAT8_E8M0_DTYPE  = {static_cast<uint8_t>(nb::dlpack::dtype_code::Float8_E8M0FNU), 8, 1};
 constexpr nb::dlpack::dtype kF16_DTYPE          = {static_cast<uint8_t>(nb::dlpack::dtype_code::Float), 16, 1};
 constexpr nb::dlpack::dtype kF32_DTYPE          = {static_cast<uint8_t>(nb::dlpack::dtype_code::Float), 32, 1};
+constexpr nb::dlpack::dtype kF64_DTYPE          = {static_cast<uint8_t>(nb::dlpack::dtype_code::Float), 64, 1};
 constexpr nb::dlpack::dtype kINT4_DTYPE         = {static_cast<uint8_t>(nb::dlpack::dtype_code::Int), 4, 1};
 constexpr nb::dlpack::dtype kINT8_DTYPE         = {static_cast<uint8_t>(nb::dlpack::dtype_code::Int), 8, 1};
 constexpr nb::dlpack::dtype kINT16_DTYPE        = {static_cast<uint8_t>(nb::dlpack::dtype_code::Int), 16, 1};
@@ -61,6 +62,8 @@ static constexpr nb::dlpack::dtype hmll_dtype_to_dlpack(const hmll_dtype_t dtype
         return kF16_DTYPE;
     case HMLL_DTYPE_FLOAT32:
         return kF32_DTYPE;
+    case HMLL_DTYPE_FLOAT64:
+        return kF64_DTYPE;
     case HMLL_DTYPE_SIGNED_INT4:
         return kINT4_DTYPE;
     case HMLL_DTYPE_SIGNED_INT8:

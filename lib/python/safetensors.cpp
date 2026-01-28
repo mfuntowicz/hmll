@@ -29,9 +29,9 @@ class SafetensorsAccessor
     std::shared_ptr<hmll_registry_t> registry_;
 
 public:
-    SafetensorsAccessor(const std::filesystem::path& path, const hmll_device_t device, const bool is_shared)
+    SafetensorsAccessor(const std::filesystem::path& path, const hmll_device_t device, const bool is_sharded)
     {
-        if (is_shared) {
+        if (is_sharded) {
             hmll_source index{};
             const auto path_str = path.string();
             if (hmll_check(hmll_source_open(path_str.c_str(), &index)))
@@ -63,7 +63,22 @@ public:
             loader_ = std::make_unique<WeightLoader>(sources, device, std::move(ctx));
             registry_ = std::move(registry);
         } else {
-            throw std::runtime_error("Single safetensors file is not supported yet");
+            const auto path_str = path.string();
+            hmll_source_t source;
+            if (hmll_check(hmll_source_open(path_str.c_str(), &source)))
+                throw std::runtime_error("Failed to open file: " + path_str);
+
+            const auto registry = std::make_shared<hmll_registry_t>();
+            auto ctx = std::make_unique<hmll_t>();
+
+            if (const auto n_tensors = hmll_safetensors_populate_registry(ctx.get(), registry.get(), source, 0, 0); n_tensors == 0) {
+                hmll_source_close(&source);
+                throw std::runtime_error(fmt::format(FMT_COMPILE("Failed to read tensor definition in file {}: {}"), path, hmll_strerr(ctx->error)));
+            }
+
+            auto sources = std::vector<hmll_source_t>{source};
+            loader_ = std::make_unique<WeightLoader>(std::move(sources), device, std::move(ctx));
+            registry_ = std::move(registry);
         }
     }
 
@@ -152,7 +167,7 @@ void init_safetensors(nb::module_& m)
     .def("afetch", &SafetensorsAccessor::afetch)
     .def("fetch", &SafetensorsAccessor::fetch);
 
-    m.def("safetensors", [](const std::filesystem::path& path, const hmll_device_t device, const bool is_shared) {
-        return new SafetensorsAccessor(path, device, is_shared);
-    }, nb::rv_policy::take_ownership);
+    m.def("safetensors", [](const std::filesystem::path& path, const hmll_device_t device, const bool is_sharded) {
+        return new SafetensorsAccessor(path, device, is_sharded);
+    }, nb::rv_policy::take_ownership, "path"_a, "device"_a, "is_sharded"_a = false);
 }
