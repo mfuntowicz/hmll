@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.17.0)
 
-project(hmll LANGUAGES C CXX)
+project(hmll VERSION 0.1.0 LANGUAGES C CXX)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
@@ -220,3 +220,32 @@ if(${HMLL_BUILD_TESTS})
     target_link_libraries(libhmll_tests PRIVATE Catch2::Catch2WithMain libhmll)
     catch_discover_tests(libhmll_tests)
 endif()
+
+###########################################################
+# Installation
+###########################################################
+include(GNUInstallDirs)
+
+# Install the library (output name without 'lib' prefix since we named it 'libhmll')
+set_target_properties(libhmll PROPERTIES OUTPUT_NAME hmll)
+install(TARGETS libhmll
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+# Install headers
+install(DIRECTORY include/hmll
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    FILES_MATCHING PATTERN "*.h"
+)
+
+# Generate and install pkg-config file
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/hmll.pc.in
+    ${CMAKE_CURRENT_BINARY_DIR}/hmll.pc
+    @ONLY
+)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/hmll.pc
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
+)
