@@ -21,32 +21,27 @@
 #endif
 
 static ssize_t
-hmll_mmap_fetch_range_impl(struct hmll *ctx, const int iofile, const struct hmll_iobuf *dst, const struct hmll_range range)
+hmll_mmap_fetch_range_impl(struct hmll *ctx, const int iofile, const struct hmll_iobuf *dst, const size_t offset)
 {
     if (hmll_check(ctx->error)) return -1;
+    if (dst->size == 0) return 0;
 
     const struct hmll_mmap *fetcher = ctx->fetcher->backend_impl_;
     unsigned char *m_buf = fetcher->m_content[iofile];
-    const size_t n_bytes = range.end - range.start;
-    madvise(m_buf + range.start, n_bytes, MADV_WILLNEED | MADV_SEQUENTIAL);
-
-    if (dst->size < n_bytes) {
-        ctx->error = HMLL_ERR(HMLL_ERR_BUFFER_TOO_SMALL);
-        return -1;
-    }
+    madvise(m_buf + offset, dst->size, MADV_WILLNEED | MADV_SEQUENTIAL);
 
 #ifdef __HMLL_CUDA_ENABLED__
     if (ctx->fetcher->device == HMLL_DEVICE_CUDA) {
-        const void *p_src = (void *) ((uintptr_t)m_buf + range.start);
-        cudaMemcpy(dst->ptr, p_src, n_bytes, cudaMemcpyHostToDevice);
+        const void *p_src = (void *) ((uintptr_t)m_buf + offset);
+        cudaMemcpy(dst->ptr, p_src, dst->size, cudaMemcpyHostToDevice);
     } else {
-        memcpy(dst->ptr, m_buf + range.start, n_bytes);
+        memcpy(dst->ptr, m_buf + offset, dst->size);
     }
 #else
-    memcpy(dst->ptr, m_buf + range.start, n_bytes);
+    memcpy(dst->ptr, m_buf + offset, dst->size);
 #endif
 
-    return (ssize_t) n_bytes;
+    return (ssize_t) dst->size;
 }
 
 struct hmll_error hmll_mmap_init(struct hmll *ctx, const enum hmll_device device)

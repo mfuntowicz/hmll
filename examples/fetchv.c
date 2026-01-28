@@ -1,74 +1,123 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
 #include <hmll/hmll.h>
-#include <hmll/memory.h>
+
+#ifdef _WIN32
+#include <windows.h>
+typedef LARGE_INTEGER timespec_t;
+
+static void tick(timespec_t *ts) {
+    QueryPerformanceCounter(ts);
+}
+
+static double time_diff_ns(const timespec_t *start, const timespec_t *end) {
+    LARGE_INTEGER frequency;
+    QueryPerformanceFrequency(&frequency);
+    return (double)(end->QuadPart - start->QuadPart) * 1e9 / frequency.QuadPart;
+}
+#else
+#include <time.h>
+typedef struct timespec timespec_t;
+
+static void tick(timespec_t *ts) {
+    clock_gettime(CLOCK_MONOTONIC, ts);
+}
+
+static double time_diff_ns(const timespec_t *start, const timespec_t *end) {
+    return (end->tv_sec - start->tv_sec) * 1e9 + (end->tv_nsec - start->tv_nsec);
+}
+#endif
+
+#if defined(__HMLL_CUDA_ENABLED__)
+#include <cuda_runtime.h>
+#endif
+
+// #define TENSOR_NAME "language_model.model.layers.15.mlp.gate_proj.weight"
+#define TENSOR_NAME "float32.dim5"
 
 int main(const int argc, const char** argv)
 {
     if (argc < 2) {
-        fprintf(stderr, "No file specified.\nInvoke through hmll_safetensors_ex <path/to/safetensors/file>");
+        printf("No file specified.\nInvoke through hmll_safetensors_ex <path/to/safetensors/file>");
         return 1;
     }
 
-    int status = 0;
+    hmll_t ctx = {0};
+    hmll_source_t src = {0};
+    if (hmll_check(hmll_source_open(argv[1], &src)))
+        return 1;
 
-    struct hmll ctx = {0};
-    struct hmll_error err;
-    struct hmll_source *src;
-    if ((src = calloc(argc - 1, sizeof(struct hmll_source))) == NULL) {
-        fprintf(stderr, "Failed to allocated memory to store file sources");
-        status = 2;
-        goto exit;
-    }
+    // Read safetensors table with all tensors mapping
+    hmll_registry_t registry = {0};
+    if (hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) == 0)
+        return 2;
 
-    printf("Opening %u files:\n", argc - 1);
-    for (size_t i = 0; i < argc - 1; ++i) {
-        if (hmll_check((err = hmll_source_open(argv[i + 1], src + i)))) {
-            fprintf(stderr, "Failed to open source %s: %s\n", argv[i + 1], hmll_strerr(err));
-            free(src);
-            status = 3;
-            goto exit;
+    if (hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, HMLL_FETCHER_IO_URING)))
+        return 3;
+
+    const hmll_lookup_result_t lookup = hmll_lookup_tensor(&ctx, &registry, TENSOR_NAME);
+    if (hmll_success(ctx.error) && lookup.specs != NULL)
+    {
+        const hmll_range_t range = (struct hmll_range){ lookup.specs->start, lookup.specs->end };
+        const hmll_iobuf_t buffer = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
+        if (hmll_success(ctx.error)) {
+            // create ranges
+            const uintptr_t ptr = lookup.specs->start;
+            struct hmll_range ranges[4] = {
+                {ptr + 0 * sizeof(float), ptr + 1 * sizeof(float)},
+                {ptr + 3 * sizeof(float), ptr + 4 * sizeof(float)},
+                {ptr + 2 * sizeof(float), ptr + 3 * sizeof(float)},
+                {ptr + 1 * sizeof(float), ptr + 2 * sizeof(float)},
+            };
+
+            struct hmll_iobuf dsts[4] = {
+                hmll_slice_buffer(&buffer, ranges[0]),
+                hmll_slice_buffer(&buffer, ranges[1]),
+                hmll_slice_buffer(&buffer, ranges[2]),
+                hmll_slice_buffer(&buffer, ranges[3]),
+            };
+
+            // Start timing
+            timespec_t start, end;
+            tick(&start);
+
+            if (hmll_fetchv(&ctx, lookup.file, dsts, ranges, 4) < 0) {
+                fprintf(stderr, "Failed to fetch data: %s", hmll_strerr(ctx.error));
+                return 4;
+            }
+
+            // End timing and calculate elapsed time
+            tick(&end);
+            const double elapsed_ns = time_diff_ns(&start, &end);
+            const double elapsed_ms = elapsed_ns / 1e6;
+            const double elapsed_s = elapsed_ns / 1e9;
+
+            if (hmll_success(ctx.error)) {
+                // Calculate throughput
+                const double size_mb = (double)(buffer.size) / (1024.0 * 1024.0);
+                const double throughput_mbps = size_mb / elapsed_s;
+
+                printf("Fetch completed in %.3f ms (%.6f s)\n", elapsed_ms, elapsed_s);
+                printf("Tensor size: %.2f MB\n", size_mb);
+                printf("Throughput: %.2f MB/s\n", throughput_mbps);
+
+                unsigned short *bf16_ptr;
+                if (ctx.fetcher->device == HMLL_DEVICE_CUDA) {
+                    bf16_ptr = malloc(buffer.size);
+                    cudaMemcpy(bf16_ptr, buffer.ptr, hmll_numel(lookup.specs) * sizeof(short), cudaMemcpyDeviceToHost);
+                } else {
+                    bf16_ptr = buffer.ptr;
+                }
+
+                unsigned long sum = 0;
+                for (size_t i = 0; i < hmll_numel(lookup.specs); ++i) sum += bf16_ptr[i];
+
+                printf("Sum: %lu\n", sum);
+            } else {
+                printf("Got an error while reading the safetensors: %s\n", hmll_strerr(ctx.error));
+            }
         }
-        printf("\t- %s -> %zu bytes (fd: %u)\n", argv[i + 1], src[i].size, src[i].fd);
     }
 
-    err = hmll_loader_init(&ctx, src, argc - 1, HMLL_DEVICE_CUDA, HMLL_FETCHER_AUTO);
-    if (hmll_check(err)) {
-        fprintf(stderr, "Failed to initialize HMLL: %s\n", hmll_strerr(ctx.error));
-        status = 4;
-        goto clean;
-    }
-
-    printf("Successfully initialized HMLL (n_sources=%zu)\n", ctx.num_sources);
-
-    const struct hmll_range rs[2] = {(struct hmll_range){39304, 604019080 / 2}, (struct hmll_range){604019080 / 2, 604019080}};
-    const struct hmll_iobuf b0 = hmll_get_buffer_for_range(&ctx, HMLL_DEVICE_CPU, rs[0]);
-    const struct hmll_iobuf b1 = hmll_get_buffer_for_range(&ctx, HMLL_DEVICE_CPU, rs[1]);
-    const struct hmll_iobuf bs[2] = {b0, b1};
-
-    struct timespec ts_start, ts_end;
-    clock_gettime(CLOCK_MONOTONIC, &ts_start);
-
-    const ssize_t res = hmll_fetchv(&ctx, 0, bs, rs, 2);
-
-    clock_gettime(CLOCK_MONOTONIC, &ts_end);
-
-    if (res < 0) {
-        fprintf(stderr, "Failed to fetch tensor: %s\n", hmll_strerr(ctx.error));
-        status = 4;
-        goto clean;
-    }
-
-    const double elapsed = (ts_end.tv_sec - ts_start.tv_sec) + (ts_end.tv_nsec - ts_start.tv_nsec) / 1e9;
-    const double total_bytes = (rs[0].end - rs[0].start) + (rs[1].end - rs[1].start);
-    const double throughput_gbps = (total_bytes / elapsed) / 1e9;
-
-    printf("Successfully fetched %zu ranges (%.2f MB) in %.3f seconds (%.2f GB/s)\n",
-           (size_t)2, total_bytes / 1e6, elapsed, throughput_gbps);
-clean:
-    hmll_destroy(&ctx);
-
-exit:
-    return status;
+    return 0;
 }

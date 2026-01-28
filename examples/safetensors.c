@@ -52,7 +52,7 @@ int main(const int argc, const char** argv)
     if (hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) == 0)
         return 2;
 
-    if (hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, HMLL_FETCHER_MMAP)))
+    if (hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CUDA, HMLL_FETCHER_IO_URING)))
         return 3;
 
     const hmll_lookup_result_t lookup = hmll_lookup_tensor(&ctx, &registry, TENSOR_NAME);
@@ -65,7 +65,7 @@ int main(const int argc, const char** argv)
             timespec_t start, end;
             tick(&start);
 
-            if (hmll_fetch(&ctx, lookup.file, &buffer, range) < range.end - range.start) {
+            if (hmll_fetch(&ctx, lookup.file, &buffer, range.start) < range.end - range.start) {
                 fprintf(stderr, "Failed to fetch data: %s", hmll_strerr(ctx.error));
                 return 4;
             }

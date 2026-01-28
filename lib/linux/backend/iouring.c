@@ -176,7 +176,7 @@ static ssize_t hmll_io_uring_fetch_range_impl(
     struct hmll *ctx,
     const int iofile,
     const struct hmll_iobuf *dst,
-    const struct hmll_range range
+    const size_t offset
 ) {
     if (hmll_check(ctx->error)) return -1;
 
@@ -187,25 +187,24 @@ static ssize_t hmll_io_uring_fetch_range_impl(
     size_t b_submitted = 0;
     struct io_uring_cqe *cqes[HMLL_URING_CQE_BATCH_SIZE];
 
-    const size_t size = hmll_range_size(range);
     struct io_uring_sqe *sqe = NULL;
     int slot;
     if ((sqe = io_uring_get_sqe(&fetcher->ioring))) {
-        io_uring_prep_fadvise(sqe, iofile, range.start, size, POSIX_FADV_SEQUENTIAL | POSIX_FADV_WILLNEED);
+        io_uring_prep_fadvise(sqe, iofile, offset, dst->size, POSIX_FADV_SEQUENTIAL | POSIX_FADV_WILLNEED);
         io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
         io_uring_sqe_set_data64(sqe, HMLL_IO_URING_ADVISORY_FLAG);
     }
 
-    while (b_read < size) {
+    while (b_read < dst->size) {
         hmll_io_uring_reclaim_slots(fetcher, dst->device);
 
-        while (b_submitted < size) {
+        while (b_submitted < dst->size) {
             if (unlikely((slot = hmll_io_uring_get_sqe(fetcher, &sqe)) < 0))
                 break;
 
-            const size_t remaining = size - b_submitted;
+            const size_t remaining = dst->size - b_submitted;
             const size_t to_read = (remaining < HMLL_URING_BUFFER_SIZE) ? remaining : HMLL_URING_BUFFER_SIZE;
-            const size_t file_offset = range.start + b_submitted;
+            const size_t file_offset = offset + b_submitted;
 
             hmll_io_uring_prep_sqe(fetcher, dst->device, sqe, (char *)dst->ptr + b_submitted, file_offset, to_read, iofile, slot);
 
@@ -247,7 +246,7 @@ static ssize_t hmll_io_uring_fetch_range_impl(
                 }
 
                 b_read += cqe->res;
-                hmll_io_uring_handle_completion(fetcher, cqe, dst, range.start, cqe->res);
+                hmll_io_uring_handle_completion(fetcher, cqe, dst, offset, cqe->res);
             }
 
             io_uring_cq_advance(&fetcher->ioring, count);
@@ -261,12 +260,12 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
     struct hmll *ctx,
     const int iofile,
     const struct hmll_iobuf *dsts,
-    const struct hmll_range *ranges,
+    const size_t *offsets,
     const size_t n
 ) {
     if (hmll_check(ctx->error)) return -1;
 
-    struct hmll_io_uring *fetcher = (struct hmll_io_uring *)ctx->fetcher;
+    struct hmll_io_uring *fetcher = ctx->fetcher->backend_impl_;
 
     struct fetch_state {
         size_t submitted;
@@ -307,12 +306,11 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
 
     size_t n_active = 0;
     for (size_t i = 0; i < n; ++i) {
-        const size_t sz = ranges[i].end - ranges[i].start;
         states[i].submitted = 0;
-        states[i].size = sz;
+        states[i].size = dsts[i].size;
         states[i].fadvise_sent = false;
 
-        if (sz > 0) {
+        if (dsts[i].size > 0) {
             active_indices[n_active++] = i;
         }
     }
@@ -335,7 +333,7 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
             struct fetch_state *st = &states[current_idx];
 
             if (unlikely(!st->fadvise_sent)) {
-                io_uring_prep_fadvise(sqe, iofile, ranges[current_idx].start, st->size, POSIX_FADV_SEQUENTIAL | POSIX_FADV_WILLNEED);
+                io_uring_prep_fadvise(sqe, iofile, offsets[current_idx], st->size, POSIX_FADV_SEQUENTIAL | POSIX_FADV_WILLNEED);
                 io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
                 io_uring_sqe_set_data64(sqe, BIT_FADVISE);
                 st->fadvise_sent = 1;
@@ -354,7 +352,7 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
             slot_offsets[slot] = st->submitted;
             const size_t remaining = st->size - st->submitted;
             const size_t to_read = remaining < HMLL_URING_BUFFER_SIZE ? remaining : HMLL_URING_BUFFER_SIZE;
-            const size_t file_offset = ranges[current_idx].start + st->submitted;
+            const size_t file_offset = offsets[current_idx] + st->submitted;
 
             hmll_io_uring_prep_sqe(
                 fetcher,
@@ -388,13 +386,13 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
         }
 
         struct timespec ts_start, ts_end;
-        clock_gettime(CLOCK_MONOTONIC_COARSE, &ts_start);
+        clock_gettime(CLOCK_MONOTONIC, &ts_start);
 
         if (unlikely(io_uring_submit_and_wait(&fetcher->ioring, nwait) < 0)) {
             ctx->error = HMLL_ERR(HMLL_ERR_IO_ERROR);
             goto cleanup;
         }
-        clock_gettime(CLOCK_MONOTONIC_COARSE, &ts_end);
+        clock_gettime(CLOCK_MONOTONIC, &ts_end);
 
         if (nwait > 0) hmll_io_uring_cca_update(&fetcher->iocca, HMLL_URING_BUFFER_SIZE * nwait, ts_start, ts_end);
 

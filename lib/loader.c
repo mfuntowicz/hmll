@@ -25,50 +25,27 @@ struct hmll_error hmll_loader_init(
     return HMLL_ERR(HMLL_ERR_FILE_EMPTY);
 }
 
-ssize_t hmll_fetch(struct hmll *ctx, const int iofile, const struct hmll_iobuf *dst, const struct hmll_range range)
+ssize_t hmll_fetch(struct hmll *ctx, const int iofile, const struct hmll_iobuf *dst, const size_t offset)
 {
     if (hmll_check(ctx->error))
         goto fail;
 
-    if (range.start >= range.end) {
-        ctx->error = HMLL_ERR(HMLL_ERR_INVALID_RANGE);
-        goto fail;
-    }
-
-    if (dst->size < range.end - range.start) {
-        ctx->error.code = HMLL_ERR_BUFFER_TOO_SMALL;
-        goto fail;
-    }
+    if (dst->size == 0) return 0;
 
     const struct hmll_loader *fetcher = ctx->fetcher;
-    return fetcher->fetch_range_impl_(ctx, iofile, dst, range);
+    return fetcher->fetch_range_impl_(ctx, iofile, dst, offset);
 
 fail:
     return -1;
 }
 
-ssize_t hmll_fetchv(struct hmll *ctx, const int iofile, const struct hmll_iobuf *dsts, const struct hmll_range *ranges, const size_t n)
+ssize_t hmll_fetchv(struct hmll *ctx, const int iofile, const struct hmll_iobuf *dsts, const size_t *offsets, const size_t n)
 {
     if (hmll_check(ctx->error))
         goto fail;
 
-    // validate ranges and dsts
-    for (size_t i = 0; i < n; ++i) {
-        const struct hmll_range range = ranges[i];
-        if (range.start >= range.end) {
-            ctx->error = HMLL_ERR(HMLL_ERR_INVALID_RANGE);
-            goto fail;
-        }
-
-        const struct hmll_iobuf dst = dsts[i];
-        if (dst.size < range.end - range.start) {
-            ctx->error.code = HMLL_ERR_BUFFER_TOO_SMALL;
-            goto fail;
-        }
-    }
-
     const struct hmll_loader *fetcher = ctx->fetcher;
-    return fetcher->fetchv_range_impl_(ctx, iofile, dsts, ranges, n);
+    return fetcher->fetchv_range_impl_(ctx, iofile, dsts, offsets, n);
 
 fail:
     return -1;
@@ -88,6 +65,6 @@ ssize_t hmll_fetch_tensor(struct hmll *ctx, const struct hmll_registry *registry
 
     const struct hmll_tensor_specs *specs = lookup.specs;
     const struct hmll_range range = (struct hmll_range){specs->start, specs->end};
-    return hmll_fetch(ctx, lookup.file, dst, range);
+    return hmll_fetch(ctx, lookup.file, dst, range.start);
 }
 #endif

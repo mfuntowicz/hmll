@@ -181,7 +181,7 @@ impl<'a> WeightLoader<'a> {
         }
 
         let res = unsafe {
-            hmll_sys::hmll_fetch(self.context.as_mut(), file_index, &iobuf, range.to_raw())
+            hmll_sys::hmll_fetch(self.context.as_mut(), file_index, &iobuf, range.start)
         };
 
         if res < 0 {
