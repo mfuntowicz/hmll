@@ -1,0 +1,10 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+Name: hmll
+Description: High-performance ML model loading library
+Version: @PROJECT_VERSION@
+Libs: -L${libdir} -lhmll
+Cflags: -I${includedir}
