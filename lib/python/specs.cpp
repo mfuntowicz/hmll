@@ -10,7 +10,7 @@
 
 namespace nb = nanobind;
 
-void init_specs(const nb::module_& m)
+void init_specs(nb::module_& m)
 {
     nb::class_<hmll_tensor_specs_t>(m, "TensorSpecs", nb::is_final())
         .def_ro("start", &hmll_tensor_specs_t::start)

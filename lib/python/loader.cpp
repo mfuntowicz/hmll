@@ -96,7 +96,7 @@ size_t WeightLoader::fetch(const int iofile, const size_t offset, const uintptr_
     }
 }
 
-void init_loader(const nb::module_& m)
+void init_loader(nb::module_& m)
 {
     nb::enum_<hmll_device_t>(m, "Device", R"pbdoc(Define all the targetable devices)pbdoc")
     .value("CPU", HMLL_DEVICE_CPU, "Target CPU device")
