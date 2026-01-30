@@ -35,13 +35,13 @@ std::unique_ptr<WeightLoader> WeightLoader::from_paths(const std::vector<std::st
     return std::make_unique<WeightLoader>(srcs, device, std::move(ctx));
 }
 
-WeightLoader::WeightLoader(std::vector<hmll_source_t> srcs, const hmll_device_t device)
-    : WeightLoader(std::move(srcs), device, std::make_unique<hmll_t>()) {}
+WeightLoader::WeightLoader(std::vector<hmll_source_t> srcs, const hmll_device_t device, const hmll_fetcher_kind_t backend)
+    : WeightLoader(std::move(srcs), device, std::make_unique<hmll_t>(), backend) {}
 
-WeightLoader::WeightLoader(std::vector<hmll_source_t> srcs, const hmll_device_t device, std::unique_ptr<hmll_t> ctx)
+WeightLoader::WeightLoader(std::vector<hmll_source_t> srcs, const hmll_device_t device, std::unique_ptr<hmll_t> ctx, const hmll_fetcher_kind_t backend)
     : ctx_(std::move(ctx)), srcs_(std::move(srcs))
 {
-    if (hmll_check(hmll_loader_init(ctx_.get(), srcs_.data(), srcs_.size(), device, HMLL_FETCHER_AUTO))) {
+    if (hmll_check(hmll_loader_init(ctx_.get(), srcs_.data(), srcs_.size(), device, backend))) {
         const std::string err = hmll_strerr(ctx_->error);
         throw std::runtime_error("Failed to initialize loader: " + err);
     }
@@ -100,6 +100,11 @@ void init_loader(nb::module_& m)
     nb::enum_<hmll_device_t>(m, "Device", R"pbdoc(Define all the targetable devices)pbdoc")
     .value("CPU", HMLL_DEVICE_CPU, "Target CPU device")
     .value("CUDA", HMLL_DEVICE_CUDA, "Target CUDA device");
+
+    nb::enum_<hmll_fetcher_kind_t>(m, "Backend", R"pbdoc(Define the I/O backend to use)pbdoc")
+    .value("AUTO", HMLL_FETCHER_AUTO, "Automatically select backend (defaults to MMAP)")
+    .value("IO_URING", HMLL_FETCHER_IO_URING, "Use io_uring for async I/O (Linux only)")
+    .value("MMAP", HMLL_FETCHER_MMAP, "Use memory-mapped I/O");
 
     nb::enum_<hmll_dtype_t>(m, "dtype", R"pbdoc(Define all the targetable element type in a tensor)pbdoc")
     .value("BOOL", HMLL_DTYPE_BOOL)

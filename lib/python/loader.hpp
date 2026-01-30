@@ -25,8 +25,8 @@ public:
     WeightLoader& operator=(WeightLoader&&) = default;
     WeightLoader(const WeightLoader&) = delete;
     WeightLoader& operator=(const WeightLoader&) = delete;
-    WeightLoader(std::vector<hmll_source_t> srcs, hmll_device_t device, std::unique_ptr<hmll_t> ctx);
-    WeightLoader(std::vector<hmll_source_t> srcs, hmll_device_t device);
+    WeightLoader(std::vector<hmll_source_t> srcs, hmll_device_t device, std::unique_ptr<hmll_t> ctx, hmll_fetcher_kind_t backend = HMLL_FETCHER_AUTO);
+    WeightLoader(std::vector<hmll_source_t> srcs, hmll_device_t device, hmll_fetcher_kind_t backend = HMLL_FETCHER_AUTO);
 
     [[nodiscard]]
     hmll_t* context() const;

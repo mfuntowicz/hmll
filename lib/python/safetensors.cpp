@@ -29,7 +29,7 @@ class SafetensorsAccessor
     std::shared_ptr<hmll_registry_t> registry_;
 
 public:
-    SafetensorsAccessor(const std::filesystem::path& path, const hmll_device_t device, const bool is_sharded)
+    SafetensorsAccessor(const std::filesystem::path& path, const hmll_device_t device, const bool is_sharded, const hmll_fetcher_kind_t backend = HMLL_FETCHER_AUTO)
     {
         if (is_sharded) {
             hmll_source index{};
@@ -60,7 +60,7 @@ public:
                 }
             }
 
-            loader_ = std::make_unique<WeightLoader>(sources, device, std::move(ctx));
+            loader_ = std::make_unique<WeightLoader>(sources, device, std::move(ctx), backend);
             registry_ = std::move(registry);
         } else {
             const auto path_str = path.string();
@@ -77,7 +77,7 @@ public:
             }
 
             auto sources = std::vector<hmll_source_t>{source};
-            loader_ = std::make_unique<WeightLoader>(std::move(sources), device, std::move(ctx));
+            loader_ = std::make_unique<WeightLoader>(std::move(sources), device, std::move(ctx), backend);
             registry_ = std::move(registry);
         }
     }
@@ -182,7 +182,7 @@ void init_safetensors(nb::module_& m)
     .def("afetch", &SafetensorsAccessor::afetch)
     .def("fetch", &SafetensorsAccessor::fetch);
 
-    m.def("safetensors", [](const std::filesystem::path& path, const hmll_device_t device, const bool is_sharded) {
-        return new SafetensorsAccessor(path, device, is_sharded);
-    }, nb::rv_policy::take_ownership, "path"_a, "device"_a, "is_sharded"_a = false);
+    m.def("safetensors", [](const std::filesystem::path& path, const hmll_device_t device, const bool is_sharded, const hmll_fetcher_kind_t backend) {
+        return new SafetensorsAccessor(path, device, is_sharded, backend);
+    }, nb::rv_policy::take_ownership, "path"_a, "device"_a, "is_sharded"_a = false, "backend"_a = HMLL_FETCHER_AUTO);
 }
