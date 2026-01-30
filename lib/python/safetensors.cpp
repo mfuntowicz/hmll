@@ -113,6 +113,19 @@ public:
         return specs;
     }
 
+    [[nodiscard]] bool contains(const std::string_view name) const
+    {
+        return hmll_find_by_name(loader_->context(), registry_.get(), name.data()) >= 0;
+    }
+
+    const hmll_tensor_specs_t* operator[](const std::string_view name) const
+    {
+        if (const hmll_lookup_result lookup = hmll_lookup_tensor(loader_->context(), registry_.get(), name.data()); lookup.specs != nullptr)
+            return lookup.specs;
+
+        throw nb::key_error(name.data());
+    }
+
     [[nodiscard]] nb::ndarray<nb::c_contig> afetch(const std::string& name) const
     {
         const auto registry = registry_.get();
@@ -148,6 +161,8 @@ void init_safetensors(nb::module_& m)
 {
     nb::class_<SafetensorsAccessor>(m, "SafetensorsAccessor")
     .def("__len__", &SafetensorsAccessor::size)
+    .def("__contains__", &SafetensorsAccessor::contains)
+    .def("__getitem__", &SafetensorsAccessor::operator[])
     .def("__enter__", [](const nb::handle self) { return self; })
     .def("__exit__",
         [](SafetensorsAccessor&, nb::handle exc_type, nb::handle exc_value, nb::handle traceback) {
