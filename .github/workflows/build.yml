@@ -85,6 +85,7 @@ jobs:
 
       - name: Create test-scoped safetensors file
         id: create-safetensors
+        shell: bash
         run: |
           FPATH=$(python3 scripts/create_testing_safetensors.py)
           echo "filepath=$FPATH" >> $GITHUB_OUTPUT

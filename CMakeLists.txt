@@ -40,15 +40,20 @@ set(HMLL_LIBRARIES fmt::fmt)
 if(${HMLL_ENABLE_CUDA})
     find_package(CUDAToolkit REQUIRED)
     list(APPEND HMLL_LIBRARIES CUDA::cudart CUDA::cuda_driver)
-    add_compile_definitions(libhmll PUBLIC __HMLL_CUDA_ENABLED__=1)
+    add_compile_definitions(__HMLL_CUDA_ENABLED__=1)
     message(STATUS "Enabling CUDA support")
 endif()
 
 
+# _GNU_SOURCE needed for POSIX extensions like MADV_SEQUENTIAL on Linux
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_compile_definitions("_GNU_SOURCE")
+endif()
+
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND ${HMLL_ENABLE_IO_URING})
     include(cmake/liburing.cmake)
     list(APPEND HMLL_LIBRARIES liburing_static)
-    add_compile_definitions("_GNU_SOURCE")
+    add_compile_definitions("__HMLL_IO_URING_ENABLED__=1")
     message(STATUS "Enabling io_uring backend")
 endif()
 
@@ -87,20 +92,36 @@ if(WIN32)
         lib/win32/memory.c
         lib/win32/backend/mmap.c
     )
-elseif(LINUX)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     list(APPEND LIBHMLL_HEADERS
-        include/hmll/linux/loader.h
-        include/hmll/linux/backend/iouring.h
         include/hmll/unix/backend/mmap.h
     )
 
     list(APPEND LIBHMLL_SOURCES
-        lib/linux/loader.c
-        lib/linux/backend/iouring.c
         lib/unix/file.c
         lib/unix/memory.c
         lib/unix/backend/mmap.c
     )
+
+    # io_uring backend is optional on Linux
+    if(${HMLL_ENABLE_IO_URING})
+        list(APPEND LIBHMLL_HEADERS
+            include/hmll/linux/loader.h
+            include/hmll/linux/backend/iouring.h
+        )
+        list(APPEND LIBHMLL_SOURCES
+            lib/linux/loader.c
+            lib/linux/backend/iouring.c
+        )
+    else()
+        # Use Unix loader when io_uring is disabled
+        list(APPEND LIBHMLL_HEADERS
+            include/hmll/unix/loader.h
+        )
+        list(APPEND LIBHMLL_SOURCES
+            lib/unix/loader.c
+        )
+    endif()
 
 elseif(UNIX)
     list(APPEND LIBHMLL_HEADERS
@@ -119,8 +140,8 @@ endif()
 
 if(${HMLL_ENABLE_SAFETENSORS})
     message(STATUS "Enabling safetensors format support")
-    add_compile_definitions(libhmll PUBLIC __HMLL_SAFETENSORS_ENABLED__=1)
-    add_compile_definitions(libhmll PUBLIC __HMLL_TENSORS_ENABLED__=1)
+    add_compile_definitions(__HMLL_SAFETENSORS_ENABLED__=1)
+    add_compile_definitions(__HMLL_TENSORS_ENABLED__=1)
     fetchcontent_declare(
             yyjson
             GIT_REPOSITORY https://github.com/ibireme/yyjson.git
