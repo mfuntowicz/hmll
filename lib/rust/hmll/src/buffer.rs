@@ -96,6 +96,19 @@ pub struct Buffer {
 }
 
 impl Buffer {
+    /// Create an empty buffer for the given device.
+    ///
+    /// This is useful when you need to represent a zero-length fetch result.
+    #[inline(always)]
+    pub fn empty(device: Device) -> Self {
+        Self {
+            ptr: std::ptr::null_mut(),
+            size: 0,
+            device,
+            owned: false,
+        }
+    }
+
     /// Create a new buffer from raw parts.
     ///
     /// # Safety
@@ -119,8 +132,13 @@ impl Buffer {
     /// Get the buffer as a byte slice (CPU only).
     #[inline]
     pub fn as_slice(&self) -> Option<&[u8]> {
-        if self.device == Device::Cpu && !self.ptr.is_null() {
-            unsafe { Some(std::slice::from_raw_parts(self.ptr, self.size)) }
+        if self.device == Device::Cpu {
+            if self.ptr.is_null() || self.size == 0 {
+                // Return empty slice for empty/null buffers
+                Some(&[])
+            } else {
+                unsafe { Some(std::slice::from_raw_parts(self.ptr, self.size)) }
+            }
         } else {
             None
         }
