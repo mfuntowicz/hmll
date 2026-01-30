@@ -32,8 +32,7 @@ hmll_mmap_fetch_range_impl(struct hmll *ctx, const int iofile, const struct hmll
 
 #ifdef __HMLL_CUDA_ENABLED__
     if (ctx->fetcher->device == HMLL_DEVICE_CUDA) {
-        const void *p_src = (void *) ((uintptr_t)m_buf + offset);
-        cudaMemcpy(dst->ptr, p_src, dst->size, cudaMemcpyHostToDevice);
+        cudaMemcpy(dst->ptr, m_buf + offset, dst->size, cudaMemcpyHostToDevice);
     } else {
         memcpy(dst->ptr, m_buf + offset, dst->size);
     }
