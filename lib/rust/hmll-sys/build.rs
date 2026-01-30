@@ -163,11 +163,52 @@ fn link_cuda() {
     println!("cargo:rustc-link-lib=dylib=cuda");
 }
 
+/// Try to find GCC's internal include path for stddef.h and other compiler headers.
+/// This is needed because bindgen uses libclang which may not find GCC's headers.
+fn find_gcc_include_path() -> Option<String> {
+    // Try to get GCC's include path by running gcc -print-file-name=include
+    if let Ok(output) = std::process::Command::new("gcc")
+        .args(["-print-file-name=include"])
+        .output()
+    {
+        if output.status.success() {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !path.is_empty() && Path::new(&path).exists() {
+                return Some(path);
+            }
+        }
+    }
+
+    // Fallback: try common GCC include paths
+    let common_paths = [
+        "/usr/lib/gcc/x86_64-linux-gnu/13/include",
+        "/usr/lib/gcc/x86_64-linux-gnu/12/include",
+        "/usr/lib/gcc/x86_64-linux-gnu/11/include",
+        "/usr/lib/gcc/aarch64-linux-gnu/13/include",
+        "/usr/lib/gcc/aarch64-linux-gnu/12/include",
+    ];
+
+    for path in &common_paths {
+        if Path::new(path).exists() {
+            return Some(path.to_string());
+        }
+    }
+
+    None
+}
+
 fn generate_bindings(include_path: &Path) {
-    let builder = bindgen::Builder::default()
+    let mut builder = bindgen::Builder::default()
         .header(include_path.join("hmll/hmll.h").to_str().unwrap())
         .clang_arg(format!("-I{}", include_path.display()))
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()));
+
+    // Add GCC include path if found (fixes "stddef.h not found" on some systems)
+    if let Some(gcc_include) = find_gcc_include_path() {
+        builder = builder.clang_arg(format!("-I{}", gcc_include));
+    }
+
+    let builder = builder
         .allowlist_function("hmll_.*")
         .allowlist_type("hmll_.*")
         .allowlist_var("HMLL_.*")
@@ -197,6 +238,9 @@ fn generate_bindings(include_path: &Path) {
 
     #[cfg(feature = "cuda")]
     let builder = builder.clang_arg("-D__HMLL_CUDA_ENABLED__=1");
+
+    #[cfg(all(target_os = "linux", feature = "io_uring"))]
+    let builder = builder.clang_arg("-D__HMLL_IO_URING_ENABLED__=1");
 
     let bindings = builder.generate().expect("Unable to generate bindings");
 
