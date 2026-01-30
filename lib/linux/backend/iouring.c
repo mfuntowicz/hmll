@@ -62,6 +62,22 @@ static struct hmll_error hmll_io_uring_register_staging_buffers(
     return HMLL_OK;
 }
 
+static inline void hmll_io_uring_sync(const enum hmll_device device, const struct hmll_io_uring *fetcher)
+{
+    if (device == HMLL_DEVICE_CUDA) {
+#ifdef __HMLL_CUDA_ENABLED__
+        // Wait for all pending CUDA operations to complete
+        for (size_t i = 0; i < HMLL_URING_QUEUE_DEPTH; ++i) {
+            if (hmll_io_uring_slot_is_busy(fetcher->iobusy, i)) {
+                const struct hmll_io_uring_cuda_context *cd = (struct hmll_io_uring_cuda_context *)fetcher->device_ctx + i;
+                if (cd->state == HMLL_CUDA_STREAM_MEMCPY)
+                    cudaEventSynchronize(cd->done);
+            }
+        }
+#endif
+    }
+}
+
 /**
  * Checks for completed CUDA events and reclaims the associated io_uring slots.
  * If CUDA is disabled or the device is CPU, this is a no-op.
@@ -253,6 +269,7 @@ static ssize_t hmll_io_uring_fetch_range_impl(
         }
     }
 
+    hmll_io_uring_sync(dst->device, fetcher);
     return (ssize_t)b_read;
 }
 
