@@ -55,7 +55,7 @@ void hmll_free_buffer(struct hmll_iobuf *buffer)
     if (!buffer) return;
 
 #if defined(__HMLL_CUDA_ENABLED__)
-    if (buffer->device == HMLL_DEVICE_CUDA) cudaFreeHost(buffer->ptr);
+    if (buffer->device == HMLL_DEVICE_CUDA) cudaFree(buffer->ptr);
 #endif
 
     if (buffer->device == HMLL_DEVICE_CPU) munmap(buffer->ptr, buffer->size);
