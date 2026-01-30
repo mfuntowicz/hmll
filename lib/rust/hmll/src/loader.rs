@@ -9,8 +9,8 @@ use std::ptr;
 pub enum LoaderKind {
     /// Automatically select the best backend.
     Auto,
-    /// Use io_uring backend (Linux only).
-    #[cfg(target_os = "linux")]
+    /// Use io_uring backend (Linux only, requires io_uring feature).
+    #[cfg(all(target_os = "linux", feature = "io_uring"))]
     IoUring,
     /// Use mmap backend (cross-platform).
     Mmap,
@@ -22,7 +22,7 @@ impl LoaderKind {
     pub(crate) const fn to_raw(self) -> hmll_sys::hmll_loader_kind {
         match self {
             LoaderKind::Auto => hmll_sys::HMLL_FETCHER_AUTO,
-            #[cfg(target_os = "linux")]
+            #[cfg(all(target_os = "linux", feature = "io_uring"))]
             LoaderKind::IoUring => hmll_sys::HMLL_FETCHER_IO_URING,
             LoaderKind::Mmap => hmll_sys::HMLL_FETCHER_MMAP,
         }

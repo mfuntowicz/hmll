@@ -42,18 +42,11 @@ extern "C" {
 #include "memory.h"
 #include "types.h"
 
-#if defined(__unix__) || defined(__APPLE__)
-#endif
-
-#if defined(__linux__)
+// Platform-specific file handling - loader.h already handles platform detection
+#if defined(__linux__) || defined(__unix__) || defined(__APPLE__)
 #include "unix/file.h"
-#include "linux/loader.h"
-#elif defined(__unix__) || defined(__APPLE__)
-#include "unix/file.h"
-#include "unix/loader.h"
 #elif defined(_WIN32)
 #include "win32/file.h"
-#include "win32/loader.h"
 #endif
 
 #define likely(x)      __builtin_expect(!!(x), 1)

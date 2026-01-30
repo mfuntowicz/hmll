@@ -3,9 +3,11 @@
 
 #include "hmll/types.h"
 
-#if defined(__linux__)
+// Platform-specific loader headers
+// On Linux, use io_uring backend only if explicitly enabled
+#if defined(__linux__) && defined(__HMLL_IO_URING_ENABLED__)
 #include "hmll/linux/loader.h"
-#elif defined(__unix__) || defined(__APPLE__)
+#elif defined(__unix__) || defined(__APPLE__) || defined(__linux__)
 #include "hmll/unix/loader.h"
 #elif defined(_WIN32)
 #include "hmll/win32/loader.h"

@@ -2,11 +2,7 @@
 #include "hmll/loader.h"
 #include "hmll/hmll.h"
 
-#if defined(__linux__)
-#include "hmll/linux/loader.h"
-#elif defined(__unix__) || defined(__APPLE__)
-#include "hmll/unix/loader.h"
-#endif
+// Platform-specific loader headers (loader.h handles the include logic)
 
 
 struct hmll_error hmll_loader_init(
