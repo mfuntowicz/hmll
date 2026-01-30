@@ -76,6 +76,8 @@ static inline void hmll_io_uring_sync(const enum hmll_device device, const struc
         }
 #endif
     }
+
+    HMLL_UNUSED(fetcher);
 }
 
 /**
