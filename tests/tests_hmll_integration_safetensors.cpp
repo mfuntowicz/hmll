@@ -125,7 +125,7 @@ TEST_CASE("safetensors integration - read multi-dtype file", "[safetensors][inte
                 auto buffer = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
                 REQUIRE_FALSE(hmll_check(ctx.error));
 
-                auto bytes_read = hmll_fetch(&ctx, lookup.file, &buffer, range);
+                auto bytes_read = hmll_fetch(&ctx, lookup.file, &buffer, range.start);
                 REQUIRE(bytes_read > 0);
                 REQUIRE_FALSE(hmll_check(ctx.error));
 
@@ -172,7 +172,7 @@ TEST_CASE("safetensors integration - read multi-dtype file", "[safetensors][inte
                 hmll_iobuf_t buffer = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
                 REQUIRE_FALSE(hmll_check(ctx.error));
 
-                auto bytes_read = hmll_fetch(&ctx, lookup.file, &buffer, range);
+                auto bytes_read = hmll_fetch(&ctx, lookup.file, &buffer, range.start);
                 REQUIRE(bytes_read > 0);
 
                 auto num_elements = calculate_elements(ndim);
@@ -217,7 +217,7 @@ TEST_CASE("safetensors integration - read multi-dtype file", "[safetensors][inte
                  auto buffer = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
                 REQUIRE_FALSE(hmll_check(ctx.error));
 
-                auto bytes_read = hmll_fetch(&ctx, lookup.file, &buffer, range);
+                auto bytes_read = hmll_fetch(&ctx, lookup.file, &buffer, range.start);
                 REQUIRE(bytes_read > 0);
 
                 auto num_elements = calculate_elements(ndim);
@@ -262,7 +262,7 @@ TEST_CASE("safetensors integration - read multi-dtype file", "[safetensors][inte
                 hmll_iobuf_t buffer = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
                 REQUIRE_FALSE(hmll_check(ctx.error));
 
-                auto bytes_read = hmll_fetch(&ctx, lookup.file, &buffer, range);
+                auto bytes_read = hmll_fetch(&ctx, lookup.file, &buffer, range.start);
                 REQUIRE(bytes_read > 0);
 
                 auto num_elements = calculate_elements(ndim);
@@ -307,7 +307,7 @@ TEST_CASE("safetensors integration - read multi-dtype file", "[safetensors][inte
                 auto buffer = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
                 REQUIRE_FALSE(hmll_check(ctx.error));
 
-                auto bytes_read = hmll_fetch(&ctx, lookup.file, &buffer, range);
+                auto bytes_read = hmll_fetch(&ctx, lookup.file, &buffer, range.start);
                 REQUIRE(bytes_read > 0);
                 REQUIRE_FALSE(hmll_check(ctx.error));
 
@@ -340,7 +340,7 @@ TEST_CASE("safetensors integration - read multi-dtype file", "[safetensors][inte
                 auto buffer = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
                 REQUIRE_FALSE(hmll_check(ctx.error));
 
-                auto bytes_read = hmll_fetch(&ctx, lookup.file, &buffer, range);
+                auto bytes_read = hmll_fetch(&ctx, lookup.file, &buffer, range.start);
                 REQUIRE(bytes_read > 0);
 
                 hmll_free_buffer(&buffer);
