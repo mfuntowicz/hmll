@@ -1,0 +1,10 @@
+prefix=/usr/local
+exec_prefix=${prefix}
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+Name: hmll
+Description: High-performance ML model loading library
+Version: 0.1.0
+Libs: -L${libdir} -lhmll
+Cflags: -I${includedir}

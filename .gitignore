@@ -59,6 +59,7 @@ Cargo.lock
 cmake_install.cmake
 CMakeCache.txt
 Makefile
+!build-filc/filc-tests/Makefile
 CMakeFiles/
 
 build/
