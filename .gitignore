@@ -62,3 +62,5 @@ Makefile
 CMakeFiles/
 
 build/
+
+__pycache__/

@@ -189,7 +189,8 @@ unsafe impl Sync for Buffer {}
 
 impl Drop for Buffer {
     fn drop(&mut self) {
-        if !self.ptr.is_null() {
+        // Only free if we own the memory (not a view into mmap'd region)
+        if self.owned && !self.ptr.is_null() {
             let mut buf = hmll_iobuf {
                 size: self.size,
                 ptr: self.ptr.cast::<c_void>(),
@@ -199,5 +200,16 @@ impl Drop for Buffer {
             self.ptr = std::ptr::null_mut();
             self.size = 0;
         }
+    }
+}
+
+impl Buffer {
+    /// Check if this buffer owns its memory.
+    ///
+    /// Owned buffers are freed when dropped. Non-owned buffers (views) are
+    /// not freed because they point to memory managed elsewhere (e.g., mmap'd region).
+    #[inline(always)]
+    pub const fn is_owned(&self) -> bool {
+        self.owned
     }
 }

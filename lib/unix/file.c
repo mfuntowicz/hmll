@@ -1,11 +1,9 @@
 #include <errno.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#if defined(__APPLE__)
-#include <fcntl.h>
-#endif
 #include "hmll/hmll.h"
 
 struct hmll_error hmll_source_open(const char *path, struct hmll_source *src)

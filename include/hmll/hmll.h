@@ -100,6 +100,9 @@ HMLL_EXTERN struct hmll_error hmll_loader_init(
 HMLL_EXTERN ssize_t hmll_fetch(struct hmll *ctx, int iofile, const struct hmll_iobuf *dst, size_t offset) NO_EXCEPT;
 HMLL_EXTERN ssize_t hmll_fetchv(struct hmll *ctx, int iofile, const struct hmll_iobuf *dsts, const size_t *offsets, size_t n) NO_EXCEPT;
 
+/** Zero-copy mmap view (mmap backend, CPU device only) **/
+HMLL_EXTERN struct hmll_error hmll_get_mmap_view(struct hmll *ctx, int iofile, struct hmll_range range, struct hmll_iobuf *out_view) NO_EXCEPT;
+
 /** Tensors manipulation stubs - enabled if a higher-level tensor format is enabled **/
 #ifdef __HMLL_TENSORS_ENABLED__
 HMLL_EXTERN uint8_t hmll_nbits(enum hmll_dtype dtype) NO_EXCEPT;

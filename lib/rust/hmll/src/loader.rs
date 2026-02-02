@@ -196,6 +196,85 @@ impl<'a> WeightLoader<'a> {
         Ok(unsafe { Buffer::from_raw_parts(iobuf.ptr as *mut u8, iobuf.size, self.device, false) })
     }
 
+    /// Fetch a zero-copy view of a range of bytes from a specific source file.
+    ///
+    /// This returns a `Buffer` that points directly into the mmap'd region
+    /// without any memory allocation or copying. The buffer is only valid
+    /// as long as this `WeightLoader` remains valid.
+    ///
+    /// # Arguments
+    ///
+    /// * `range` - The byte range to get a view of (start..end)
+    /// * `file_index` - Index of the source file
+    ///
+    /// # Returns
+    ///
+    /// A `Buffer` containing a view into the mmap'd data. The buffer does NOT
+    /// own its memory and will NOT free it when dropped.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The file index is out of bounds
+    /// - The range is invalid
+    /// - The loader is not using the mmap backend
+    /// - The device is not CPU (GPU requires copying)
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use hmll::{Source, WeightLoader, Device, LoaderKind};
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let source = Source::open("model.safetensors")?;
+    /// # let sources = [source];
+    /// # let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Mmap)?;
+    ///
+    /// // Get a zero-copy view into the first 1MB
+    /// let view = loader.fetch_view(0..1024 * 1024, 0)?;
+    /// println!("Got view of {} bytes", view.len());
+    /// // view does not own its memory - no allocation or free happens
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn fetch_view<R: Into<Range>>(&mut self, range: R, file_index: i32) -> Result<Buffer> {
+        let range = range.into();
+
+        if file_index >= self.sources.len() as i32 {
+            return Err(Error::InvalidRange);
+        }
+
+        if range.is_empty() {
+            return Ok(unsafe { Buffer::from_raw_parts(ptr::null_mut(), 0, self.device, false) });
+        }
+
+        // Only CPU device supports views (GPU needs to copy to device memory)
+        if self.device != Device::Cpu {
+            return Err(Error::UnsupportedDevice);
+        }
+
+        let mut out_view = hmll_sys::hmll_iobuf {
+            size: 0,
+            ptr: ptr::null_mut(),
+            device: self.device.to_raw(),
+        };
+
+        let err = unsafe {
+            hmll_sys::hmll_get_mmap_view(
+                self.context.as_mut(),
+                file_index,
+                range.to_raw(),
+                &mut out_view,
+            )
+        };
+
+        Error::check_hmll_error(err)?;
+
+        // Return a non-owned buffer (view into mmap'd region)
+        Ok(unsafe {
+            Buffer::from_raw_parts(out_view.ptr as *mut u8, out_view.size, Device::Cpu, false)
+        })
+    }
+
     /// Get the device this loader is configured for.
     #[inline(always)]
     pub const fn device(&self) -> Device {
