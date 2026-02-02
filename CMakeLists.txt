@@ -53,7 +53,7 @@ endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND ${HMLL_ENABLE_IO_URING})
     include(cmake/liburing.cmake)
     list(APPEND HMLL_LIBRARIES liburing_static)
-    add_compile_definitions("__HMLL_IO_URING_ENABLED__=1")
+    set(HMLL_IO_URING_ENABLED TRUE)
     message(STATUS "Enabling io_uring backend")
 endif()
 
@@ -163,6 +163,9 @@ target_include_directories(libhmll PUBLIC
         $<INSTALL_INTERFACE:include>
 )
 target_compile_definitions(libhmll PUBLIC __HMLL_EXPORTS__=1)
+if(HMLL_IO_URING_ENABLED)
+    target_compile_definitions(libhmll PUBLIC "__HMLL_IO_URING_ENABLED__=1")
+endif()
 
 if (MSVC)
     # warning level 4

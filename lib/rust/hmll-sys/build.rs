@@ -239,9 +239,6 @@ fn generate_bindings(include_path: &Path) {
     #[cfg(feature = "cuda")]
     let builder = builder.clang_arg("-D__HMLL_CUDA_ENABLED__=1");
 
-    #[cfg(all(target_os = "linux", feature = "io_uring"))]
-    let builder = builder.clang_arg("-D__HMLL_IO_URING_ENABLED__=1");
-
     let bindings = builder.generate().expect("Unable to generate bindings");
 
     // Write the bindings to the $OUT_DIR/bindings.rs file

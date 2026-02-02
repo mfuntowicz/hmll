@@ -103,7 +103,9 @@ void init_loader(nb::module_& m)
 
     nb::enum_<hmll_fetcher_kind_t>(m, "Backend", R"pbdoc(Define the I/O backend to use)pbdoc")
     .value("AUTO", HMLL_FETCHER_AUTO, "Automatically select backend (defaults to MMAP)")
+#ifdef __HMLL_IO_URING_ENABLED__
     .value("IO_URING", HMLL_FETCHER_IO_URING, "Use io_uring for async I/O (Linux only)")
+#endif
     .value("MMAP", HMLL_FETCHER_MMAP, "Use memory-mapped I/O");
 
     nb::enum_<hmll_dtype_t>(m, "dtype", R"pbdoc(Define all the targetable element type in a tensor)pbdoc")
