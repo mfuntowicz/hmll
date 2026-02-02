@@ -8,6 +8,7 @@
 struct hmll_source {
     HANDLE handle;
     size_t size;
+    unsigned char *content;
 };
 typedef struct hmll_source hmll_source_t;
 
@@ -40,6 +41,9 @@ static inline FILE *hmll_get_file_from_fd(hmll_source_t source) {
 
     return fp;
 }
+
+// Memory map a file handle, attempting to use large pages when possible
+unsigned char *hmll_mmap_file(HANDLE handle, size_t size);
 
 #endif // HMLL_WIN_FILE_H
 

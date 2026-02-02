@@ -5,7 +5,7 @@
 #include <stdlib.h>
 
 struct hmll_mmap {
-    unsigned char **m_content;
+    const unsigned char **m_content;
     size_t n;
 };
 
@@ -13,11 +13,7 @@ static inline void hmll_mmap_free(struct hmll_mmap *backend)
 {
     if (backend) {
         if (backend->m_content) {
-            for (size_t i = 0; i < backend->n; i++) {
-                if (backend->m_content[i]) {
-                    UnmapViewOfFile(backend->m_content[i]);
-                }
-            }
+            // Note: backend doesn't own the memory, sources do
             free(backend->m_content);
         }
         free(backend);

@@ -17,8 +17,20 @@ struct hmll_error hmll_source_open(const char *path, struct hmll_source *src)
         goto close_fd_then_exit;
     }
 
+    if (size.QuadPart == 0) {
+        error = HMLL_ERR(HMLL_ERR_FILE_EMPTY);
+        goto close_fd_then_exit;
+    }
+
+    unsigned char *content = hmll_mmap_file(handle, (size_t)size.QuadPart);
+    if (content == NULL) {
+        error = HMLL_ERR(HMLL_ERR_MMAP_FAILED);
+        goto close_fd_then_exit;
+    }
+
     src->handle = handle;
-    src->size = size.QuadPart;
+    src->size = (size_t)size.QuadPart;
+    src->content = content;
 
     return HMLL_OK;
 
@@ -30,6 +42,56 @@ close_fd_then_exit:
 
 void hmll_source_close(const struct hmll_source *src)
 {
-    if (src != NULL && src->handle)
-        CloseHandle(src->handle);
+    if (src != NULL) {
+        if (src->content != NULL) {
+            UnmapViewOfFile(src->content);
+        }
+        if (src->handle != NULL) {
+            CloseHandle(src->handle);
+        }
+    }
+}
+
+
+unsigned char *hmll_mmap_file(HANDLE handle, size_t size)
+{
+    unsigned char *buf;
+    HANDLE h_mapping;
+
+    // Try to create file mapping with large pages first (requires SeManageVolumePrivilege)
+    h_mapping = CreateFileMappingA(
+        handle,
+        NULL,
+        PAGE_READONLY | SEC_LARGE_PAGES,
+        (DWORD)((size >> 32) & 0xFFFFFFFF),
+        (DWORD)(size & 0xFFFFFFFF),
+        NULL
+    );
+
+    if (h_mapping != NULL) {
+        buf = MapViewOfFile(h_mapping, FILE_MAP_READ, 0, 0, size);
+        CloseHandle(h_mapping);
+        if (buf != NULL) {
+            return buf;
+        }
+    }
+
+    // Fallback to regular pages
+    h_mapping = CreateFileMappingA(
+        handle,
+        NULL,
+        PAGE_READONLY,
+        (DWORD)((size >> 32) & 0xFFFFFFFF),
+        (DWORD)(size & 0xFFFFFFFF),
+        NULL
+    );
+
+    if (h_mapping == NULL) {
+        return NULL;
+    }
+
+    buf = MapViewOfFile(h_mapping, FILE_MAP_READ, 0, 0, size);
+    CloseHandle(h_mapping);
+
+    return buf;
 }

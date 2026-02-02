@@ -7,6 +7,7 @@
 struct hmll_source {
     int fd;
     size_t size;
+    unsigned char *content;
 };
 typedef struct hmll_source hmll_source_t;
 
@@ -26,6 +27,9 @@ static FILE *hmll_get_file_from_fd(const hmll_source_t source) {
 
     return fp;
 }
+
+// Memory map a file descriptor, attempting to use huge pages when possible
+unsigned char *hmll_mmap_file(int fd, size_t size);
 
 #endif // HMLL_UNIX_FILE_H
 

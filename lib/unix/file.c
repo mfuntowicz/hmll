@@ -2,6 +2,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <sys/file.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include "hmll/hmll.h"
@@ -32,8 +33,15 @@ struct hmll_error hmll_source_open(const char *path, struct hmll_source *src)
         goto close_fd_then_exit;
     }
 
+    unsigned char *content = hmll_mmap_file(fd, sb.st_size);
+    if (content == NULL) {
+        error = HMLL_ERR(HMLL_ERR_MMAP_FAILED);
+        goto close_fd_then_exit;
+    }
+
     src->fd = fd;
     src->size = sb.st_size;
+    src->content = content;
 
     return HMLL_OK;
 
@@ -47,6 +55,36 @@ exit:
 
 void hmll_source_close(const struct hmll_source *src)
 {
-    if (src != NULL && src->fd > 0)
-        close(src->fd);
+    if (src != NULL) {
+        if (src->content != NULL && src->size > 0) {
+            munmap(src->content, src->size);
+        }
+        if (src->fd > 0) {
+            close(src->fd);
+        }
+    }
+}
+
+
+unsigned char *hmll_mmap_file(const int fd, const size_t size)
+{
+    unsigned char *buf;
+
+#ifdef MAP_HUGETLB
+    buf = mmap(0, size, PROT_READ, MAP_PRIVATE | MAP_HUGETLB | MAP_HUGE_2MB, fd, 0);
+    if (buf != MAP_FAILED) {
+        return buf;
+    }
+#endif
+
+    buf = mmap(0, size, PROT_READ, MAP_PRIVATE, fd, 0);
+    if (buf == MAP_FAILED) {
+        return NULL;
+    }
+
+#ifdef MADV_HUGEPAGE
+    madvise(buf, size, MADV_HUGEPAGE);
+#endif
+
+    return buf;
 }

@@ -27,8 +27,8 @@ hmll_mmap_fetch_range_impl(struct hmll *ctx, const int iofile, const struct hmll
     if (dst->size == 0) return 0;
 
     const struct hmll_mmap *fetcher = ctx->fetcher->backend_impl_;
-    unsigned char *m_buf = fetcher->m_content[iofile];
-    madvise(m_buf + offset, dst->size, MADV_WILLNEED | MADV_SEQUENTIAL);
+    const unsigned char *m_buf = fetcher->m_content[iofile];
+    madvise((void *)(m_buf + offset), dst->size, MADV_WILLNEED | MADV_SEQUENTIAL);
 
 #ifdef __HMLL_CUDA_ENABLED__
     if (ctx->fetcher->device == HMLL_DEVICE_CUDA) {
@@ -90,7 +90,7 @@ struct hmll_error hmll_mmap_init(struct hmll *ctx, const enum hmll_device device
         goto exit;
     }
 
-    backend->m_content = calloc(sizeof(unsigned char *), ctx->num_sources);
+    backend->m_content = calloc(ctx->num_sources, sizeof(const unsigned char *));
     if (!backend->m_content) {
         ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
         goto exit;
@@ -98,15 +98,8 @@ struct hmll_error hmll_mmap_init(struct hmll *ctx, const enum hmll_device device
 
     for (size_t i = 0; i < ctx->num_sources; i++) {
         const struct hmll_source src = ctx->sources[i];
-        unsigned char *buf;
-        if ((buf = mmap(0, src.size, PROT_READ, MAP_PRIVATE, src.fd, 0)) == MAP_FAILED) {
-            free(backend->m_content);
-            ctx->error = HMLL_ERR(HMLL_ERR_MMAP_FAILED);
-            goto exit;
-        }
-
-        madvise(buf, src.size, MADV_WILLNEED | MADV_HUGEPAGE);
-        backend->m_content[i] = buf;
+        // Simply reference the already-mapped content from the source
+        backend->m_content[i] = src.content;
     }
 
     ctx->fetcher = calloc(1, sizeof(struct hmll_loader));

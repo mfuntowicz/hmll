@@ -44,51 +44,20 @@ struct hmll_error hmll_mmap_init(struct hmll *ctx, const enum hmll_device device
         goto exit;
     }
 
-    backend->m_content = calloc(sizeof(unsigned char *), ctx->num_sources);
+    backend->m_content = calloc(ctx->num_sources, sizeof(const unsigned char *));
     if (!backend->m_content) {
         ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
         free(backend);
         goto exit;
     }
 
-    backend->n = 0;
-
     for (size_t i = 0; i < ctx->num_sources; i++) {
         const struct hmll_source src = ctx->sources[i];
-
-        // Create file mapping using older, more compatible API
-        const HANDLE h_mapping = CreateFileMappingA(
-            src.handle,
-            NULL,
-            PAGE_READONLY,
-            0,
-            0,
-            NULL
-        );
-
-        if (!h_mapping) {
-            ctx->error = HMLL_SYS_ERR(GetLastError());
-            goto cleanup_mappings;
-        }
-
-        unsigned char *buf = MapViewOfFile(
-            h_mapping,
-            FILE_MAP_READ,
-            0,
-            0,
-            (SIZE_T)src.size
-        );
-
-        CloseHandle(h_mapping);
-
-        if (buf == NULL) {
-            ctx->error = HMLL_SYS_ERR(GetLastError());
-            goto cleanup_mappings;
-        }
-
-        backend->m_content[i] = buf;
-        backend->n++;
+        // Simply reference the already-mapped content from the source
+        backend->m_content[i] = src.content;
     }
+
+    backend->n = ctx->num_sources;
 
     ctx->fetcher = calloc(1, sizeof(struct hmll_loader));
     ctx->fetcher->kind = HMLL_FETCHER_MMAP;
@@ -96,10 +65,6 @@ struct hmll_error hmll_mmap_init(struct hmll *ctx, const enum hmll_device device
     ctx->fetcher->backend_impl_ = backend;
     ctx->fetcher->fetch_range_impl_ = hmll_mmap_fetch_range_impl;
     ctx->fetcher->fetchv_range_impl_ = NULL;
-    goto exit;
-
-cleanup_mappings:
-    hmll_mmap_free(backend);
 
 exit:
     return ctx->error;

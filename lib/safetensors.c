@@ -166,33 +166,13 @@ size_t hmll_safetensors_index(struct hmll *ctx, struct hmll_registry *reg, const
     size_t num_files = 0;
     size_t num_allocated_files = 0;
     char **files = NULL;
-    char *content = NULL;
     yyjson_doc *document = NULL;
 
     if (hmll_check(ctx->error))
         goto cleanup;
 
-    content = calloc(1, source.size);
-    if (!content) {
-        ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
-        goto cleanup;
-    }
-
-    FILE *file = hmll_get_file_from_fd(source);
-    if (!file) {
-        ctx->error = HMLL_ERR(HMLL_ERR_FILE_OPEN_FAILED);
-        goto cleanup;
-    }
-
-    if (fread(content, 1, source.size, file) != (size_t)source.size) {
-        ctx->error = HMLL_ERR(HMLL_ERR_FILE_READ_FAILED);
-        goto cleanup;
-    }
-
-    fclose(file);
-
     yyjson_read_err error;
-    if ((document = yyjson_read_opts(content, source.size, YYJSON_READ_NOFLAG, NULL, &error)) == NULL) {
+    if ((document = yyjson_read_opts((char *)source.content, source.size, YYJSON_READ_NOFLAG, NULL, &error)) == NULL) {
         ctx->error = HMLL_ERR(HMLL_ERR_SAFETENSORS_JSON_MALFORMED_INDEX);
         goto cleanup;
     }
@@ -264,7 +244,6 @@ cleanup:
     num_files = 0;
 
 exit:
-    if (content) free(content);
     return num_files;
 }
 
@@ -280,8 +259,6 @@ size_t hmll_safetensors_populate_registry(
         goto exit;
 
     yyjson_doc *document = NULL;
-    char *header = NULL;
-
     FILE *file = hmll_get_file_from_fd(source);
     if (!file) {
         ctx->error = HMLL_ERR(HMLL_ERR_FILE_OPEN_FAILED);
@@ -289,24 +266,11 @@ size_t hmll_safetensors_populate_registry(
     }
 
     uint64_t hsize;
-    if (fread(&hsize, sizeof(uint64_t), 1, file) != 1) {
-        ctx->error = HMLL_ERR(HMLL_ERR_FILE_READ_FAILED);
-        goto freeup_and_exit;
-    }
-    header = calloc(hsize, sizeof(unsigned char));
-    if (!header) {
-        ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
-        goto freeup_and_exit;
-    }
-
-    if (fread(header, sizeof(unsigned char), hsize, file) < hsize) {
-        ctx->error = HMLL_ERR(HMLL_ERR_FILE_READ_FAILED);
-        goto freeup_and_exit;
-    }
+    memcpy(&hsize, source.content, sizeof(uint64_t));
 
     // Parse JSON
     yyjson_read_err error;
-    document = yyjson_read_opts(header, hsize, YYJSON_READ_NOFLAG, NULL, &error);
+    document = yyjson_read_opts((char *)source.content + sizeof(uint64_t), hsize, YYJSON_READ_NOFLAG, NULL, &error);
     if (!document) {
         ctx->error = HMLL_ERR(HMLL_ERR_SAFETENSORS_JSON_INVALID_HEADER);
         goto freeup_and_exit;
@@ -375,7 +339,6 @@ size_t hmll_safetensors_populate_registry(
     }
 
 freeup_and_exit:
-    if (header) free(header);
     if (document) yyjson_doc_free(document);
 
 exit:
