@@ -1,137 +1,169 @@
 #include "hmll/win32/backend/mmap.h"
 #include <memoryapi.h>
-#include <windows.h>
 #include <stdlib.h>
 #include <string.h>
+#include <windows.h>
 
 #ifdef __HMLL_CUDA_ENABLED__
 #include "cuda_runtime.h"
 #endif
 
-static ssize_t hmll_mmap_fetch_range_impl(
-    struct hmll *ctx, const int iofile, const struct hmll_iobuf *dst, const size_t offset)
-{
-    if (hmll_check(ctx->error)) return -1;
-    if (dst->size == 0) return 0;
+static ssize_t hmll_mmap_fetch_range_impl(struct hmll *ctx, const int iofile,
+                                          const struct hmll_iobuf *dst,
+                                          const size_t offset) {
+  if (hmll_check(ctx->error))
+    return -1;
+  if (dst->size == 0)
+    return 0;
 
-    const struct hmll_mmap *fetcher = ctx->fetcher->backend_impl_;
-    const unsigned char *m_buf = fetcher->m_content[iofile];
+  const struct hmll_mmap *fetcher = ctx->fetcher->backend_impl_;
+  const unsigned char *m_buf = fetcher->m_content[iofile];
 
 #ifdef __HMLL_CUDA_ENABLED__
-    if (ctx->fetcher->device == HMLL_DEVICE_CUDA) {
-        cudaMemcpy(dst->ptr, m_buf + offset, dst->size, cudaMemcpyHostToDevice);
-    } else {
-        memcpy(dst->ptr, m_buf + offset, dst->size);
-    }
-#else
+  if (ctx->fetcher->device == HMLL_DEVICE_CUDA) {
+    cudaMemcpy(dst->ptr, m_buf + offset, dst->size, cudaMemcpyHostToDevice);
+  } else {
     memcpy(dst->ptr, m_buf + offset, dst->size);
+  }
+#else
+  memcpy(dst->ptr, m_buf + offset, dst->size);
 #endif
 
-    return (ssize_t) dst->size;
+  return (ssize_t)dst->size;
 }
 
-struct hmll_error hmll_mmap_init(struct hmll *ctx, const enum hmll_device device)
-{
-    if (hmll_check(ctx->error)) goto exit;
-    if (ctx->num_sources <= 0 || !ctx->sources) {
-        ctx->error = HMLL_ERR(HMLL_ERR_NO_SOURCE_PROVIDED);
-        goto exit;
-    }
-
-    struct hmll_mmap *backend = calloc(1, sizeof(struct hmll_mmap));
-    if (!backend) {
-        ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
-        goto exit;
-    }
-
-    backend->m_content = calloc(sizeof(unsigned char *), ctx->num_sources);
-    if (!backend->m_content) {
-        ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
-        free(backend);
-        goto exit;
-    }
-
-    backend->n = 0;
-
-    for (size_t i = 0; i < ctx->num_sources; i++) {
-        const struct hmll_source src = ctx->sources[i];
-
-        // Create file mapping using older, more compatible API
-        const HANDLE h_mapping = CreateFileMappingA(
-            src.handle,
-            NULL,
-            PAGE_READONLY,
-            0,
-            0,
-            NULL
-        );
-
-        if (!h_mapping) {
-            ctx->error = HMLL_SYS_ERR(GetLastError());
-            goto cleanup_mappings;
-        }
-
-        unsigned char *buf = MapViewOfFile(
-            h_mapping,
-            FILE_MAP_READ,
-            0,
-            0,
-            (SIZE_T)src.size
-        );
-
-        CloseHandle(h_mapping);
-
-        if (buf == NULL) {
-            ctx->error = HMLL_SYS_ERR(GetLastError());
-            goto cleanup_mappings;
-        }
-
-        backend->m_content[i] = buf;
-        backend->n++;
-    }
-
-    ctx->fetcher = calloc(1, sizeof(struct hmll_loader));
-    ctx->fetcher->kind = HMLL_FETCHER_MMAP;
-    ctx->fetcher->device = device;
-    ctx->fetcher->backend_impl_ = backend;
-    ctx->fetcher->fetch_range_impl_ = hmll_mmap_fetch_range_impl;
-    ctx->fetcher->fetchv_range_impl_ = NULL;
+struct hmll_error hmll_mmap_init(struct hmll *ctx,
+                                 const enum hmll_device device) {
+  if (hmll_check(ctx->error))
     goto exit;
+  if (ctx->num_sources <= 0 || !ctx->sources) {
+    ctx->error = HMLL_ERR(HMLL_ERR_NO_SOURCE_PROVIDED);
+    goto exit;
+  }
+
+  struct hmll_mmap *backend = calloc(1, sizeof(struct hmll_mmap));
+  if (!backend) {
+    ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
+    goto exit;
+  }
+
+  backend->m_content = calloc(sizeof(unsigned char *), ctx->num_sources);
+  if (!backend->m_content) {
+    ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
+    free(backend);
+    goto exit;
+  }
+
+  backend->m_sizes = calloc(sizeof(size_t), ctx->num_sources);
+  if (!backend->m_sizes) {
+    ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
+    free(backend->m_content);
+    free(backend);
+    goto exit;
+  }
+
+  backend->n = ctx->num_sources;
+  atomic_store(&backend->refcount, 1);
+
+  for (size_t i = 0; i < ctx->num_sources; i++) {
+    const struct hmll_source src = ctx->sources[i];
+
+    // Create file mapping using older, more compatible API
+    const HANDLE h_mapping =
+        CreateFileMappingA(src.handle, NULL, PAGE_READONLY, 0, 0, NULL);
+
+    if (!h_mapping) {
+      ctx->error = HMLL_SYS_ERR(GetLastError());
+      goto cleanup_mappings;
+    }
+
+    unsigned char *buf =
+        MapViewOfFile(h_mapping, FILE_MAP_READ, 0, 0, (SIZE_T)src.size);
+
+    CloseHandle(h_mapping);
+
+    if (buf == NULL) {
+      ctx->error = HMLL_SYS_ERR(GetLastError());
+      goto cleanup_mappings;
+    }
+
+    backend->m_content[i] = buf;
+    backend->m_sizes[i] = src.size;
+  }
+
+  ctx->fetcher = calloc(1, sizeof(struct hmll_loader));
+  ctx->fetcher->kind = HMLL_FETCHER_MMAP;
+  ctx->fetcher->device = device;
+  ctx->fetcher->backend_impl_ = backend;
+  ctx->fetcher->fetch_range_impl_ = hmll_mmap_fetch_range_impl;
+  ctx->fetcher->fetchv_range_impl_ = NULL;
+  goto exit;
 
 cleanup_mappings:
-    hmll_mmap_free(backend);
+  hmll_mmap_release(backend);
 
 exit:
-    return ctx->error;
+  return ctx->error;
 }
 
-struct hmll_error hmll_mmap_get_view(struct hmll *ctx, const int iofile, const struct hmll_range range, struct hmll_iobuf *out_view)
-{
-    if (hmll_check(ctx->error)) return ctx->error;
+struct hmll_error hmll_mmap_get_view(struct hmll *ctx, const int iofile,
+                                     const struct hmll_range range,
+                                     struct hmll_iobuf *out_view) {
+  if (hmll_check(ctx->error))
+    return ctx->error;
 
-    // Only supported for mmap backend
-    if (!ctx->fetcher || ctx->fetcher->kind != HMLL_FETCHER_MMAP) {
-        return HMLL_ERR(HMLL_ERR_UNSUPPORTED_PLATFORM);
+  // Only supported for mmap backend
+  if (!ctx->fetcher || ctx->fetcher->kind != HMLL_FETCHER_MMAP) {
+    return HMLL_ERR(HMLL_ERR_UNSUPPORTED_PLATFORM);
+  }
+
+  // Only supported for CPU device (GPU needs to copy)
+  if (ctx->fetcher->device != HMLL_DEVICE_CPU) {
+    return HMLL_ERR(HMLL_ERR_UNSUPPORTED_DEVICE);
+  }
+
+  // Validate file index
+  if (iofile < 0 || (size_t)iofile >= ctx->num_sources) {
+    return HMLL_ERR(HMLL_ERR_INVALID_RANGE);
+  }
+
+  struct hmll_mmap *fetcher = ctx->fetcher->backend_impl_;
+  unsigned char *m_buf = fetcher->m_content[iofile];
+  const size_t n_bytes = range.end - range.start;
+
+  // Retain the mmap (increment refcount)
+  hmll_mmap_retain(fetcher);
+
+  // Return a view directly into the mmap'd region
+  out_view->ptr = m_buf + range.start;
+  out_view->size = n_bytes;
+  out_view->device = HMLL_DEVICE_CPU;
+  out_view->owned = 0;          // View does NOT own memory
+  out_view->mmap_ref = fetcher; // Hold reference to mmap for cleanup
+
+  return HMLL_OK;
+}
+
+void hmll_mmap_retain(struct hmll_mmap *mmap) {
+  if (mmap) {
+    atomic_fetch_add(&mmap->refcount, 1);
+  }
+}
+
+void hmll_mmap_release(struct hmll_mmap *mmap) {
+  if (!mmap)
+    return;
+
+  // Decrement refcount; if it reaches 0, clean up
+  if (atomic_fetch_sub(&mmap->refcount, 1) == 1) {
+    // We were the last reference, clean up
+    for (size_t i = 0; i < mmap->n; i++) {
+      if (mmap->m_content[i]) {
+        UnmapViewOfFile(mmap->m_content[i]);
+      }
     }
-
-    // Only supported for CPU device (GPU needs to copy)
-    if (ctx->fetcher->device != HMLL_DEVICE_CPU) {
-        return HMLL_ERR(HMLL_ERR_UNSUPPORTED_DEVICE);
-    }
-
-    // Validate file index
-    if (iofile < 0 || (size_t)iofile >= ctx->num_sources) {
-        return HMLL_ERR(HMLL_ERR_INVALID_RANGE);
-    }
-
-    struct hmll_mmap *fetcher = ctx->fetcher->backend_impl_;
-    unsigned char *m_buf = fetcher->m_content[iofile];
-    const size_t n_bytes = range.end - range.start;
-
-    // Return a view directly into the mmap'd region
-    out_view->ptr = m_buf + range.start;
-    out_view->size = n_bytes;
-    out_view->device = HMLL_DEVICE_CPU;
-
-    return HMLL_OK;
+    free(mmap->m_sizes);
+    free(mmap->m_content);
+    free(mmap);
+  }
 }

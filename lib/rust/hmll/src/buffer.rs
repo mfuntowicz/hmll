@@ -3,7 +3,6 @@
 use crate::Device;
 use hmll_sys::{hmll_free_buffer, hmll_iobuf};
 use std::ops;
-use std::os::raw::c_void;
 
 /// Represents a range of bytes to fetch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -85,14 +84,21 @@ impl From<Range> for ops::Range<usize> {
 }
 
 /// A buffer containing fetched data.
-#[derive(Debug)]
+///
+/// Wraps the underlying `hmll_iobuf` C struct directly.
 pub struct Buffer {
-    ptr: *mut u8,
-    size: usize,
-    device: Device,
-    // We own this memory, so we need to track whether to free it
-    #[allow(dead_code)]
-    owned: bool,
+    buf: hmll_iobuf,
+}
+
+impl std::fmt::Debug for Buffer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Buffer")
+            .field("size", &self.buf.size)
+            .field("ptr", &self.buf.ptr)
+            .field("device", &self.device())
+            .field("owned", &self.is_owned())
+            .finish()
+    }
 }
 
 impl Buffer {
@@ -102,42 +108,35 @@ impl Buffer {
     #[inline(always)]
     pub fn empty(device: Device) -> Self {
         Self {
-            ptr: std::ptr::null_mut(),
-            size: 0,
-            device,
-            owned: false,
+            buf: hmll_iobuf {
+                size: 0,
+                ptr: std::ptr::null_mut(),
+                device: device.to_raw(),
+                owned: 0,
+                mmap_ref: std::ptr::null_mut(),
+            },
         }
     }
 
-    /// Create a new buffer from raw parts.
+    /// Create a new buffer from an `hmll_iobuf`.
     ///
     /// # Safety
     ///
-    /// The caller must ensure that `ptr` points to valid memory of at least `size` bytes.
+    /// The caller must ensure that `buf.ptr` points to valid memory of at least `buf.size` bytes.
     #[inline(always)]
-    pub(crate) unsafe fn from_raw_parts(
-        ptr: *mut u8,
-        size: usize,
-        device: Device,
-        owned: bool,
-    ) -> Self {
-        Self {
-            ptr,
-            size,
-            device,
-            owned,
-        }
+    pub(crate) unsafe fn from_raw(buf: hmll_iobuf) -> Self {
+        Self { buf }
     }
 
     /// Get the buffer as a byte slice (CPU only).
     #[inline]
     pub fn as_slice(&self) -> Option<&[u8]> {
-        if self.device == Device::Cpu {
-            if self.ptr.is_null() || self.size == 0 {
+        if self.device() == Device::Cpu {
+            if self.buf.ptr.is_null() || self.buf.size == 0 {
                 // Return empty slice for empty/null buffers
                 Some(&[])
             } else {
-                unsafe { Some(std::slice::from_raw_parts(self.ptr, self.size)) }
+                unsafe { Some(std::slice::from_raw_parts(self.buf.ptr as *const u8, self.buf.size)) }
             }
         } else {
             None
@@ -147,31 +146,25 @@ impl Buffer {
     /// Get the size of the buffer in bytes.
     #[inline(always)]
     pub const fn len(&self) -> usize {
-        self.size
+        self.buf.size
     }
 
     /// Check if the buffer is empty.
     #[inline(always)]
     pub const fn is_empty(&self) -> bool {
-        self.size == 0
+        self.buf.size == 0
     }
 
     /// Get the device where the buffer is located.
     #[inline(always)]
-    pub const fn device(&self) -> Device {
-        self.device
+    pub fn device(&self) -> Device {
+        Device::from_raw(self.buf.device)
     }
 
     /// Get a raw pointer to the buffer.
     #[inline(always)]
     pub const fn as_ptr(&self) -> *const u8 {
-        self.ptr as *const u8
-    }
-
-    /// Get a mutable raw pointer to the buffer.
-    #[inline(always)]
-    pub fn as_mut_ptr(&mut self) -> *mut u8 {
-        self.ptr
+        self.buf.ptr as *const u8
     }
 
     /// Convert to a Vec (copies data if on CPU, panics if on GPU).
@@ -181,6 +174,15 @@ impl Buffer {
             .expect("Cannot convert GPU buffer to Vec")
             .to_vec()
     }
+
+    /// Check if this buffer owns its memory.
+    ///
+    /// Owned buffers are freed when dropped. Non-owned buffers (views) are
+    /// not freed because they point to memory managed elsewhere (e.g., mmap'd region).
+    #[inline(always)]
+    pub const fn is_owned(&self) -> bool {
+        self.buf.owned != 0
+    }
 }
 
 // Buffer is Send and Sync as long as the device supports it
@@ -189,27 +191,9 @@ unsafe impl Sync for Buffer {}
 
 impl Drop for Buffer {
     fn drop(&mut self) {
-        // Only free if we own the memory (not a view into mmap'd region)
-        if self.owned && !self.ptr.is_null() {
-            let mut buf = hmll_iobuf {
-                size: self.size,
-                ptr: self.ptr.cast::<c_void>(),
-                device: self.device.to_raw(),
-            };
-            unsafe { hmll_free_buffer(&mut buf as *mut hmll_iobuf) };
-            self.ptr = std::ptr::null_mut();
-            self.size = 0;
+        if !self.buf.ptr.is_null() {
+            // hmll_free_buffer checks the owned flag and only frees if owned
+            unsafe { hmll_free_buffer(&mut self.buf) };
         }
-    }
-}
-
-impl Buffer {
-    /// Check if this buffer owns its memory.
-    ///
-    /// Owned buffers are freed when dropped. Non-owned buffers (views) are
-    /// not freed because they point to memory managed elsewhere (e.g., mmap'd region).
-    #[inline(always)]
-    pub const fn is_owned(&self) -> bool {
-        self.owned
     }
 }

@@ -131,6 +131,8 @@ struct hmll_iobuf
     size_t size;
     void *ptr;
     enum hmll_device device;
+    unsigned char owned;  // 1 if buffer owns memory, 0 if view into mmap'd region
+    void *mmap_ref;       // For views: pointer to hmll_mmap (refcounted), NULL for owned buffers
 };
 typedef struct hmll_iobuf hmll_iobuf_t;
 
