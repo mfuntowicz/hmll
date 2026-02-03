@@ -1,7 +1,6 @@
 #ifndef HMLL_WIN32_BACKEND_MMAP_H
 #define HMLL_WIN32_BACKEND_MMAP_H
 #include "hmll/hmll.h"
-#include <stdatomic.h>
 #include <stdlib.h>
 #include <windows.h>
 
@@ -9,7 +8,7 @@ struct hmll_mmap {
   unsigned char **m_content;
   size_t *m_sizes; // Size of each mmap'd region (needed for cleanup)
   size_t n;
-  atomic_size_t refcount;
+  volatile LONG refcount;  // Use Windows Interlocked* for atomics
 };
 
 struct hmll_error hmll_mmap_init(struct hmll *ctx, enum hmll_device device);

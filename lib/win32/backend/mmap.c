@@ -63,7 +63,7 @@ struct hmll_error hmll_mmap_init(struct hmll *ctx,
   }
 
   backend->n = ctx->num_sources;
-  atomic_store(&backend->refcount, 1);
+  InterlockedExchange(&backend->refcount, 1);
 
   for (size_t i = 0; i < ctx->num_sources; i++) {
     const struct hmll_source src = ctx->sources[i];
@@ -146,7 +146,7 @@ struct hmll_error hmll_mmap_get_view(struct hmll *ctx, const int iofile,
 
 void hmll_mmap_retain(struct hmll_mmap *mmap) {
   if (mmap) {
-    atomic_fetch_add(&mmap->refcount, 1);
+    InterlockedIncrement(&mmap->refcount);
   }
 }
 
@@ -154,9 +154,7 @@ void hmll_mmap_release(struct hmll_mmap *mmap) {
   if (!mmap)
     return;
 
-  // Decrement refcount; if it reaches 0, clean up
-  if (atomic_fetch_sub(&mmap->refcount, 1) == 1) {
-    // We were the last reference, clean up
+  if (InterlockedDecrement(&mmap->refcount) == 0) {
     for (size_t i = 0; i < mmap->n; i++) {
       if (mmap->m_content[i]) {
         UnmapViewOfFile(mmap->m_content[i]);
