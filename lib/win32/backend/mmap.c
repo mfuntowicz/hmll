@@ -54,7 +54,16 @@ struct hmll_error hmll_mmap_init(struct hmll *ctx,
     goto exit;
   }
 
-  backend->n = 0;
+  backend->m_sizes = calloc(sizeof(size_t), ctx->num_sources);
+  if (!backend->m_sizes) {
+    ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
+    free(backend->m_content);
+    free(backend);
+    goto exit;
+  }
+
+  backend->n = ctx->num_sources;
+  atomic_store(&backend->refcount, 1);
 
   for (size_t i = 0; i < ctx->num_sources; i++) {
     const struct hmll_source src = ctx->sources[i];
@@ -79,7 +88,7 @@ struct hmll_error hmll_mmap_init(struct hmll *ctx,
     }
 
     backend->m_content[i] = buf;
-    backend->n++;
+    backend->m_sizes[i] = src.size;
   }
 
   ctx->fetcher = calloc(1, sizeof(struct hmll_loader));
@@ -91,7 +100,7 @@ struct hmll_error hmll_mmap_init(struct hmll *ctx,
   goto exit;
 
 cleanup_mappings:
-  hmll_mmap_free(backend);
+  hmll_mmap_release(backend);
 
 exit:
   return ctx->error;
@@ -122,10 +131,39 @@ struct hmll_error hmll_mmap_get_view(struct hmll *ctx, const int iofile,
   unsigned char *m_buf = fetcher->m_content[iofile];
   const size_t n_bytes = range.end - range.start;
 
+  // Retain the mmap (increment refcount)
+  hmll_mmap_retain(fetcher);
+
   // Return a view directly into the mmap'd region
   out_view->ptr = m_buf + range.start;
   out_view->size = n_bytes;
   out_view->device = HMLL_DEVICE_CPU;
+  out_view->owned = 0;          // View does NOT own memory
+  out_view->mmap_ref = fetcher; // Hold reference to mmap for cleanup
 
   return HMLL_OK;
+}
+
+void hmll_mmap_retain(struct hmll_mmap *mmap) {
+  if (mmap) {
+    atomic_fetch_add(&mmap->refcount, 1);
+  }
+}
+
+void hmll_mmap_release(struct hmll_mmap *mmap) {
+  if (!mmap)
+    return;
+
+  // Decrement refcount; if it reaches 0, clean up
+  if (atomic_fetch_sub(&mmap->refcount, 1) == 1) {
+    // We were the last reference, clean up
+    for (size_t i = 0; i < mmap->n; i++) {
+      if (mmap->m_content[i]) {
+        UnmapViewOfFile(mmap->m_content[i]);
+      }
+    }
+    free(mmap->m_sizes);
+    free(mmap->m_content);
+    free(mmap);
+  }
 }

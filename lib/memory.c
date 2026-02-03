@@ -27,7 +27,15 @@ struct hmll_iobuf hmll_slice_buffer(const struct hmll_iobuf *src,
                                     const struct hmll_range slice) {
   if (slice.end - slice.start < src->size) {
     void *ptr = (unsigned char *)src->ptr + slice.start;
-    return (struct hmll_iobuf){slice.end - slice.start, ptr, src->device};
+    void *mmap_ref = src->mmap_ref;
+
+    // If source is a mmap view, retain the reference for the slice
+    if (mmap_ref) {
+      hmll_mmap_retain((struct hmll_mmap *)mmap_ref);
+    }
+
+    // Slices don't own their memory - they're views into the source buffer
+    return (struct hmll_iobuf){slice.end - slice.start, ptr, src->device, 0, mmap_ref};
   }
 
   return (struct hmll_iobuf){0};

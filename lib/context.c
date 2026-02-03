@@ -8,10 +8,8 @@
 
 #if defined(_WIN32)
 #include "hmll/win32/backend/mmap.h"
-#elif defined(__linux__)
-// TODO(mfuntowicz): include io_uring cleanup when implemented
-#elif defined(__unix__)
-// TODO(mfuntowicz): include unix mmap cleanup when implemented
+#elif defined(__unix__) || defined(__APPLE__)
+#include "hmll/unix/backend/mmap.h"
 #endif
 
 void hmll_destroy(struct hmll *ctx)
@@ -20,12 +18,19 @@ void hmll_destroy(struct hmll *ctx)
         if (ctx->fetcher) {
 #if defined(_WIN32)
             if (ctx->fetcher->kind == HMLL_FETCHER_MMAP && ctx->fetcher->backend_impl_) {
-                hmll_mmap_free(ctx->fetcher->backend_impl_);
+                // Release the loader's reference to the mmap.
+                // If no views are outstanding, this will unmap and free.
+                // Otherwise, cleanup happens when last view is freed.
+                hmll_mmap_release(ctx->fetcher->backend_impl_);
             }
-#elif defined(__linux__)
+#elif defined(__unix__) || defined(__APPLE__)
+            if (ctx->fetcher->kind == HMLL_FETCHER_MMAP && ctx->fetcher->backend_impl_) {
+                // Release the loader's reference to the mmap.
+                // If no views are outstanding, this will munmap and free.
+                // Otherwise, cleanup happens when last view is freed.
+                hmll_mmap_release(ctx->fetcher->backend_impl_);
+            }
             // TODO(mfuntowicz): handle io_uring cleanup
-#elif defined(__unix__)
-            // TODO(mfuntowicz): handle unix mmap cleanup
 #endif
             free(ctx->fetcher);
             ctx->fetcher = NULL;

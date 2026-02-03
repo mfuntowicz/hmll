@@ -165,7 +165,7 @@ impl<'a> WeightLoader<'a> {
         }
 
         if range.is_empty() {
-            return Ok(unsafe { Buffer::from_raw_parts(ptr::null_mut(), 0, self.device, false) });
+            return Ok(Buffer::empty(self.device));
         }
 
         let iobuf = unsafe {
@@ -193,7 +193,7 @@ impl<'a> WeightLoader<'a> {
             return Err(Error::from_hmll_error(err));
         }
 
-        Ok(unsafe { Buffer::from_raw_parts(iobuf.ptr as *mut u8, iobuf.size, self.device, false) })
+        Ok(unsafe { Buffer::from_raw(iobuf) })
     }
 
     /// Fetch a zero-copy view of a range of bytes from a specific source file.
@@ -244,7 +244,7 @@ impl<'a> WeightLoader<'a> {
         }
 
         if range.is_empty() {
-            return Ok(unsafe { Buffer::from_raw_parts(ptr::null_mut(), 0, self.device, false) });
+            return Ok(Buffer::empty(self.device));
         }
 
         // Only CPU device supports views (GPU needs to copy to device memory)
@@ -256,6 +256,8 @@ impl<'a> WeightLoader<'a> {
             size: 0,
             ptr: ptr::null_mut(),
             device: self.device.to_raw(),
+            owned: 0,
+            mmap_ref: ptr::null_mut(),
         };
 
         let err = unsafe {
@@ -269,10 +271,8 @@ impl<'a> WeightLoader<'a> {
 
         Error::check_hmll_error(err)?;
 
-        // Return a non-owned buffer (view into mmap'd region)
-        Ok(unsafe {
-            Buffer::from_raw_parts(out_view.ptr as *mut u8, out_view.size, Device::Cpu, false)
-        })
+        // hmll_get_mmap_view sets owned=0 for views
+        Ok(unsafe { Buffer::from_raw(out_view) })
     }
 
     /// Get the device this loader is configured for.
