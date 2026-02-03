@@ -24,7 +24,7 @@ static ssize_t hmll_mmap_fetch_range_impl(
         memcpy(dst->ptr, m_buf + offset, dst->size);
     }
 #else
-    memcpy(dst->ptr, m_buf + range.start, n_bytes);
+    memcpy(dst->ptr, m_buf + offset, dst->size);
 #endif
 
     return (ssize_t) dst->size;
