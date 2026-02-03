@@ -164,7 +164,7 @@ target_include_directories(libhmll PUBLIC
 )
 target_compile_definitions(libhmll PUBLIC __HMLL_EXPORTS__=1)
 if(HMLL_IO_URING_ENABLED)
-    target_compile_definitions(libhmll PUBLIC "__HMLL_IO_URING_ENABLED__=1")
+    target_compile_definitions(libhmll PUBLIC __HMLL_IO_URING_ENABLED__=1)
 endif()
 
 if (MSVC)

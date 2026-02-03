@@ -231,6 +231,9 @@ fn generate_bindings(include_path: &Path) {
         .rustified_enum("hmll_dtype");
 
     // Add conditional defines based on features
+    #[cfg(feature = "io_uring")]
+    let builder = builder.clang_arg("-D__HMLL_IO_URING_ENABLED__=1");
+
     #[cfg(feature = "safetensors")]
     let builder = builder
         .clang_arg("-D__HMLL_SAFETENSORS_ENABLED__=1")
