@@ -44,7 +44,7 @@ hmll_mmap_fetch_range_impl(struct hmll *ctx, const int iofile, const struct hmll
 }
 
 static ssize_t
-hmll_mmap_fetchv_range_impl(struct hmll *ctx, const int iofile, const struct hmll_iobuf *dsts, const struct hmll_range *ranges, const size_t n)
+hmll_mmap_fetchv_range_impl(struct hmll *ctx, const int iofile, const struct hmll_iobuf *dsts, const size_t *offsets, const size_t n)
 {
     if (hmll_check(ctx->error)) return -1;
 
@@ -53,26 +53,21 @@ hmll_mmap_fetchv_range_impl(struct hmll *ctx, const int iofile, const struct hml
     ssize_t total_bytes = 0;
 
     for (size_t i = 0; i < n; i++) {
-        const struct hmll_range range = ranges[i];
         const struct hmll_iobuf *dst = &dsts[i];
-        const size_t n_bytes = range.end - range.start;
+        const size_t offset = offsets[i];
+        const size_t n_bytes = dst->size;
 
-        madvise(m_buf + range.start, n_bytes, MADV_WILLNEED | MADV_SEQUENTIAL);
-
-        if (dst->size < n_bytes) {
-            ctx->error = HMLL_ERR(HMLL_ERR_BUFFER_TOO_SMALL);
-            return -1;
-        }
+        madvise(m_buf + offset, n_bytes, MADV_WILLNEED | MADV_SEQUENTIAL);
 
 #ifdef __HMLL_CUDA_ENABLED__
         if (ctx->fetcher->device == HMLL_DEVICE_CUDA) {
-            const void *p_src = (void *) ((uintptr_t)m_buf + range.start);
+            const void *p_src = (void *) ((uintptr_t)m_buf + offset);
             cudaMemcpy(dst->ptr, p_src, n_bytes, cudaMemcpyHostToDevice);
         } else {
-            memcpy(dst->ptr, m_buf + range.start, n_bytes);
+            memcpy(dst->ptr, m_buf + offset, n_bytes);
         }
 #else
-        memcpy(dst->ptr, m_buf + range.start, n_bytes);
+        memcpy(dst->ptr, m_buf + offset, n_bytes);
 #endif
 
         total_bytes += (ssize_t) n_bytes;
