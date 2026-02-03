@@ -116,7 +116,6 @@ struct hmll_error hmll_mmap_init(struct hmll *ctx,
     unsigned char *buf;
     if ((buf = mmap(0, src.size, PROT_READ, MAP_PRIVATE, src.fd, 0)) ==
         MAP_FAILED) {
-      // Cleanup already mapped regions
       for (size_t j = 0; j < i; j++) {
         munmap(backend->m_content[j], backend->m_sizes[j]);
       }
@@ -159,7 +158,6 @@ struct hmll_error hmll_mmap_get_view(struct hmll *ctx, const int iofile,
     return HMLL_ERR(HMLL_ERR_UNSUPPORTED_DEVICE);
   }
 
-  // Validate file index
   if (iofile < 0 || (size_t)iofile >= ctx->num_sources) {
     return HMLL_ERR(HMLL_ERR_INVALID_RANGE);
   }
@@ -194,9 +192,7 @@ void hmll_mmap_release(struct hmll_mmap *mmap) {
   if (!mmap)
     return;
 
-  // Decrement refcount; if it reaches 0, clean up
   if (atomic_fetch_sub(&mmap->refcount, 1) == 1) {
-    // We were the last reference, clean up
     for (size_t i = 0; i < mmap->n; i++) {
       if (mmap->m_content[i]) {
         munmap(mmap->m_content[i], mmap->m_sizes[i]);
