@@ -108,6 +108,7 @@ int main(const int argc, const char** argv)
             fprintf(stderr, "Failed to lookup tensor: %s\n", hmll_strerr(ctx.error));
     }
 
+    hmll_free_registry(&registry);
     hmll_source_close(&src);
     return 0;
 }

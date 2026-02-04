@@ -30,9 +30,5 @@ void hmll_destroy(struct hmll *ctx)
             free(ctx->fetcher);
             ctx->fetcher = NULL;
         }
-
-        if (ctx->sources) {
-            for (size_t i = 0; i < ctx->num_sources; ++i) hmll_source_free(ctx->sources + i);
-        }
     }
 }
