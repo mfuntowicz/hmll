@@ -33,7 +33,7 @@ struct hmll_error hmll_source_open(const char *path, struct hmll_source *src)
         goto close_fd_then_exit;
     }
 
-    unsigned char *content = hmll_mmap_file(fd, sb.st_size);
+    const unsigned char *content = hmll_mmap_file(fd, sb.st_size);
     if (content == NULL) {
         error = HMLL_ERR(HMLL_ERR_MMAP_FAILED);
         goto close_fd_then_exit;
@@ -77,7 +77,7 @@ unsigned char *hmll_mmap_file(const int fd, const size_t size)
     unsigned char *buf;
 
 #ifdef MAP_HUGETLB
-    buf = mmap(0, size, PROT_READ, MAP_PRIVATE | MAP_HUGETLB | MAP_HUGE_2MB, fd, 0);
+    buf = mmap(0, size, PROT_READ, MAP_PRIVATE | MAP_HUGETLB, fd, 0);
     if (buf != MAP_FAILED) {
         return buf;
     }
