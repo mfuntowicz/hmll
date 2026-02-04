@@ -7,7 +7,7 @@
 struct hmll_source {
     int fd;
     size_t size;
-    unsigned char *content;
+    const unsigned char *content;
 };
 typedef struct hmll_source hmll_source_t;
 

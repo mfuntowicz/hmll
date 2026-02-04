@@ -93,11 +93,10 @@ impl<'a> WeightLoader<'a> {
             return Err(Error::InvalidRange);
         }
 
-        let sources_vec: Vec<hmll_sys::hmll_source> = sources.iter().map(|s| *s.as_raw()).collect();
-
+        let mut sources_vec: Vec<hmll_sys::hmll_source> = sources.iter().map(|s| *s.as_raw()).collect();
         let mut context = Box::new(hmll_sys::hmll {
             fetcher: ptr::null_mut(),
-            sources: ptr::null(),
+            sources: ptr::null_mut(),
             num_sources: 0,
             error: hmll_sys::hmll_error {
                 code: hmll_sys::HMLL_ERR_SUCCESS,
@@ -108,7 +107,7 @@ impl<'a> WeightLoader<'a> {
         unsafe {
             let err = hmll_sys::hmll_loader_init(
                 context.as_mut(),
-                sources_vec.as_ptr(),
+                sources_vec.as_mut_ptr(),
                 sources_vec.len(),
                 device.to_raw(),
                 kind.to_raw(),
@@ -309,9 +308,6 @@ impl<'a> Drop for WeightLoader<'a> {
         }
     }
 }
-
-// WeightLoader is Send but not Sync (mutable operations)
-unsafe impl<'a> Send for WeightLoader<'a> {}
 
 /// Information about a source file.
 #[derive(Debug, Clone, Copy)]

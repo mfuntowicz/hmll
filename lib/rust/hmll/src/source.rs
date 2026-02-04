@@ -3,6 +3,7 @@
 use crate::error::{Error, Result};
 use std::ffi::CString;
 use std::path::Path;
+use std::ptr::null_mut;
 
 /// A source file for loading model weights.
 ///
@@ -34,7 +35,7 @@ impl Source {
         let c_path = CString::new(path_str)
             .map_err(|_| Error::FileNotFound("Path contains null byte".to_string()))?;
 
-        let mut source = hmll_sys::hmll_source { fd: -1, size: 0 };
+        let mut source = hmll_sys::hmll_source { fd: -1, size: 0, content: null_mut() };
 
         unsafe {
             let err = hmll_sys::hmll_source_open(c_path.as_ptr(), &mut source);

@@ -78,7 +78,6 @@ set(LIBHMLL_SOURCES
         lib/memory.c
 )
 
-
 if(WIN32)
     list(APPEND LIBHMLL_HEADERS
         include/hmll/win32/file.h

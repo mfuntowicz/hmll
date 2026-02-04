@@ -30,21 +30,9 @@ void hmll_destroy(struct hmll *ctx)
             free(ctx->fetcher);
             ctx->fetcher = NULL;
         }
+
+        if (ctx->sources) {
+            for (size_t i = 0; i < ctx->num_sources; ++i) hmll_source_free(ctx->sources + i);
+        }
     }
 }
-
-struct hmll_error hmll_clone_context(struct hmll *dst, const struct hmll *src)
-{
-    if (!src || !dst) {
-        return HMLL_ERR(HMLL_ERR_INVALID_RANGE);
-    }
-
-    memcpy(dst, src, sizeof(struct hmll));
-
-    // Reset error state for the new context
-    dst->error = HMLL_OK;
-    dst->fetcher = NULL;
-
-    return HMLL_OK;
-}
-

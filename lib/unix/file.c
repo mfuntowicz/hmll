@@ -55,16 +55,22 @@ exit:
 
 void hmll_source_close(const struct hmll_source *src)
 {
-    if (src != NULL) {
-        if (src->content != NULL && src->size > 0) {
-            munmap(src->content, src->size);
-        }
-        if (src->fd > 0) {
-            close(src->fd);
-        }
+    if (src && src->fd > 0) {
+        close(src->fd);
     }
 }
 
+void hmll_source_free(struct hmll_source *src)
+{
+    if (src) {
+        hmll_source_close(src);
+        if (src->content && src->size > 0) {
+            munmap((void *)src->content, src->size);
+            src->size = 0;
+        }
+        free(src);
+    }
+}
 
 unsigned char *hmll_mmap_file(const int fd, const size_t size)
 {

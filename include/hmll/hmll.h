@@ -79,12 +79,10 @@ HMLL_EXTERN unsigned char hmll_error_is_lib_error(struct hmll_error err) NO_EXCE
 HMLL_EXTERN const char *hmll_strerr(struct hmll_error err) NO_EXCEPT;
 HMLL_EXTERN void hmll_destroy(struct hmll *ctx) NO_EXCEPT;
 
-/** Context cloning **/
-HMLL_EXTERN struct hmll_error hmll_clone_context(struct hmll *dst, const struct hmll *src) NO_EXCEPT;
-
 /** Sources handling stubs **/
 HMLL_EXTERN struct hmll_error hmll_source_open(const char *path, struct hmll_source *src) NO_EXCEPT;
 HMLL_EXTERN void hmll_source_close(const struct hmll_source *src) NO_EXCEPT;
+HMLL_EXTERN void hmll_source_free(struct hmll_source *src) NO_EXCEPT;
 
 /** Memory handling stubs **/
 static inline size_t hmll_range_size(const struct hmll_range range) NO_EXCEPT { return range.end - range.start; }
@@ -96,7 +94,7 @@ HMLL_EXTERN struct hmll_iobuf hmll_slice_buffer(const struct hmll_iobuf *src, st
 
 /** Fetching stubs **/
 HMLL_EXTERN struct hmll_error hmll_loader_init(
-    struct hmll *ctx, const struct hmll_source *srcs, size_t n, enum hmll_device device, enum hmll_loader_kind kind) NO_EXCEPT;
+    struct hmll *ctx, struct hmll_source *srcs, size_t n, enum hmll_device device, enum hmll_loader_kind kind) NO_EXCEPT;
 HMLL_EXTERN ssize_t hmll_fetch(struct hmll *ctx, int iofile, const struct hmll_iobuf *dst, size_t offset) NO_EXCEPT;
 HMLL_EXTERN ssize_t hmll_fetchv(struct hmll *ctx, int iofile, const struct hmll_iobuf *dsts, const size_t *offsets, size_t n) NO_EXCEPT;
 

@@ -7,7 +7,7 @@
 
 struct hmll_error hmll_loader_init(
     struct hmll *ctx,
-    const struct hmll_source *srcs,
+    struct hmll_source *srcs,
     const size_t n,
     const enum hmll_device device,
     const enum hmll_loader_kind kind)

@@ -32,8 +32,8 @@ static double time_diff_ns(const timespec_t *start, const timespec_t *end) {
 #include <cuda_runtime.h>
 #endif
 
-// #define TENSOR_NAME "language_model.model.layers.15.mlp.gate_proj.weight"
-#define TENSOR_NAME "model.embed_tokens.weight"
+#define TENSOR_NAME "language_model.model.embed_tokens.weight"
+// #define TENSOR_NAME "model.embed_tokens.weight"
 
 int main(const int argc, const char** argv)
 {
@@ -56,7 +56,7 @@ int main(const int argc, const char** argv)
         return 3;
 
     const hmll_lookup_result_t lookup = hmll_lookup_tensor(&ctx, &registry, TENSOR_NAME);
-    if (hmll_success(ctx.error) && lookup.specs != NULL)
+    if (hmll_success(ctx.error) && lookup.specs)
     {
         const hmll_range_t range = (struct hmll_range){ lookup.specs->start, lookup.specs->end };
         const hmll_iobuf_t buffer = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
@@ -101,7 +101,13 @@ int main(const int argc, const char** argv)
                 printf("Got an error while reading the safetensors: %s\n", hmll_strerr(ctx.error));
             }
         }
+    } else {
+        if (!lookup.specs)
+            fprintf(stderr, "Tensor not found in safetensors file.\n");
+        else
+            fprintf(stderr, "Failed to lookup tensor: %s\n", hmll_strerr(ctx.error));
     }
 
+    hmll_source_close(&src);
     return 0;
 }

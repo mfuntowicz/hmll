@@ -42,14 +42,20 @@ close_fd_then_exit:
 
 void hmll_source_close(const struct hmll_source *src)
 {
-    if (src != NULL) {
-        if (src->content != NULL) {
-            UnmapViewOfFile(src->content);
-        }
-        if (src->handle != NULL) {
+    if (src) {
+        if (src->handle) {
             CloseHandle(src->handle);
         }
     }
+}
+
+void hmll_source_free(struct hmll_source *src)
+{
+    hmll_source_close(src);
+    if (src->content && src->size > 0) {
+        UnmapViewOfFile(src->content);
+    }
+    free(src);
 }
 
 
