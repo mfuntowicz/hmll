@@ -136,13 +136,9 @@ mod tests {
             size: 4096,
             ptr: std::ptr::null_mut(),
             device: hmll_device::HMLL_DEVICE_CPU,
-            owned: 1,
-            mmap_ref: std::ptr::null_mut(),
         };
         assert_eq!(iobuf.size, 4096);
         assert!(iobuf.ptr.is_null());
         assert_eq!(iobuf.device, hmll_device::HMLL_DEVICE_CPU);
-        assert_eq!(iobuf.owned, 1);
-        assert!(iobuf.mmap_ref.is_null());
     }
 }

@@ -109,7 +109,6 @@ struct hmll_error hmll_mmap_init(struct hmll *ctx,
   }
 
   backend->n = ctx->num_sources;
-  atomic_store(&backend->refcount, 1);
 
   for (size_t i = 0; i < ctx->num_sources; i++) {
     const struct hmll_source src = ctx->sources[i];
@@ -142,64 +141,38 @@ exit:
   return ctx->error;
 }
 
-struct hmll_error hmll_mmap_get_view(struct hmll *ctx, const int iofile,
-                                     const struct hmll_range range,
-                                     struct hmll_iobuf *out_view) {
-  if (hmll_check(ctx->error))
-    return ctx->error;
-
-  // Only supported for mmap backend
-  if (!ctx->fetcher || ctx->fetcher->kind != HMLL_FETCHER_MMAP) {
-    return HMLL_ERR(HMLL_ERR_UNSUPPORTED_PLATFORM);
+void *hmll_get_mmap_backend(struct hmll *ctx) {
+  if (!ctx || !ctx->fetcher || ctx->fetcher->kind != HMLL_FETCHER_MMAP) {
+    return NULL;
   }
-
-  // Only supported for CPU device (GPU needs to copy)
-  if (ctx->fetcher->device != HMLL_DEVICE_CPU) {
-    return HMLL_ERR(HMLL_ERR_UNSUPPORTED_DEVICE);
-  }
-
-  if (iofile < 0 || (size_t)iofile >= ctx->num_sources) {
-    return HMLL_ERR(HMLL_ERR_INVALID_RANGE);
-  }
-
-  struct hmll_mmap *fetcher = ctx->fetcher->backend_impl_;
-  unsigned char *m_buf = fetcher->m_content[iofile];
-  const size_t n_bytes = range.end - range.start;
-
-  // Issue madvise for the range
-  madvise(m_buf + range.start, n_bytes, MADV_WILLNEED | MADV_SEQUENTIAL);
-
-  // Retain the mmap (increment refcount)
-  hmll_mmap_retain(fetcher);
-
-  // Return a view directly into the mmap'd region
-  out_view->ptr = m_buf + range.start;
-  out_view->size = n_bytes;
-  out_view->device = HMLL_DEVICE_CPU;
-  out_view->owned = 0;          // View does NOT own memory
-  out_view->mmap_ref = fetcher; // Hold reference to mmap for cleanup
-
-  return HMLL_OK;
+  return ctx->fetcher->backend_impl_;
 }
 
-void hmll_mmap_retain(struct hmll_mmap *mmap) {
-  if (mmap) {
-    atomic_fetch_add(&mmap->refcount, 1);
-  }
-}
-
-void hmll_mmap_release(struct hmll_mmap *mmap) {
+void hmll_mmap_free_impl(struct hmll_mmap *mmap) {
   if (!mmap)
     return;
 
-  if (atomic_fetch_sub(&mmap->refcount, 1) == 1) {
-    for (size_t i = 0; i < mmap->n; i++) {
-      if (mmap->m_content[i]) {
-        munmap(mmap->m_content[i], mmap->m_sizes[i]);
-      }
+  for (size_t i = 0; i < mmap->n; i++) {
+    if (mmap->m_content[i]) {
+      munmap(mmap->m_content[i], mmap->m_sizes[i]);
     }
-    free(mmap->m_sizes);
-    free(mmap->m_content);
-    free(mmap);
   }
+  free(mmap->m_sizes);
+  free(mmap->m_content);
+  free(mmap);
+}
+
+void hmll_mmap_free(void *mmap) {
+  hmll_mmap_free_impl((struct hmll_mmap *)mmap);
+}
+
+void *hmll_get_mmap_content(struct hmll *ctx, int iofile) {
+  if (!ctx || !ctx->fetcher || ctx->fetcher->kind != HMLL_FETCHER_MMAP) {
+    return NULL;
+  }
+  if (iofile < 0 || (size_t)iofile >= ctx->num_sources) {
+    return NULL;
+  }
+  struct hmll_mmap *fetcher = ctx->fetcher->backend_impl_;
+  return fetcher->m_content[iofile];
 }

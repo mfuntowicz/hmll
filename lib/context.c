@@ -6,32 +6,16 @@
 #include <string.h>
 #include "hmll/hmll.h"
 
-#if defined(_WIN32)
-#include "hmll/win32/backend/mmap.h"
-#elif defined(__unix__) || defined(__APPLE__)
-#include "hmll/unix/backend/mmap.h"
-#endif
-
 void hmll_destroy(struct hmll *ctx)
 {
     if (ctx) {
         if (ctx->fetcher) {
-#if defined(_WIN32)
-            if (ctx->fetcher->kind == HMLL_FETCHER_MMAP && ctx->fetcher->backend_impl_) {
-                // Release the loader's reference to the mmap.
-                // If no views are outstanding, this will unmap and free.
-                // Otherwise, cleanup happens when last view is freed.
-                hmll_mmap_release(ctx->fetcher->backend_impl_);
-            }
-#elif defined(__unix__) || defined(__APPLE__)
-            if (ctx->fetcher->kind == HMLL_FETCHER_MMAP && ctx->fetcher->backend_impl_) {
-                // Release the loader's reference to the mmap.
-                // If no views are outstanding, this will munmap and free.
-                // Otherwise, cleanup happens when last view is freed.
-                hmll_mmap_release(ctx->fetcher->backend_impl_);
-            }
+            // Note: For mmap backend, we do NOT free backend_impl_ here.
+            // The Rust wrapper manages mmap lifetime via Arc reference counting.
+            // It will call hmll_mmap_free() when all references are dropped.
+            // We only free the fetcher struct itself, not the backend data.
+
             // TODO(mfuntowicz): handle io_uring cleanup
-#endif
             free(ctx->fetcher);
             ctx->fetcher = NULL;
         }

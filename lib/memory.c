@@ -23,26 +23,15 @@ struct hmll_iobuf hmll_get_buffer_for_range(struct hmll *ctx,
 
   return buf;
 }
+
 struct hmll_iobuf hmll_slice_buffer(const struct hmll_iobuf *src,
                                     const struct hmll_range slice) {
   if (slice.end - slice.start < src->size) {
     void *ptr = (unsigned char *)src->ptr + slice.start;
-    void *mmap_ref = src->mmap_ref;
-
-    // If source is a mmap view, retain the reference for the slice
-    if (mmap_ref) {
-      hmll_mmap_retain((struct hmll_mmap *)mmap_ref);
-    }
-
-    // Slices don't own their memory - they're views into the source buffer
-    return (struct hmll_iobuf){slice.end - slice.start, ptr, src->device, 0, mmap_ref};
+    // Slices don't own their memory - they're views into the source buffer.
+    // Ownership is tracked in the Rust wrapper layer.
+    return (struct hmll_iobuf){slice.end - slice.start, ptr, src->device};
   }
 
   return (struct hmll_iobuf){0};
-}
-
-struct hmll_error hmll_get_mmap_view(struct hmll *ctx, const int iofile,
-                                     const struct hmll_range range,
-                                     struct hmll_iobuf *out_view) {
-  return hmll_mmap_get_view(ctx, iofile, range, out_view);
 }

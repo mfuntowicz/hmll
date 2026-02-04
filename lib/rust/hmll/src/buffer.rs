@@ -1,8 +1,22 @@
 //! Buffer and range types for data operations.
 
+use crate::error::{Error, Result};
+use crate::mmap::MmapHandle;
 use crate::Device;
 use hmll_sys::{hmll_free_buffer, hmll_iobuf};
 use std::ops;
+use std::sync::Arc;
+
+/// Describes the ownership and lifetime semantics of a buffer.
+enum BufferKind {
+    /// Empty buffer - nothing to free or keep alive.
+    Empty,
+    /// Owned memory allocated via hmll (must be freed on drop).
+    Owned,
+    /// Zero-copy view into mmap'd region.
+    /// The Arc is held for RAII - dropping it decrements the mmap refcount.
+    MmapView(#[allow(dead_code)] Arc<MmapHandle>),
+}
 
 /// Represents a range of bytes to fetch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -85,9 +99,12 @@ impl From<Range> for ops::Range<usize> {
 
 /// A buffer containing fetched data.
 ///
-/// Wraps the underlying `hmll_iobuf` C struct directly.
+/// Buffers come in two flavors:
+/// - **Owned**: Allocated memory that is freed when the buffer is dropped.
+/// - **View**: Zero-copy pointer into mmap'd memory, kept alive via Arc.
 pub struct Buffer {
     buf: hmll_iobuf,
+    kind: BufferKind,
 }
 
 impl std::fmt::Debug for Buffer {
@@ -103,8 +120,6 @@ impl std::fmt::Debug for Buffer {
 
 impl Buffer {
     /// Create an empty buffer for the given device.
-    ///
-    /// This is useful when you need to represent a zero-length fetch result.
     #[inline(always)]
     pub fn empty(device: Device) -> Self {
         Self {
@@ -112,20 +127,50 @@ impl Buffer {
                 size: 0,
                 ptr: std::ptr::null_mut(),
                 device: device.to_raw(),
-                owned: 0,
-                mmap_ref: std::ptr::null_mut(),
             },
+            kind: BufferKind::Empty,
         }
     }
 
-    /// Create a new buffer from an `hmll_iobuf`.
+    /// Create a new owned buffer from an `hmll_iobuf`.
+    ///
+    /// Owned buffers are freed when dropped.
     ///
     /// # Safety
     ///
-    /// The caller must ensure that `buf.ptr` points to valid memory of at least `buf.size` bytes.
+    /// The caller must ensure that `buf.ptr` points to valid memory of at least `buf.size` bytes,
+    /// and that the memory was allocated via hmll allocation functions.
     #[inline(always)]
-    pub(crate) unsafe fn from_raw(buf: hmll_iobuf) -> Self {
-        Self { buf }
+    pub(crate) unsafe fn from_raw_owned(buf: hmll_iobuf) -> Self {
+        Self {
+            buf,
+            kind: BufferKind::Owned,
+        }
+    }
+
+    /// Create a zero-copy view into mmap'd memory.
+    ///
+    /// The Arc keeps the mmap alive while this buffer exists.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that `ptr` points to valid memory within the mmap region
+    /// of at least `size` bytes.
+    #[inline(always)]
+    pub(crate) unsafe fn from_mmap_view(
+        ptr: *mut std::ffi::c_void,
+        size: usize,
+        device: Device,
+        mmap_handle: Arc<MmapHandle>,
+    ) -> Self {
+        Self {
+            buf: hmll_iobuf {
+                size,
+                ptr,
+                device: device.to_raw(),
+            },
+            kind: BufferKind::MmapView(mmap_handle),
+        }
     }
 
     /// Get the buffer as a byte slice (CPU only).
@@ -167,21 +212,25 @@ impl Buffer {
         self.buf.ptr as *const u8
     }
 
-    /// Convert to a Vec (copies data if on CPU, panics if on GPU).
+    /// Convert to a Vec by copying data.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::UnsupportedDevice` if the buffer is on a GPU device.
     #[inline]
-    pub fn to_vec(&self) -> Vec<u8> {
+    pub fn to_vec(&self) -> Result<Vec<u8>> {
         self.as_slice()
-            .expect("Cannot convert GPU buffer to Vec")
-            .to_vec()
+            .map(|s| s.to_vec())
+            .ok_or(Error::UnsupportedDevice)
     }
 
     /// Check if this buffer owns its memory.
     ///
-    /// Owned buffers are freed when dropped. Non-owned buffers (views) are
-    /// not freed because they point to memory managed elsewhere (e.g., mmap'd region).
+    /// Owned buffers are freed when dropped. Views point into mmap'd memory
+    /// and are kept alive by an Arc reference.
     #[inline(always)]
-    pub const fn is_owned(&self) -> bool {
-        self.buf.owned != 0
+    pub fn is_owned(&self) -> bool {
+        matches!(self.kind, BufferKind::Owned)
     }
 }
 
@@ -191,9 +240,11 @@ unsafe impl Sync for Buffer {}
 
 impl Drop for Buffer {
     fn drop(&mut self) {
-        if !self.buf.ptr.is_null() {
-            // hmll_free_buffer checks the owned flag and only frees if owned
-            unsafe { hmll_free_buffer(&mut self.buf) };
+        if let BufferKind::Owned = self.kind {
+            if !self.buf.ptr.is_null() {
+                unsafe { hmll_free_buffer(&mut self.buf) };
+            }
         }
+        // For MmapView: the Arc is dropped automatically, decrementing refcount
     }
 }

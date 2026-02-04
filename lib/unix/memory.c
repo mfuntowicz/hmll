@@ -3,7 +3,6 @@
 //
 #include <sys/mman.h>
 #include "hmll/hmll.h"
-#include "hmll/unix/backend/mmap.h"
 
 #if defined(__linux__)
 #include "linux/mman.h"
@@ -46,35 +45,25 @@ void *hmll_alloc(const size_t size, const enum hmll_device device, const int fla
 
     if (device == HMLL_DEVICE_CUDA && flags == HMLL_MEM_STAGING)
         cudaHostAlloc(&ptr, size, cudaHostAllocDefault | cudaHostAllocPortable);
-
 #endif
     return ptr;
 }
 
 void hmll_free_buffer(struct hmll_iobuf *buffer)
 {
-    if (!buffer) return;
+    if (!buffer || !buffer->ptr) return;
 
-    // If this is a view into mmap'd region, release the reference
-    if (!buffer->owned) {
-        if (buffer->mmap_ref) {
-            hmll_mmap_release((struct hmll_mmap *)buffer->mmap_ref);
-            buffer->mmap_ref = NULL;
-        }
-        buffer->ptr = NULL;
-        buffer->size = 0;
-        return;
-    }
-
+    // Free the allocated memory based on device type.
+    // The Rust wrapper decides whether to call this (owned buffers only).
 #if defined(__HMLL_CUDA_ENABLED__)
-    if (buffer->device == HMLL_DEVICE_CUDA) cudaFree(buffer->ptr);
+    if (buffer->device == HMLL_DEVICE_CUDA)
+        cudaFree(buffer->ptr);
 #endif
 
     if (buffer->device == HMLL_DEVICE_CPU) munmap(buffer->ptr, buffer->size);
 
     buffer->ptr = NULL;
     buffer->size = 0;
-    buffer->owned = 0;
 }
 
 struct hmll_iobuf hmll_get_buffer(struct hmll *ctx, const enum hmll_device device, const size_t size, const int flags)
@@ -100,5 +89,5 @@ struct hmll_iobuf hmll_get_buffer(struct hmll *ctx, const enum hmll_device devic
 #endif
         break;
     }
-    return (struct hmll_iobuf){size, ptr, device, 1, NULL};  // owned=1, no mmap_ref
+    return (struct hmll_iobuf){size, ptr, device};
 }
