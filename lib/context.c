@@ -3,16 +3,13 @@
 //
 
 #include <stdlib.h>
-#include <string.h>
 #include "hmll/hmll.h"
 
 #if defined(_WIN32)
 #include "hmll/win32/backend/mmap.h"
-#elif defined(__linux__)
+#elif defined(__unix__) || defined(__linux__) || defined(__APPLE__)
 #include "hmll/unix/backend/mmap.h"
 // TODO(mfuntowicz): include io_uring cleanup when implemented
-#elif defined(__unix__)
-#include "hmll/unix/backend/mmap.h"
 #endif
 
 void hmll_destroy(struct hmll *ctx)
