@@ -242,6 +242,13 @@ if(${HMLL_BUILD_TESTS})
     )
     target_include_directories(libhmll_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/include)
     target_link_libraries(libhmll_tests PRIVATE Catch2::Catch2WithMain libhmll)
+
+    # Enable sanitizers for tests
+    if(${HMLL_ENABLE_SANITIZERS} AND NOT MSVC)
+        target_compile_options(libhmll_tests PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+        target_link_options(libhmll_tests PRIVATE -fsanitize=address,undefined)
+    endif()
+
     catch_discover_tests(libhmll_tests)
 endif()
 
