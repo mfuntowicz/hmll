@@ -1,30 +1,37 @@
-//! Safe, idiomatic Rust bindings to the hmll library.
+//! High-performance, file-format agnostic byte loading for Rust.
 //!
-//! This crate provides a safe, high-level interface to the hmll C library for
-//! high-performance loading of machine learning model files.
+//! hmll provides fast I/O primitives for loading bytes from files. It is designed
+//! to be embedded into file-format libraries (like safetensors) rather than used
+//! directly by end users.
 //!
 //! # Features
 //!
-//! - **`io_uring`** (default): High-performance I/O using io_uring on Linux
-//! - **`safetensors`**: Native support for safetensors format
-//! - **`cuda`**: CUDA memory support for GPU operations
+//! - **`io_uring`** (default, Linux only): High-performance async I/O
+//! - **`cuda`**: Direct loading to GPU memory
 //!
-//! # Example
+//! # Core API
+//!
+//! - [`Source`]: File handle with size information
+//! - [`WeightLoader`]: Fast byte loading with multiple backend support
+//! - [`Buffer`]: Loaded data (owned or zero-copy mmap view)
+//!
+//! # Multi-file Support
+//!
+//! hmll supports loading from multiple files simultaneously:
 //!
 //! ```no_run
-//! use hmll::{Source, WeightLoader, Device, LoaderKind};
-//!
+//! # use hmll::{Source, WeightLoader, Device, LoaderKind};
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! // Open a model file
-//! let source = Source::open("model.safetensors")?;
-//! let sources = [source];
+//! let sources = [
+//!     Source::open("shard-00001.bin")?,
+//!     Source::open("shard-00002.bin")?,
+//! ];
 //!
-//! // Create a weight loader
 //! let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)?;
 //!
-//! // Fetch a range of bytes
-//! let data = loader.fetch(0..1024, 0)?;
-//! println!("Fetched {} bytes", data.len());
+//! // Fetch bytes from specific file by index
+//! let data = loader.fetch(0..1024, 0)?;  // from shard 1
+//! let data = loader.fetch(0..1024, 1)?;  // from shard 2
 //! # Ok(())
 //! # }
 //! ```
@@ -35,18 +42,8 @@ mod error;
 mod loader;
 mod source;
 
-#[cfg(feature = "safetensors")]
-mod dtype;
-#[cfg(feature = "safetensors")]
-mod registry;
-
 pub use buffer::{Buffer, Range};
 pub use device::Device;
 pub use error::{Error, Result};
 pub use loader::{LoaderKind, WeightLoader};
 pub use source::Source;
-
-#[cfg(feature = "safetensors")]
-pub use dtype::DType;
-#[cfg(feature = "safetensors")]
-pub use registry::{Registry, TensorInfo};

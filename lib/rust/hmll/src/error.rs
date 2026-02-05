@@ -18,6 +18,9 @@ pub enum Error {
     #[error("Unsupported device")]
     UnsupportedDevice,
 
+    #[error("Unsupported backend for this operation")]
+    UnsupportedBackend,
+
     #[error("Memory allocation failed")]
     AllocationFailed,
 
@@ -39,11 +42,23 @@ pub enum Error {
     #[error("I/O error")]
     IoError,
 
+    #[error("No source provided")]
+    NoSourceProvided,
+
     #[error("File not found: {0}")]
     FileNotFound(String),
 
     #[error("File is empty")]
     FileEmpty,
+
+    #[error("Failed to open file")]
+    FileOpenFailed,
+
+    #[error("Failed to read file")]
+    FileReadFailed,
+
+    #[error("Failed to register file")]
+    FileRegistrationFailed,
 
     #[error("Memory mapping failed")]
     MmapFailed,
@@ -109,8 +124,12 @@ impl Error {
             HMLL_ERR_BUFFER_ADDR_NOT_ALIGNED => Error::BufferAddrNotAligned,
             HMLL_ERR_BUFFER_TOO_SMALL => Error::BufferTooSmall,
             HMLL_ERR_IO_ERROR => Error::IoError,
+            HMLL_ERR_NO_SOURCE_PROVIDED => Error::NoSourceProvided,
             HMLL_ERR_FILE_NOT_FOUND => Error::FileNotFound(String::new()),
             HMLL_ERR_FILE_EMPTY => Error::FileEmpty,
+            HMLL_ERR_FILE_OPEN_FAILED => Error::FileOpenFailed,
+            HMLL_ERR_FILE_READ_FAILED => Error::FileReadFailed,
+            HMLL_ERR_FILE_REGISTRATION_FAILED => Error::FileRegistrationFailed,
             HMLL_ERR_MMAP_FAILED => Error::MmapFailed,
             HMLL_ERR_IO_BUFFER_REGISTRATION_FAILED => Error::IoBufferRegistrationFailed,
             HMLL_ERR_SAFETENSORS_JSON_INVALID_HEADER => Error::SafeTensorsJsonInvalidHeader,

@@ -1,8 +1,10 @@
 //! Weight loader implementation for efficient model loading.
 
+use crate::source::SourceHandle;
 use crate::{Buffer, Device, Error, Range, Result, Source};
 use std::marker::PhantomData;
 use std::ptr;
+use std::sync::Arc;
 
 /// Loader backend kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -71,7 +73,10 @@ impl Default for LoaderKind {
 /// ```
 pub struct WeightLoader<'a> {
     context: Box<hmll_sys::hmll>,
+    /// Raw sources passed to C layer
     sources: Vec<hmll_sys::hmll_source>,
+    /// Arc handles for each source - keeps mmap alive while views exist
+    source_handles: Vec<Arc<SourceHandle>>,
     device: Device,
     _marker: PhantomData<&'a ()>,
 }
@@ -93,6 +98,12 @@ impl<'a> WeightLoader<'a> {
             return Err(Error::InvalidRange);
         }
 
+        // Clone Arc handles to keep sources alive while views exist
+        let source_handles: Vec<Arc<SourceHandle>> = sources
+            .iter()
+            .map(|s| s.handle().clone())
+            .collect();
+
         let mut sources_vec: Vec<hmll_sys::hmll_source> = sources.iter().map(|s| *s.as_raw()).collect();
         let mut context = Box::new(hmll_sys::hmll {
             fetcher: ptr::null_mut(),
@@ -113,11 +124,21 @@ impl<'a> WeightLoader<'a> {
                 kind.to_raw(),
             );
             Error::check_hmll_error(err)?;
+
+            // For mmap backend, close fds immediately - mmap is independent of fd.
+            // NOTE: Could detect Auto resolving to mmap and close too, but left out for now.
+            if kind == LoaderKind::Mmap {
+                for handle in &source_handles {
+                    let inner_ptr = &handle.inner as *const _ as *mut hmll_sys::hmll_source;
+                    hmll_sys::hmll_source_close(inner_ptr);
+                }
+            }
         }
 
         Ok(Self {
             context,
             sources: sources_vec,
+            source_handles,
             device,
             _marker: PhantomData,
         })
@@ -156,15 +177,15 @@ impl<'a> WeightLoader<'a> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn fetch<R: Into<Range>>(&mut self, range: R, file_index: i32) -> Result<Buffer> {
+    pub fn fetch<R: Into<Range>>(&mut self, range: R, file_index: usize) -> Result<Buffer> {
         let range = range.into();
 
-        if file_index >= self.sources.len() as i32 {
+        if file_index >= self.sources.len() {
             return Err(Error::InvalidRange);
         }
 
         if range.is_empty() {
-            return Ok(unsafe { Buffer::from_raw_parts(ptr::null_mut(), 0, self.device, false) });
+            return Ok(Buffer::empty(self.device));
         }
 
         let iobuf = unsafe {
@@ -180,7 +201,7 @@ impl<'a> WeightLoader<'a> {
         }
 
         let res = unsafe {
-            hmll_sys::hmll_fetch(self.context.as_mut(), file_index, &iobuf, range.start)
+            hmll_sys::hmll_fetch(self.context.as_mut(), file_index as i32, &iobuf, range.start)
         };
 
         if res < 0 {
@@ -192,14 +213,14 @@ impl<'a> WeightLoader<'a> {
             return Err(Error::from_hmll_error(err));
         }
 
-        Ok(unsafe { Buffer::from_raw_parts(iobuf.ptr as *mut u8, iobuf.size, self.device, false) })
+        Ok(unsafe { Buffer::from_raw_owned(iobuf) })
     }
 
     /// Fetch a zero-copy view of a range of bytes from a specific source file.
     ///
     /// This returns a `Buffer` that points directly into the mmap'd region
-    /// without any memory allocation or copying. The buffer is only valid
-    /// as long as this `WeightLoader` remains valid.
+    /// without any memory allocation or copying. The buffer holds an Arc
+    /// reference to the source, so it can safely **outlive** this `WeightLoader`.
     ///
     /// # Arguments
     ///
@@ -209,14 +230,14 @@ impl<'a> WeightLoader<'a> {
     /// # Returns
     ///
     /// A `Buffer` containing a view into the mmap'd data. The buffer does NOT
-    /// own its memory and will NOT free it when dropped.
+    /// own its memory and will NOT free it when dropped. Instead, it holds an
+    /// Arc reference that keeps the source's mmap alive.
     ///
     /// # Errors
     ///
     /// Returns an error if:
     /// - The file index is out of bounds
     /// - The range is invalid
-    /// - The loader is not using the mmap backend
     /// - The device is not CPU (GPU requires copying)
     ///
     /// # Example
@@ -232,18 +253,19 @@ impl<'a> WeightLoader<'a> {
     /// let view = loader.fetch_view(0..1024 * 1024, 0)?;
     /// println!("Got view of {} bytes", view.len());
     /// // view does not own its memory - no allocation or free happens
+    /// // view can outlive the loader due to Arc refcounting
     /// # Ok(())
     /// # }
     /// ```
-    pub fn fetch_view<R: Into<Range>>(&mut self, range: R, file_index: i32) -> Result<Buffer> {
+    pub fn fetch_view<R: Into<Range>>(&mut self, range: R, file_index: usize) -> Result<Buffer> {
         let range = range.into();
 
-        if file_index >= self.sources.len() as i32 {
+        if file_index >= self.sources.len() {
             return Err(Error::InvalidRange);
         }
 
         if range.is_empty() {
-            return Ok(unsafe { Buffer::from_raw_parts(ptr::null_mut(), 0, self.device, false) });
+            return Ok(Buffer::empty(self.device));
         }
 
         // Only CPU device supports views (GPU needs to copy to device memory)
@@ -251,27 +273,21 @@ impl<'a> WeightLoader<'a> {
             return Err(Error::UnsupportedDevice);
         }
 
-        let mut out_view = hmll_sys::hmll_iobuf {
-            size: 0,
-            ptr: ptr::null_mut(),
-            device: self.device.to_raw(),
-        };
+        // Clone the Arc to keep the source (and its mmap) alive
+        let source_handle = self.source_handles[file_index].clone();
 
-        let err = unsafe {
-            hmll_sys::hmll_get_mmap_view(
-                self.context.as_mut(),
-                file_index,
-                range.to_raw(),
-                &mut out_view,
-            )
-        };
+        // Get the mmap'd content pointer directly from the source
+        let content_ptr = source_handle.inner.content;
+        if content_ptr.is_null() {
+            return Err(Error::MmapFailed);
+        }
 
-        Error::check_hmll_error(err)?;
+        // Calculate the view pointer
+        let view_ptr = unsafe { (content_ptr as *mut u8).add(range.start) as *mut std::ffi::c_void };
+        let view_size = range.len();
 
-        // Return a non-owned buffer (view into mmap'd region)
-        Ok(unsafe {
-            Buffer::from_raw_parts(out_view.ptr as *mut u8, out_view.size, Device::Cpu, false)
-        })
+        // Create a view buffer - Arc keeps source (and mmap) alive
+        Ok(unsafe { Buffer::from_source_view(view_ptr, view_size, self.device, source_handle) })
     }
 
     /// Get the device this loader is configured for.
@@ -289,15 +305,7 @@ impl<'a> WeightLoader<'a> {
     /// Get information about a specific source file.
     #[inline]
     pub fn source_info(&self, index: usize) -> Option<SourceInfo> {
-        if index < self.sources.len() {
-            Some(SourceInfo {
-                size: self.sources[index].size,
-                #[cfg(target_family = "unix")]
-                fd: self.sources[index].fd,
-            })
-        } else {
-            None
-        }
+        self.sources.get(index).map(|s| SourceInfo { size: s.size })
     }
 }
 
@@ -314,9 +322,6 @@ impl<'a> Drop for WeightLoader<'a> {
 pub struct SourceInfo {
     /// Size of the file in bytes
     pub size: usize,
-    /// File descriptor (Unix only)
-    #[cfg(target_family = "unix")]
-    pub fd: i32,
 }
 
 #[cfg(test)]
@@ -531,9 +536,9 @@ mod tests {
             .expect("Failed to create loader");
 
         let buffer = loader.fetch(0..content.len(), 0).expect("Failed to fetch");
-        let vec = buffer.to_vec();
+        let vec = buffer.to_vec().expect("Failed to convert to vec");
 
-        assert_eq!(vec, content.to_vec());
+        assert_eq!(vec, content);
     }
 
     #[test]
@@ -552,5 +557,156 @@ mod tests {
             .expect("Failed to fetch with mmap");
 
         assert_eq!(buffer.as_slice().unwrap(), content);
+    }
+
+    #[test]
+    fn test_fetch_view_full_file() {
+        let content = b"This is test content for fetch_view functionality.";
+        let temp_file = create_test_file(content);
+
+        let source = Source::open(temp_file.path()).expect("Failed to open source");
+        let sources = [source];
+
+        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Mmap)
+            .expect("Failed to create mmap loader");
+
+        let view = loader
+            .fetch_view(0..content.len(), 0)
+            .expect("Failed to get view");
+
+        assert_eq!(view.len(), content.len());
+        assert_eq!(view.device(), Device::Cpu);
+        assert!(!view.is_owned()); // Views don't own their memory
+        assert_eq!(view.as_slice().unwrap(), content);
+    }
+
+    #[test]
+    fn test_fetch_view_partial_range() {
+        let content = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij";
+        let temp_file = create_test_file(content);
+
+        let source = Source::open(temp_file.path()).expect("Failed to open source");
+        let sources = [source];
+
+        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Mmap)
+            .expect("Failed to create mmap loader");
+
+        // Get a view of just the uppercase letters
+        let view = loader
+            .fetch_view(10..36, 0)
+            .expect("Failed to get partial view");
+
+        assert_eq!(view.len(), 26);
+        assert!(!view.is_owned());
+        assert_eq!(view.as_slice().unwrap(), b"ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+    }
+
+    #[test]
+    fn test_fetch_view_empty_range() {
+        let content = b"Some content";
+        let temp_file = create_test_file(content);
+
+        let source = Source::open(temp_file.path()).expect("Failed to open source");
+        let sources = [source];
+
+        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Mmap)
+            .expect("Failed to create mmap loader");
+
+        let view = loader.fetch_view(5..5, 0).expect("Failed to get empty view");
+
+        assert!(view.is_empty());
+        assert_eq!(view.len(), 0);
+    }
+
+    #[test]
+    fn test_fetch_view_invalid_file_index() {
+        let content = b"Test content";
+        let temp_file = create_test_file(content);
+
+        let source = Source::open(temp_file.path()).expect("Failed to open source");
+        let sources = [source];
+
+        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Mmap)
+            .expect("Failed to create mmap loader");
+
+        let result = loader.fetch_view(0..10, 99);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_fetch_view_outlives_loader() {
+        // Test that views can safely outlive the WeightLoader due to Arc refcounting
+        let content = b"Data that should remain valid after loader is dropped.";
+        let temp_file = create_test_file(content);
+
+        let view = {
+            let source = Source::open(temp_file.path()).expect("Failed to open source");
+            let sources = [source];
+
+            let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Mmap)
+                .expect("Failed to create mmap loader");
+
+            loader.fetch_view(0..content.len(), 0).expect("Failed to get view")
+            // loader AND sources are dropped here, but view holds Arc to source
+        };
+
+        // The view should still be valid after loader is dropped
+        assert_eq!(view.len(), content.len());
+        assert_eq!(view.as_slice().unwrap(), content);
+    }
+
+    #[test]
+    fn test_fetch_view_multiple_views_same_source() {
+        let content = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        let temp_file = create_test_file(content);
+
+        let source = Source::open(temp_file.path()).expect("Failed to open source");
+        let sources = [source];
+
+        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Mmap)
+            .expect("Failed to create mmap loader");
+
+        // Create multiple views from the same source
+        let view1 = loader.fetch_view(0..10, 0).expect("Failed to get view 1");
+        let view2 = loader.fetch_view(10..20, 0).expect("Failed to get view 2");
+        let view3 = loader.fetch_view(20..30, 0).expect("Failed to get view 3");
+
+        assert_eq!(view1.as_slice().unwrap(), b"0123456789");
+        assert_eq!(view2.as_slice().unwrap(), b"ABCDEFGHIJ");
+        assert_eq!(view3.as_slice().unwrap(), b"KLMNOPQRST");
+
+        // Drop loader, views should still be valid
+        drop(loader);
+
+        assert_eq!(view1.as_slice().unwrap(), b"0123456789");
+        assert_eq!(view2.as_slice().unwrap(), b"ABCDEFGHIJ");
+        assert_eq!(view3.as_slice().unwrap(), b"KLMNOPQRST");
+    }
+
+    #[test]
+    fn test_fetch_view_different_sources() {
+        let content1 = b"First file content.";
+        let content2 = b"Second file content.";
+
+        let temp1 = create_test_file(content1);
+        let temp2 = create_test_file(content2);
+
+        let source1 = Source::open(temp1.path()).expect("Failed to open source 1");
+        let source2 = Source::open(temp2.path()).expect("Failed to open source 2");
+
+        let sources = [source1, source2];
+
+        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Mmap)
+            .expect("Failed to create mmap loader");
+
+        let view1 = loader.fetch_view(0..content1.len(), 0).expect("Failed to get view 1");
+        let view2 = loader.fetch_view(0..content2.len(), 1).expect("Failed to get view 2");
+
+        // Drop loader
+        drop(loader);
+
+        // Each view should keep its respective source alive
+        assert_eq!(view1.as_slice().unwrap(), content1);
+        assert_eq!(view2.as_slice().unwrap(), content2);
     }
 }

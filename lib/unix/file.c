@@ -53,14 +53,15 @@ exit:
 }
 
 
-void hmll_source_close(const struct hmll_source *src)
+void hmll_source_close(struct hmll_source *src)
 {
     if (src && src->fd > 0) {
         close(src->fd);
+        src->fd = -1;  // Mark as closed
     }
 }
 
-void hmll_source_free(struct hmll_source *src)
+void hmll_source_cleanup(struct hmll_source *src)
 {
     if (src) {
         hmll_source_close(src);
@@ -68,6 +69,13 @@ void hmll_source_free(struct hmll_source *src)
             munmap((void *)src->content, src->size);
             src->size = 0;
         }
+    }
+}
+
+void hmll_source_free(struct hmll_source *src)
+{
+    if (src) {
+        hmll_source_cleanup(src);
         free(src);
     }
 }

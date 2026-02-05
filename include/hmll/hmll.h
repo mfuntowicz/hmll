@@ -81,7 +81,8 @@ HMLL_EXTERN void hmll_destroy(struct hmll *ctx) NO_EXCEPT;
 
 /** Sources handling stubs **/
 HMLL_EXTERN struct hmll_error hmll_source_open(const char *path, struct hmll_source *src) NO_EXCEPT;
-HMLL_EXTERN void hmll_source_close(const struct hmll_source *src) NO_EXCEPT;
+HMLL_EXTERN void hmll_source_close(struct hmll_source *src) NO_EXCEPT;
+HMLL_EXTERN void hmll_source_cleanup(struct hmll_source *src) NO_EXCEPT;
 HMLL_EXTERN void hmll_source_free(struct hmll_source *src) NO_EXCEPT;
 
 /** Memory handling stubs **/

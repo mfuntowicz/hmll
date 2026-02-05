@@ -2,16 +2,39 @@
 
 use crate::error::{Error, Result};
 use std::ffi::CString;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::ptr::null_mut;
+use std::sync::Arc;
+
+/// Internal handle to the C source, enabling Arc-based lifetime management.
+///
+/// When all Arc references to this handle are dropped, `hmll_source_cleanup()`
+/// is called to close the fd and unmap the content. Rust manages the struct memory.
+pub(crate) struct SourceHandle {
+    pub(crate) inner: hmll_sys::hmll_source,
+}
+
+impl Drop for SourceHandle {
+    fn drop(&mut self) {
+        // hmll_source_cleanup closes fd and unmaps content
+        unsafe {
+            hmll_sys::hmll_source_cleanup(&mut self.inner);
+        }
+    }
+}
+
+// SourceHandle is Send and Sync - the underlying mmap is thread-safe for reads
+unsafe impl Send for SourceHandle {}
+unsafe impl Sync for SourceHandle {}
 
 /// A source file for loading model weights.
 ///
-/// This wraps a file descriptor and ensures proper cleanup when dropped.
-#[derive(Debug)]
+/// This wraps mmap'd content, using Arc-based reference counting to ensure
+/// the mmap'd memory stays alive as long as any views exist.
+#[derive(Clone)]
 pub struct Source {
-    inner: hmll_sys::hmll_source,
-    path: Option<String>,
+    pub(crate) handle: Arc<SourceHandle>,
+    path: PathBuf,
 }
 
 impl Source {
@@ -35,7 +58,11 @@ impl Source {
         let c_path = CString::new(path_str)
             .map_err(|_| Error::FileNotFound("Path contains null byte".to_string()))?;
 
-        let mut source = hmll_sys::hmll_source { fd: -1, size: 0, content: null_mut() };
+        let mut source = hmll_sys::hmll_source {
+            fd: -1,
+            size: 0,
+            content: null_mut(),
+        };
 
         unsafe {
             let err = hmll_sys::hmll_source_open(c_path.as_ptr(), &mut source);
@@ -43,67 +70,55 @@ impl Source {
         }
 
         Ok(Self {
-            inner: source,
-            path: Some(path_str.to_string()),
+            handle: Arc::new(SourceHandle { inner: source }),
+            path: path_ref.to_path_buf(),
         })
     }
 
     /// Get the size of the source file in bytes.
     #[inline(always)]
-    pub const fn size(&self) -> usize {
-        self.inner.size
+    pub fn size(&self) -> usize {
+        self.handle.inner.size
     }
 
-    /// Get the file descriptor (platform-specific).
-    #[cfg(target_family = "unix")]
-    #[inline(always)]
-    pub const fn fd(&self) -> i32 {
-        self.inner.fd
-    }
-
-    /// Get the path of the source file if available.
+    /// Get the path of the source file.
     #[inline]
-    pub fn path(&self) -> Option<&str> {
-        self.path.as_deref()
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 
     /// Get a reference to the underlying hmll_source.
     ///
     /// This is useful for advanced use cases that require direct FFI access.
     #[inline(always)]
-    pub const fn as_raw(&self) -> &hmll_sys::hmll_source {
-        &self.inner
+    pub fn as_raw(&self) -> &hmll_sys::hmll_source {
+        &self.handle.inner
     }
 
-    /// Consume self and return the raw hmll_source.
+    /// Get the Arc handle for this source.
     ///
-    /// # Safety
-    ///
-    /// The caller is responsible for calling hmll_source_close on the returned source.
-    #[allow(dead_code)]
+    /// This is used internally for creating views that outlive the loader.
     #[inline(always)]
-    pub(crate) unsafe fn into_raw(mut self) -> hmll_sys::hmll_source {
-        let source = self.inner;
-        // Prevent Drop from running
-        self.inner.fd = -1;
-        source
+    pub(crate) fn handle(&self) -> &Arc<SourceHandle> {
+        &self.handle
     }
 }
 
-impl Drop for Source {
-    fn drop(&mut self) {
-        // only close if we have a valid file descriptor
-        if self.inner.fd >= 0 {
-            unsafe {
-                hmll_sys::hmll_source_close(&self.inner);
-            }
-        }
+// Source uses Arc internally, so Drop is automatic via Arc refcounting.
+// When the last Arc<SourceHandle> is dropped, SourceHandle::drop() frees the source.
+
+impl std::fmt::Debug for Source {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Source")
+            .field("size", &self.size())
+            .field("path", &self.path)
+            .finish()
     }
 }
 
-// Source can be safely sent between threads
+// Source can be safely sent between threads (Arc<SourceHandle> is Send)
 unsafe impl Send for Source {}
-// Source can be safely shared between threads (read-only operations)
+// Source can be safely shared between threads (Arc<SourceHandle> is Sync)
 unsafe impl Sync for Source {}
 
 #[cfg(test)]
@@ -140,7 +155,31 @@ mod tests {
         let source = Source::open(temp_file.path()).expect("Failed to open source");
 
         assert_eq!(source.size(), content.len());
-        assert!(source.fd() >= 0);
-        assert!(source.path().is_some());
+        assert!(source.path().exists());
+    }
+
+    #[test]
+    fn test_source_clone_shares_handle() {
+        let content = b"Test content for clone test.";
+        let temp_file = create_test_file(content);
+
+        let source1 = Source::open(temp_file.path()).expect("Failed to open source");
+        let source2 = source1.clone();
+
+        // Both sources should have the same size
+        assert_eq!(source1.size(), source2.size());
+        // They share the same underlying Arc handle
+        assert!(Arc::ptr_eq(&source1.handle, &source2.handle));
+    }
+
+    #[test]
+    fn test_source_has_mmap_content() {
+        let content = b"Content to verify mmap.";
+        let temp_file = create_test_file(content);
+
+        let source = Source::open(temp_file.path()).expect("Failed to open source");
+
+        // Content pointer should be non-null for mmap'd files
+        assert!(!source.handle.inner.content.is_null());
     }
 }

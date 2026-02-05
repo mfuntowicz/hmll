@@ -17,7 +17,7 @@ keywords = [
   "machine-learning",
   "huggingface",
   "model-loading",
-  "safetensors",
+  "io",
 ]
 categories = ["science", "api-bindings"]
 rust-version = "1.70"
@@ -34,7 +34,6 @@ serde_json = "1"
 default = ["vendored", "io_uring"]
 vendored = ["hmll-sys/vendored"]
 io_uring = ["hmll-sys/io_uring"]
-safetensors = ["hmll-sys/safetensors"]
 cuda = ["hmll-sys/cuda"]
 
 [profile.release]

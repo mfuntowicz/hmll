@@ -40,22 +40,31 @@ close_fd_then_exit:
 }
 
 
-void hmll_source_close(const struct hmll_source *src)
+void hmll_source_close(struct hmll_source *src)
+{
+    if (src && src->handle) {
+        CloseHandle(src->handle);
+        src->handle = NULL;  // Mark as closed
+    }
+}
+
+void hmll_source_cleanup(struct hmll_source *src)
 {
     if (src) {
-        if (src->handle) {
-            CloseHandle(src->handle);
+        hmll_source_close(src);
+        if (src->content && src->size > 0) {
+            UnmapViewOfFile(src->content);
+            src->size = 0;
         }
     }
 }
 
 void hmll_source_free(struct hmll_source *src)
 {
-    hmll_source_close(src);
-    if (src->content && src->size > 0) {
-        UnmapViewOfFile(src->content);
+    if (src) {
+        hmll_source_cleanup(src);
+        free(src);
     }
-    free(src);
 }
 
 
