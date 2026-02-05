@@ -117,6 +117,12 @@ HMLL_EXTERN ssize_t hmll_fetch_tensor(struct hmll *ctx, const struct hmll_regist
 HMLL_EXTERN size_t hmll_safetensors_populate_registry(struct hmll *ctx, struct hmll_registry *reg, struct hmll_source source, size_t fid, size_t offset) NO_EXCEPT;
 HMLL_EXTERN size_t hmll_safetensors_index(struct hmll *ctx, struct hmll_registry *reg, struct hmll_source source) NO_EXCEPT;
 #endif
+
+/** GGUF format support **/
+#ifdef __HMLL_GGUF_ENABLED__
+HMLL_EXTERN size_t hmll_gguf_populate_registry(struct hmll *ctx, struct hmll_registry *reg, struct hmll_source source, size_t fid, size_t offset) NO_EXCEPT;
+#endif
+
 #ifdef __cplusplus
 }
 #endif
