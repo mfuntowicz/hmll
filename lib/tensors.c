@@ -94,6 +94,39 @@ uint8_t hmll_nbits(const enum hmll_dtype dtype)
     case HMLL_DTYPE_SIGNED_INT64:
     case HMLL_DTYPE_UNSIGNED_INT64:
         return 64;
+    // GGML quantized types - bits per element calculated as block_size_in_bits / elements_per_block
+    case HMLL_DTYPE_Q4_0:     // 32 floats -> 18 bytes = 144 bits / 32 = 4.5 bits
+    case HMLL_DTYPE_Q4_1:     // 32 floats -> 20 bytes = 160 bits / 32 = 5 bits
+    case HMLL_DTYPE_Q5_0:     // 32 floats -> 22 bytes = 176 bits / 32 = 5.5 bits
+    case HMLL_DTYPE_Q5_1:     // 32 floats -> 24 bytes = 192 bits / 32 = 6 bits
+        return 5;  // Average for Q4/Q5 family
+    case HMLL_DTYPE_Q8_0:     // 32 floats -> 34 bytes = 272 bits / 32 = 8.5 bits
+    case HMLL_DTYPE_Q8_1:     // 32 floats -> 36 bytes = 288 bits / 32 = 9 bits
+        return 9;
+    case HMLL_DTYPE_Q2_K:     // ~2.5 bits per weight
+        return 3;
+    case HMLL_DTYPE_Q3_K:     // ~3.4 bits per weight
+        return 3;
+    case HMLL_DTYPE_Q4_K:     // ~4.5 bits per weight
+        return 5;
+    case HMLL_DTYPE_Q5_K:     // ~5.5 bits per weight
+        return 6;
+    case HMLL_DTYPE_Q6_K:     // ~6.5 bits per weight
+        return 7;
+    case HMLL_DTYPE_Q8_K:     // ~8.5 bits per weight
+        return 9;
+    case HMLL_DTYPE_IQ2_XXS:  // ~2.0 bits per weight
+    case HMLL_DTYPE_IQ2_XS:   // ~2.3 bits per weight
+    case HMLL_DTYPE_IQ2_S:    // ~2.5 bits per weight
+        return 2;
+    case HMLL_DTYPE_IQ3_XXS:  // ~3.0 bits per weight
+    case HMLL_DTYPE_IQ3_S:    // ~3.4 bits per weight
+        return 3;
+    case HMLL_DTYPE_IQ1_S:    // ~1.5 bits per weight
+        return 2;
+    case HMLL_DTYPE_IQ4_NL:   // ~4.5 bits per weight
+    case HMLL_DTYPE_IQ4_XS:   // ~4.2 bits per weight
+        return 4;
     default:
         return 0;
     }
