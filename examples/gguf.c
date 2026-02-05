@@ -32,8 +32,7 @@ static double time_diff_ns(const timespec_t *start, const timespec_t *end) {
 #include <cuda_runtime.h>
 #endif
 
-#define TENSOR_NAME "language_model.model.embed_tokens.weight"
-// #define TENSOR_NAME "model.embed_tokens.weight"
+#define TENSOR_NAME "token_embd.weight"
 
 int main(const int argc, const char** argv)
 {
@@ -84,26 +83,13 @@ int main(const int argc, const char** argv)
                 printf("Fetch completed in %.3f ms (%.6f s)\n", elapsed_ms, elapsed_s);
                 printf("Tensor size: %.2f MB\n", size_mb);
                 printf("Throughput: %.2f MB/s\n", throughput_mbps);
-
-                unsigned short *bf16_ptr;
-                if (ctx.fetcher->device == HMLL_DEVICE_CUDA) {
-                    bf16_ptr = malloc(buffer.size);
-                    cudaMemcpy(bf16_ptr, buffer.ptr, hmll_numel(lookup.specs) * sizeof(short), cudaMemcpyDeviceToHost);
-                } else {
-                    bf16_ptr = buffer.ptr;
-                }
-
-                unsigned long sum = 0;
-                for (size_t i = 0; i < hmll_numel(lookup.specs); ++i) sum += bf16_ptr[i];
-
-                printf("Sum: %lu\n", sum);
             } else {
-                printf("Got an error while reading the safetensors: %s\n", hmll_strerr(ctx.error));
+                printf("Got an error while reading the gguf: %s\n", hmll_strerr(ctx.error));
             }
         }
     } else {
         if (!lookup.specs)
-            fprintf(stderr, "Tensor not found in safetensors file.\n");
+            fprintf(stderr, "Tensor not found in gguf file.\n");
         else
             fprintf(stderr, "Failed to lookup tensor: %s\n", hmll_strerr(ctx.error));
     }
