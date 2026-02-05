@@ -30,15 +30,15 @@ static ssize_t hmll_mmap_fetch_range_impl(
     return (ssize_t) dst->size;
 }
 
-static inline void hmll_mmap_free(void *backend)
+static inline void hmll_mmap_free(void *ptr)
 {
-    if (backend) {
+    if (ptr) {
         struct hmll_mmap *backend = ptr;
         if (backend->m_content) {
             // Note: backend doesn't own the memory, sources do
             free(backend->m_content);
         }
-        free(backend);
+        free(ptr);
     }
 }
 
@@ -74,7 +74,7 @@ struct hmll_error hmll_mmap_init(struct hmll *ctx, const enum hmll_device device
     ctx->fetcher = calloc(1, sizeof(struct hmll_loader));
     ctx->fetcher->kind = HMLL_FETCHER_MMAP;
     ctx->fetcher->device = device;
-    ctx->fetcher->backed_free = hmll_mmap_free;
+    ctx->fetcher->backend_free = hmll_mmap_free;
     ctx->fetcher->backend_impl_ = backend;
     ctx->fetcher->fetch_range_impl_ = hmll_mmap_fetch_range_impl;
     ctx->fetcher->fetchv_range_impl_ = NULL;
