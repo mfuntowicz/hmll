@@ -139,4 +139,5 @@ static inline void hmll_io_uring_slot_set_available(struct hmll_iouring_iobusy *
 }
 
 struct hmll_error hmll_io_uring_init(struct hmll *, enum hmll_device);
+void hmll_io_uring_destroy(void *backend);
 #endif // HMLL_FETCHER_IOURING_H

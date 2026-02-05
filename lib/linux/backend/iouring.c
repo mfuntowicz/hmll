@@ -528,6 +528,7 @@ struct hmll_error hmll_io_uring_init(struct hmll *ctx, const enum hmll_device de
         ctx->fetcher->backend_impl_ = backend;
         ctx->fetcher->fetch_range_impl_ = hmll_io_uring_fetch_range_impl;
         ctx->fetcher->fetchv_range_impl_ = hmll_io_uring_fetchv_range_impl;
+        ctx->fetcher->backend_free = hmll_io_uring_destroy;
     }
 
     return HMLL_OK;
@@ -545,3 +546,32 @@ cleanup:
     return ctx->error;
 }
 
+
+void hmll_io_uring_destroy(void *ptr)
+{
+    if (!ptr) return;
+
+    struct hmll_io_uring *backend = ptr;
+    io_uring_unregister_buffers(&backend->ioring);
+
+#if defined(__HMLL_CUDA_ENABLED__)
+    if (backend->device_ctx) {
+        struct hmll_io_uring_cuda_context *cuda_ctx = backend->device_ctx;
+        for (size_t i = 0; i < HMLL_URING_QUEUE_DEPTH; ++i) {
+            if (cuda_ctx[i].done) {
+                cudaEventDestroy(cuda_ctx[i].done);
+            }
+            if (cuda_ctx[i].stream) {
+                cudaStreamDestroy(cuda_ctx[i].stream);
+            }
+        }
+
+        munmap(backend->iovecs[0].iov_base, HMLL_URING_QUEUE_DEPTH * sizeof(struct iovec));
+        free(backend->device_ctx);
+        backend->device_ctx = NULL;
+    }
+#endif
+
+    io_uring_queue_exit(&backend->ioring);
+    free(ptr);
+}
