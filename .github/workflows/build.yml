@@ -128,9 +128,9 @@ jobs:
       - name: Build Rust
         if: inputs.enable-rust
         working-directory: lib/rust/hmll
-        run: cargo build --release ${{ inputs.enable-safetensors && '--features safetensors' || '' }}
+        run: cargo build --release
 
       - name: Test Rust Bindings
         if: inputs.enable-rust && inputs.run-tests
         working-directory: lib/rust/hmll
-        run: cargo test ${{ inputs.enable-safetensors && '--features safetensors' || '' }}
+        run: cargo test

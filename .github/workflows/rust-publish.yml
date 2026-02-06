@@ -46,10 +46,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libclang-dev
 
       - name: Clippy (hmll-sys)
-        run: cargo clippy --manifest-path lib/rust/hmll-sys/Cargo.toml --features safetensors -- -D warnings
+        run: cargo clippy --manifest-path lib/rust/hmll-sys/Cargo.toml -- -D warnings
 
       - name: Clippy (hmll)
-        run: cargo clippy --manifest-path lib/rust/hmll/Cargo.toml --features safetensors -- -D warnings
+        run: cargo clippy --manifest-path lib/rust/hmll/Cargo.toml -- -D warnings
 
   clippy-system:
     name: Clippy (system)
@@ -72,18 +72,17 @@ jobs:
           cmake -B build -S . \
             -DCMAKE_BUILD_TYPE=Release \
             -DHMLL_BUILD_STATIC=OFF \
-            -DHMLL_ENABLE_SAFETENSORS=ON \
             -DCMAKE_INSTALL_PREFIX=/usr/local
           cmake --build build --parallel
           sudo cmake --install build
 
       - name: Clippy (hmll-sys, system linking)
-        run: cargo clippy --manifest-path lib/rust/hmll-sys/Cargo.toml --no-default-features --features safetensors -- -D warnings
+        run: cargo clippy --manifest-path lib/rust/hmll-sys/Cargo.toml --no-default-features -- -D warnings
         env:
           PKG_CONFIG_PATH: /usr/local/lib/pkgconfig
 
       - name: Clippy (hmll, system linking)
-        run: cargo clippy --manifest-path lib/rust/hmll/Cargo.toml --no-default-features --features safetensors -- -D warnings
+        run: cargo clippy --manifest-path lib/rust/hmll/Cargo.toml --no-default-features -- -D warnings
         env:
           PKG_CONFIG_PATH: /usr/local/lib/pkgconfig
 
