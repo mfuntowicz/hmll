@@ -290,6 +290,192 @@ impl<'a> WeightLoader<'a> {
         Ok(unsafe { Buffer::from_source_view(view_ptr, view_size, self.device, source_handle) })
     }
 
+    /// Fetch multiple ranges of bytes in a single batched operation.
+    ///
+    /// This is optimized for io_uring backends where multiple I/O operations
+    /// can be submitted and completed concurrently. For mmap backends, this
+    /// still provides a convenient API but without the batching benefit.
+    ///
+    /// # Arguments
+    ///
+    /// * `requests` - Slice of (offset, size) pairs specifying what to fetch
+    /// * `file_index` - Index of the source file
+    ///
+    /// # Returns
+    ///
+    /// A vector of `Buffer`s containing the fetched data, in the same order
+    /// as the input requests.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use hmll::{Source, WeightLoader, Device, LoaderKind};
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let source = Source::open("model.safetensors")?;
+    /// # let sources = [source];
+    /// # let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)?;
+    ///
+    /// // Fetch multiple tensor byte ranges concurrently
+    /// let requests = vec![
+    ///     (0, 1024),      // Tensor 1: offset 0, size 1024
+    ///     (1024, 2048),   // Tensor 2: offset 1024, size 2048
+    ///     (4096, 512),    // Tensor 3: offset 4096, size 512
+    /// ];
+    /// let buffers = loader.fetchv(&requests, 0)?;
+    /// for (i, buf) in buffers.iter().enumerate() {
+    ///     println!("Buffer {}: {} bytes", i, buf.len());
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn fetchv(&mut self, requests: &[(usize, usize)], file_index: usize) -> Result<Vec<Buffer>> {
+        if file_index >= self.sources.len() {
+            return Err(Error::InvalidRange);
+        }
+
+        if requests.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Allocate buffers for all requests
+        let mut iobufs: Vec<hmll_sys::hmll_iobuf> = Vec::with_capacity(requests.len());
+        let mut offsets: Vec<usize> = Vec::with_capacity(requests.len());
+
+        for &(offset, size) in requests {
+            if size == 0 {
+                // Handle empty requests with empty buffer
+                iobufs.push(hmll_sys::hmll_iobuf {
+                    ptr: std::ptr::null_mut(),
+                    size: 0,
+                    device: self.device.to_raw(),
+                });
+                offsets.push(offset);
+                continue;
+            }
+
+            let range = Range::new(offset, offset + size);
+            let iobuf = unsafe {
+                hmll_sys::hmll_get_buffer_for_range(
+                    self.context.as_mut(),
+                    self.device.to_raw(),
+                    range.to_raw(),
+                )
+            };
+
+            if iobuf.ptr.is_null() && size > 0 {
+                // Free any already allocated buffers
+                for buf in &iobufs {
+                    if !buf.ptr.is_null() {
+                        unsafe { hmll_sys::hmll_free_buffer(buf as *const _ as *mut _) };
+                    }
+                }
+                return Err(Error::AllocationFailed);
+            }
+
+            iobufs.push(iobuf);
+            offsets.push(offset);
+        }
+
+        // Perform the batched fetch
+        let res = unsafe {
+            hmll_sys::hmll_fetchv(
+                self.context.as_mut(),
+                file_index as i32,
+                iobufs.as_ptr(),
+                offsets.as_ptr(),
+                iobufs.len(),
+            )
+        };
+
+        if res < 0 {
+            // Free all allocated buffers on error
+            for buf in &iobufs {
+                if !buf.ptr.is_null() {
+                    unsafe { hmll_sys::hmll_free_buffer(buf as *const _ as *mut _) };
+                }
+            }
+            let err = self.context.error;
+            self.context.error = hmll_sys::hmll_error {
+                code: hmll_sys::HMLL_ERR_SUCCESS,
+                sys_err: 0,
+            };
+            return Err(Error::from_hmll_error(err));
+        }
+
+        // Convert to owned Buffer objects
+        let buffers = iobufs
+            .into_iter()
+            .map(|iobuf| unsafe { Buffer::from_raw_owned(iobuf) })
+            .collect();
+
+        Ok(buffers)
+    }
+
+    /// Fetch multiple ranges with pre-allocated destination buffers.
+    ///
+    /// This variant allows you to provide your own pre-allocated buffers,
+    /// which is useful for GPU loading where you want to reuse pinned memory
+    /// or CUDA device memory allocations.
+    ///
+    /// # Arguments
+    ///
+    /// * `destinations` - Mutable slice of pre-allocated `Buffer`s to write into
+    /// * `offsets` - Slice of file offsets corresponding to each destination
+    /// * `file_index` - Index of the source file
+    ///
+    /// # Safety
+    ///
+    /// The destination buffers must be large enough to hold the data.
+    pub fn fetchv_into(
+        &mut self,
+        destinations: &mut [Buffer],
+        offsets: &[usize],
+        file_index: usize,
+    ) -> Result<usize> {
+        if file_index >= self.sources.len() {
+            return Err(Error::InvalidRange);
+        }
+
+        if destinations.is_empty() {
+            return Ok(0);
+        }
+
+        if destinations.len() != offsets.len() {
+            return Err(Error::InvalidRange);
+        }
+
+        // Build iobufs from the destination buffers
+        let iobufs: Vec<hmll_sys::hmll_iobuf> = destinations
+            .iter()
+            .map(|buf| hmll_sys::hmll_iobuf {
+                ptr: buf.as_ptr() as *mut std::ffi::c_void,
+                size: buf.len(),
+                device: buf.device().to_raw(),
+            })
+            .collect();
+
+        let res = unsafe {
+            hmll_sys::hmll_fetchv(
+                self.context.as_mut(),
+                file_index as i32,
+                iobufs.as_ptr(),
+                offsets.as_ptr(),
+                iobufs.len(),
+            )
+        };
+
+        if res < 0 {
+            let err = self.context.error;
+            self.context.error = hmll_sys::hmll_error {
+                code: hmll_sys::HMLL_ERR_SUCCESS,
+                sys_err: 0,
+            };
+            return Err(Error::from_hmll_error(err));
+        }
+
+        Ok(res as usize)
+    }
+
     /// Get the device this loader is configured for.
     #[inline(always)]
     pub const fn device(&self) -> Device {

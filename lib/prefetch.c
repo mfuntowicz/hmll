@@ -2,6 +2,11 @@
 // Prefetch Implementation - CUDA Only
 // Manages concurrent tensor loading with async GPU operations.
 //
+// Uses pinned memory staging for truly async cudaMemcpyAsync:
+// - mmap provides source data (pageable)
+// - memcpy to pinned staging buffer (sync but fast)
+// - cudaMemcpyAsync from pinned to GPU (truly async)
+//
 // Note: CPU prefetch is handled directly in Rust (mmap is lazy, no async needed).
 //
 
@@ -41,13 +46,21 @@ struct hmll_error hmll_prefetch_init(
     ctx->device_id = device_id;
     ctx->num_slots = num_slots;
     ctx->next_slot = 0;
+    ctx->use_pinned = 0;  // Disable pinned by default - adds overhead without compute overlap
 
     ctx->slots = calloc(num_slots, sizeof(struct hmll_prefetch_slot));
     if (!ctx->slots) {
         return HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
     }
 
-    // Initialize each slot with its own stream and event
+    cudaError_t err = cudaSetDevice(device_id);
+    if (err != cudaSuccess) {
+        free(ctx->slots);
+        ctx->slots = NULL;
+        return HMLL_ERR(HMLL_ERR_CUDA_ERROR);
+    }
+
+    // Initialize each slot with its own stream, event, and pinned buffer
     for (size_t i = 0; i < num_slots; i++) {
         struct hmll_prefetch_slot* slot = &ctx->slots[i];
         slot->state = HMLL_PREFETCH_IDLE;
@@ -55,11 +68,8 @@ struct hmll_error hmll_prefetch_init(
         slot->buffer.ptr = NULL;
         slot->buffer.size = 0;
         slot->buffer.device = HMLL_DEVICE_CUDA;
-
-        cudaError_t err = cudaSetDevice(device_id);
-        if (err != cudaSuccess) {
-            goto cleanup;
-        }
+        slot->pinned_buffer = NULL;
+        slot->pinned_size = 0;
 
         cudaStream_t stream;
         err = cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking);
@@ -76,11 +86,27 @@ struct hmll_error hmll_prefetch_init(
             goto cleanup;
         }
         slot->done_event = event;
+
+        // Allocate pinned staging buffer for this slot
+        void* pinned = NULL;
+        err = cudaHostAlloc(&pinned, HMLL_PREFETCH_PINNED_SIZE, cudaHostAllocDefault);
+        if (err != cudaSuccess) {
+            // Fall back to non-pinned mode if allocation fails
+            ctx->use_pinned = 0;
+            slot->pinned_buffer = NULL;
+            slot->pinned_size = 0;
+        } else {
+            slot->pinned_buffer = pinned;
+            slot->pinned_size = HMLL_PREFETCH_PINNED_SIZE;
+        }
         continue;
 
     cleanup:
         // Cleanup already-created resources
         for (size_t j = 0; j < i; j++) {
+            if (ctx->slots[j].pinned_buffer) {
+                cudaFreeHost(ctx->slots[j].pinned_buffer);
+            }
             if (ctx->slots[j].stream) {
                 cudaStreamDestroy((cudaStream_t)ctx->slots[j].stream);
             }
@@ -132,35 +158,50 @@ struct hmll_error hmll_prefetch_start_load(
     }
 
     slot->tensor_index = tensor_index;
-    slot->state = HMLL_PREFETCH_LOADING;
 
     cudaStream_t stream = (cudaStream_t)slot->stream;
     cudaEvent_t event = (cudaEvent_t)slot->done_event;
 
-    // Allocate from pool
-    void* ptr = hmll_cuda_pool_alloc_async(size, stream, ctx->device_id);
-    if (!ptr) {
+    // Allocate GPU memory from pool
+    void* gpu_ptr = hmll_cuda_pool_alloc_async(size, stream, ctx->device_id);
+    if (!gpu_ptr) {
         slot->state = HMLL_PREFETCH_ERROR;
         return HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
     }
 
-    slot->buffer.ptr = ptr;
+    slot->buffer.ptr = gpu_ptr;
     slot->buffer.size = size;
     slot->buffer.device = HMLL_DEVICE_CUDA;
 
-    // Async copy
-    cudaError_t err = cudaMemcpyAsync(ptr, src_ptr, size, cudaMemcpyHostToDevice, stream);
+    cudaError_t err;
+
+    // Use pinned staging buffer if available and tensor fits
+    if (ctx->use_pinned && slot->pinned_buffer && size <= slot->pinned_size) {
+        // Stage 1: Copy from mmap to pinned buffer (synchronous but fast)
+        slot->state = HMLL_PREFETCH_STAGING;
+        memcpy(slot->pinned_buffer, src_ptr, size);
+
+        // Stage 2: Async copy from pinned to GPU (truly asynchronous!)
+        slot->state = HMLL_PREFETCH_LOADING;
+        err = cudaMemcpyAsync(gpu_ptr, slot->pinned_buffer, size, cudaMemcpyHostToDevice, stream);
+    } else {
+        // Fallback: Direct copy from pageable memory
+        // Note: This blocks internally until copy completes
+        slot->state = HMLL_PREFETCH_LOADING;
+        err = cudaMemcpyAsync(gpu_ptr, src_ptr, size, cudaMemcpyHostToDevice, stream);
+    }
+
     if (err != cudaSuccess) {
-        hmll_cuda_pool_free_async(ptr, stream);
+        hmll_cuda_pool_free_async(gpu_ptr, stream);
         slot->buffer.ptr = NULL;
         slot->state = HMLL_PREFETCH_ERROR;
         return HMLL_ERR(HMLL_ERR_CUDA_ERROR);
     }
 
-    // Record completion
+    // Record completion event
     err = cudaEventRecord(event, stream);
     if (err != cudaSuccess) {
-        hmll_cuda_pool_free_async(ptr, stream);
+        hmll_cuda_pool_free_async(gpu_ptr, stream);
         slot->buffer.ptr = NULL;
         slot->state = HMLL_PREFETCH_ERROR;
         return HMLL_ERR(HMLL_ERR_CUDA_ERROR);
@@ -195,6 +236,11 @@ int hmll_prefetch_slot_ready(struct hmll_prefetch_ctx* ctx, size_t slot_index) {
 
     if (slot->state == HMLL_PREFETCH_READY || slot->state == HMLL_PREFETCH_ERROR) {
         return 1;
+    }
+
+    // Staging is synchronous, so if we're still in staging state something is wrong
+    if (slot->state == HMLL_PREFETCH_STAGING) {
+        return 0;
     }
 
     if (slot->state != HMLL_PREFETCH_LOADING) {
@@ -287,11 +333,18 @@ struct hmll_error hmll_prefetch_take_buffer(
     return HMLL_OK;
 }
 
+void hmll_prefetch_set_pinned(struct hmll_prefetch_ctx* ctx, int enable) {
+    if (!ctx) return;
+    ctx->use_pinned = enable;
+}
+
 void hmll_prefetch_poll(struct hmll_prefetch_ctx* ctx) {
     if (!ctx || !ctx->slots) return;
 
     for (size_t i = 0; i < ctx->num_slots; i++) {
         struct hmll_prefetch_slot* slot = &ctx->slots[i];
+        // Only poll slots that are in async loading state
+        // STAGING is synchronous and handled inline
         if (slot->state == HMLL_PREFETCH_LOADING) {
             cudaError_t err = cudaEventQuery((cudaEvent_t)slot->done_event);
             if (err == cudaSuccess) {
@@ -310,23 +363,34 @@ void hmll_prefetch_destroy(struct hmll_prefetch_ctx* ctx) {
         struct hmll_prefetch_slot* slot = &ctx->slots[i];
         cudaStream_t stream = (cudaStream_t)slot->stream;
 
+        // Free GPU buffer
         if (slot->buffer.ptr) {
             hmll_cuda_pool_free_async(slot->buffer.ptr, stream);
         }
 
+        // Sync and destroy stream
         if (stream) {
             cudaStreamSynchronize(stream);
             cudaStreamDestroy(stream);
         }
 
+        // Destroy event
         if (slot->done_event) {
             cudaEventDestroy((cudaEvent_t)slot->done_event);
+        }
+
+        // Free pinned staging buffer
+        if (slot->pinned_buffer) {
+            cudaFreeHost(slot->pinned_buffer);
+            slot->pinned_buffer = NULL;
+            slot->pinned_size = 0;
         }
     }
 
     free(ctx->slots);
     ctx->slots = NULL;
     ctx->num_slots = 0;
+    ctx->use_pinned = 0;
 }
 
 #else // !__HMLL_CUDA_ENABLED__
@@ -394,6 +458,11 @@ struct hmll_error hmll_prefetch_take_buffer(
     HMLL_UNUSED(slot_index);
     HMLL_UNUSED(out_buffer);
     return HMLL_ERR(HMLL_ERR_CUDA_NOT_ENABLED);
+}
+
+void hmll_prefetch_set_pinned(struct hmll_prefetch_ctx* ctx, int enable) {
+    HMLL_UNUSED(ctx);
+    HMLL_UNUSED(enable);
 }
 
 void hmll_prefetch_poll(struct hmll_prefetch_ctx* ctx) {

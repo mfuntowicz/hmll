@@ -11,7 +11,9 @@ use std::ptr;
 pub enum SlotState {
     /// Slot is idle and available.
     Idle,
-    /// Async load in progress.
+    /// Copying to pinned staging buffer (sync phase).
+    Staging,
+    /// Async H2D load in progress.
     Loading,
     /// Load complete, buffer ready.
     Ready,
@@ -23,6 +25,7 @@ impl From<hmll_sys::hmll_prefetch_state> for SlotState {
     fn from(state: hmll_sys::hmll_prefetch_state) -> Self {
         match state {
             hmll_sys::HMLL_PREFETCH_IDLE => SlotState::Idle,
+            hmll_sys::HMLL_PREFETCH_STAGING => SlotState::Staging,
             hmll_sys::HMLL_PREFETCH_LOADING => SlotState::Loading,
             hmll_sys::HMLL_PREFETCH_READY => SlotState::Ready,
             hmll_sys::HMLL_PREFETCH_ERROR => SlotState::Error,
@@ -76,6 +79,7 @@ impl PrefetchContext {
             next_slot: 0,
             device_id: 0,
             device: device.to_raw(),
+            use_pinned: 1, // Enable pinned memory by default
         });
 
         unsafe {

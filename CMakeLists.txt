@@ -69,6 +69,7 @@ set(LIBHMLL_HEADERS
         include/hmll/hmll.h
         include/hmll/loader.h
         include/hmll/memory.h
+        include/hmll/prefetch.h
         include/hmll/types.h
 )
 set(LIBHMLL_SOURCES
@@ -76,6 +77,7 @@ set(LIBHMLL_SOURCES
         lib/errors.c
         lib/loader.c
         lib/memory.c
+        lib/prefetch.c
 )
 
 if(WIN32)
@@ -153,7 +155,15 @@ if(${HMLL_ENABLE_SAFETENSORS})
 endif()
 
 if(${HMLL_ENABLE_CUDA})
-    list(APPEND LIBHMLL_HEADERS include/hmll/cuda.h)
+    list(APPEND LIBHMLL_HEADERS
+        include/hmll/cuda.h
+        include/hmll/cuda_pool.h
+        include/hmll/pinned_pool.h
+    )
+    list(APPEND LIBHMLL_SOURCES
+        lib/cuda_pool.c
+        lib/pinned_pool.c
+    )
 endif()
 
 add_library(libhmll ${LIBHMLL_HEADERS} ${LIBHMLL_SOURCES})
