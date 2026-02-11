@@ -160,3 +160,66 @@ struct hmll_error hmll_mmap_get_view(struct hmll *ctx, const int iofile, const s
 
     return HMLL_OK;
 }
+
+#ifdef __HMLL_CUDA_ENABLED__
+ssize_t hmll_mmap_fetch_async(
+    struct hmll *ctx,
+    int iofile,
+    struct hmll_iobuf *dst,
+    size_t offset,
+    cudaStream_t stream,
+    cudaEvent_t done_event
+) {
+    if (hmll_check(ctx->error)) return -1;
+    if (!dst || dst->size == 0) return 0;
+
+    // Validate file index
+    if (iofile < 0 || (size_t)iofile >= ctx->num_sources) {
+        ctx->error = HMLL_ERR(HMLL_ERR_INVALID_RANGE);
+        return -1;
+    }
+
+    const struct hmll_mmap *fetcher = ctx->fetcher->backend_impl_;
+    const unsigned char *m_buf = fetcher->m_content[iofile];
+
+    // Issue madvise hint for the range
+    madvise((void *)(m_buf + offset), dst->size, MADV_WILLNEED | MADV_SEQUENTIAL);
+
+    // Async copy from mmap to GPU
+    cudaError_t err = cudaMemcpyAsync(
+        dst->ptr,
+        m_buf + offset,
+        dst->size,
+        cudaMemcpyHostToDevice,
+        stream
+    );
+    if (err != cudaSuccess) {
+        ctx->error = HMLL_ERR(HMLL_ERR_CUDA_ERROR);
+        return -1;
+    }
+
+    // Record completion event if provided
+    if (done_event) {
+        err = cudaEventRecord(done_event, stream);
+        if (err != cudaSuccess) {
+            ctx->error = HMLL_ERR(HMLL_ERR_CUDA_ERROR);
+            return -1;
+        }
+    }
+
+    return (ssize_t)dst->size;
+}
+
+const void* hmll_mmap_get_content_ptr(struct hmll *ctx, int iofile) {
+    if (!ctx || !ctx->fetcher || ctx->fetcher->kind != HMLL_FETCHER_MMAP) {
+        return NULL;
+    }
+
+    if (iofile < 0 || (size_t)iofile >= ctx->num_sources) {
+        return NULL;
+    }
+
+    const struct hmll_mmap *fetcher = ctx->fetcher->backend_impl_;
+    return fetcher->m_content[iofile];
+}
+#endif // __HMLL_CUDA_ENABLED__

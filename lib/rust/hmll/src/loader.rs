@@ -307,6 +307,32 @@ impl<'a> WeightLoader<'a> {
     pub fn source_info(&self, index: usize) -> Option<SourceInfo> {
         self.sources.get(index).map(|s| SourceInfo { size: s.size })
     }
+
+    /// Get the mmap'd content pointer for a specific source file.
+    ///
+    /// This returns a raw pointer to the mmap'd file content, which can be used
+    /// for async prefetching. The pointer is valid for the lifetime of this loader.
+    ///
+    /// # Arguments
+    ///
+    /// * `file_index` - Index of the source file
+    ///
+    /// # Returns
+    ///
+    /// The content pointer, or None if the index is out of bounds or content is null.
+    #[inline]
+    pub fn source_content_ptr(&self, file_index: usize) -> Option<*const std::ffi::c_void> {
+        if file_index >= self.source_handles.len() {
+            return None;
+        }
+
+        let content_ptr = self.source_handles[file_index].inner.content;
+        if content_ptr.is_null() {
+            None
+        } else {
+            Some(content_ptr as *const std::ffi::c_void)
+        }
+    }
 }
 
 impl<'a> Drop for WeightLoader<'a> {

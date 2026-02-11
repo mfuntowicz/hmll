@@ -232,6 +232,7 @@ impl Buffer {
     pub fn is_owned(&self) -> bool {
         matches!(self.kind, BufferKind::Owned)
     }
+
 }
 
 // Buffer is Send and Sync as long as the device supports it

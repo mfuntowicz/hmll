@@ -40,6 +40,7 @@ extern "C" {
 
 #include "loader.h"
 #include "memory.h"
+#include "prefetch.h"
 #include "types.h"
 
 // Platform-specific file handling - loader.h already handles platform detection

@@ -1,8 +1,13 @@
 #include "hmll/win32/backend/mmap.h"
-#include <memoryapi.h>
 #include <windows.h>
+#include <memoryapi.h>
 #include <stdlib.h>
 #include <string.h>
+
+// PrefetchVirtualMemory requires Windows 8+ (_WIN32_WINNT >= 0x0602)
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0602
+#endif
 
 #ifdef __HMLL_CUDA_ENABLED__
 #include "cuda_runtime.h"
@@ -106,6 +111,12 @@ struct hmll_error hmll_mmap_get_view(struct hmll *ctx, const int iofile, const s
     unsigned char *m_buf = fetcher->m_content[iofile];
     const size_t n_bytes = range.end - range.start;
 
+    // Prefetch the memory range (Windows 8+ equivalent of madvise MADV_WILLNEED)
+    WIN32_MEMORY_RANGE_ENTRY range_entry;
+    range_entry.VirtualAddress = m_buf + range.start;
+    range_entry.NumberOfBytes = n_bytes;
+    PrefetchVirtualMemory(GetCurrentProcess(), 1, &range_entry, 0);
+
     // Return a view directly into the mmap'd region
     out_view->ptr = m_buf + range.start;
     out_view->size = n_bytes;
@@ -113,3 +124,69 @@ struct hmll_error hmll_mmap_get_view(struct hmll *ctx, const int iofile, const s
 
     return HMLL_OK;
 }
+
+#ifdef __HMLL_CUDA_ENABLED__
+ssize_t hmll_mmap_fetch_async(
+    struct hmll *ctx,
+    int iofile,
+    struct hmll_iobuf *dst,
+    size_t offset,
+    cudaStream_t stream,
+    cudaEvent_t done_event
+) {
+    if (hmll_check(ctx->error)) return -1;
+    if (!dst || dst->size == 0) return 0;
+
+    // Validate file index
+    if (iofile < 0 || (size_t)iofile >= ctx->num_sources) {
+        ctx->error = HMLL_ERR(HMLL_ERR_INVALID_RANGE);
+        return -1;
+    }
+
+    const struct hmll_mmap *fetcher = ctx->fetcher->backend_impl_;
+    const unsigned char *m_buf = fetcher->m_content[iofile];
+
+    // Prefetch the memory range (Windows equivalent of madvise MADV_WILLNEED)
+    WIN32_MEMORY_RANGE_ENTRY range_entry;
+    range_entry.VirtualAddress = (PVOID)(m_buf + offset);
+    range_entry.NumberOfBytes = dst->size;
+    PrefetchVirtualMemory(GetCurrentProcess(), 1, &range_entry, 0);
+
+    // Async copy from mmap to GPU
+    cudaError_t err = cudaMemcpyAsync(
+        dst->ptr,
+        m_buf + offset,
+        dst->size,
+        cudaMemcpyHostToDevice,
+        stream
+    );
+    if (err != cudaSuccess) {
+        ctx->error = HMLL_ERR(HMLL_ERR_CUDA_ERROR);
+        return -1;
+    }
+
+    // Record completion event if provided
+    if (done_event) {
+        err = cudaEventRecord(done_event, stream);
+        if (err != cudaSuccess) {
+            ctx->error = HMLL_ERR(HMLL_ERR_CUDA_ERROR);
+            return -1;
+        }
+    }
+
+    return (ssize_t)dst->size;
+}
+
+const void* hmll_mmap_get_content_ptr(struct hmll *ctx, int iofile) {
+    if (!ctx || !ctx->fetcher || ctx->fetcher->kind != HMLL_FETCHER_MMAP) {
+        return NULL;
+    }
+
+    if (iofile < 0 || (size_t)iofile >= ctx->num_sources) {
+        return NULL;
+    }
+
+    const struct hmll_mmap *fetcher = ctx->fetcher->backend_impl_;
+    return fetcher->m_content[iofile];
+}
+#endif // __HMLL_CUDA_ENABLED__

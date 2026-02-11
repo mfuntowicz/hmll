@@ -40,10 +40,12 @@ mod buffer;
 mod device;
 mod error;
 mod loader;
+mod prefetch;
 mod source;
 
 pub use buffer::{Buffer, Range};
 pub use device::Device;
 pub use error::{Error, Result};
 pub use loader::{LoaderKind, WeightLoader};
+pub use prefetch::{PrefetchContext, SlotState};
 pub use source::Source;
