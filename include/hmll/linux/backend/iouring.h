@@ -1,13 +1,14 @@
 #ifndef HMLL_FETCHER_IOURING_H
 #define HMLL_FETCHER_IOURING_H
 
-// The queue-depth matchs the number of slot (bits) allocable through iobusy var
 #ifndef HMLL_URING_QUEUE_DEPTH
 #define HMLL_URING_QUEUE_DEPTH 128U
 #endif
 
+#define HMLL_URING_IOBUSY_WORDS ((HMLL_URING_QUEUE_DEPTH + 63) / 64)
+
 #ifndef HMLL_URING_BUFFER_SIZE
-#define HMLL_URING_BUFFER_SIZE (8U * 1024 * 1024)
+#define HMLL_URING_BUFFER_SIZE (512U * 1024)
 #endif
 
 #ifndef HMLL_URING_CQE_BATCH_SIZE
@@ -19,8 +20,7 @@
 
 struct hmll_iouring_iobusy
 {
-    long long msb;
-    long long lsb;
+    unsigned long long bits[HMLL_URING_IOBUSY_WORDS];
 };
 
 struct hmll_iouring_cca
@@ -80,7 +80,7 @@ static inline unsigned hmll_io_uring_cca_update(
     const size_t smoothed = ((throughput * 3) + cca->throughput) >> 2;
 
     if (cca->throughput < throughput)
-        cca->window = cca->window + 1 >= HMLL_URING_CQE_BATCH_SIZE ? HMLL_URING_CQE_BATCH_SIZE : cca->window + 1;
+        cca->window = cca->window + 1 >= HMLL_URING_QUEUE_DEPTH ? HMLL_URING_QUEUE_DEPTH : cca->window + 1;
     else
         cca->window = cca->window - 1 < 1 ? 1 : cca->window - 1;
 
@@ -100,42 +100,27 @@ struct hmll_io_uring {
 
 static inline unsigned int hmll_io_uring_slot_is_busy(const struct hmll_iouring_iobusy iobusy, const unsigned int slot)
 {
-    if (slot < 64)
-        return iobusy.lsb & (1LL << slot);
-    return iobusy.msb & (1LL << (slot - 64));
+    return (iobusy.bits[slot >> 6] & (1ULL << (slot & 63))) != 0;
 }
 
 static inline int hmll_io_uring_slot_find_available(const struct hmll_iouring_iobusy iobusy)
 {
-    // First check LSB
-    const int pos_lsb = __builtin_ffsll(~iobusy.lsb);
-    if (pos_lsb > 0)
-        return pos_lsb - 1;
-
-    // Then check MSB
-    const int pos_msb = __builtin_ffsll(~iobusy.msb);
-    if (pos_msb > 0)
-        return 64 + pos_msb - 1;
-
+    for (unsigned i = 0; i < HMLL_URING_IOBUSY_WORDS; ++i) {
+        const int pos = __builtin_ffsll(~iobusy.bits[i]);
+        if (pos > 0)
+            return (int)(i * 64) + pos - 1;
+    }
     return -1;
 }
 
 static inline void hmll_io_uring_slot_set_busy(struct hmll_iouring_iobusy *iobusy, const unsigned int slot)
 {
-    if (slot < 64) {
-        iobusy->lsb |= 1LL << slot;
-    } else {
-        iobusy->msb |= 1LL << (slot - 64);
-    }
+    iobusy->bits[slot >> 6] |= 1ULL << (slot & 63);
 }
 
 static inline void hmll_io_uring_slot_set_available(struct hmll_iouring_iobusy *iobusy, const unsigned int slot)
 {
-    if (slot < 64) {
-        iobusy->lsb &= ~(1LL << slot);
-    } else {
-        iobusy->msb &= ~(1LL << (slot - 64));
-    }
+    iobusy->bits[slot >> 6] &= ~(1ULL << (slot & 63));
 }
 
 struct hmll_error hmll_io_uring_init(struct hmll *, enum hmll_device);

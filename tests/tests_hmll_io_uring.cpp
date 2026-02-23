@@ -9,80 +9,80 @@
 
 TEST_CASE("io_uring set slot busy", "[linux][io_uring][slot]")
 {
-    struct hmll_iouring_iobusy iobusy = {0, 0};
+    struct hmll_iouring_iobusy iobusy = {};
     hmll_io_uring_slot_set_busy(&iobusy, 0);
-    REQUIRE(iobusy.lsb == 1LL << 0);
-    REQUIRE(iobusy.msb == 0);
+    REQUIRE(iobusy.bits[0] == 1ULL << 0);
+    REQUIRE(iobusy.bits[1] == 0);
 
-    iobusy = {0, 0};
+    iobusy = {};
     hmll_io_uring_slot_set_busy(&iobusy, 13);
-    REQUIRE(iobusy.lsb == 1LL << 13);
-    REQUIRE(iobusy.msb == 0);
+    REQUIRE(iobusy.bits[0] == 1ULL << 13);
+    REQUIRE(iobusy.bits[1] == 0);
 
-    iobusy = {0, 0};
+    iobusy = {};
     hmll_io_uring_slot_set_busy(&iobusy, 56);
-    REQUIRE(iobusy.lsb == 1LL << 56);
-    REQUIRE(iobusy.msb == 0);
+    REQUIRE(iobusy.bits[0] == 1ULL << 56);
+    REQUIRE(iobusy.bits[1] == 0);
 
-    iobusy = {0, 0};
+    iobusy = {};
     hmll_io_uring_slot_set_busy(&iobusy, 64);
-    REQUIRE(iobusy.lsb == 0);
-    REQUIRE(iobusy.msb == 1LL << 0);
+    REQUIRE(iobusy.bits[0] == 0);
+    REQUIRE(iobusy.bits[1] == 1ULL << 0);
 
-    iobusy = {0, 0};
+    iobusy = {};
     hmll_io_uring_slot_set_busy(&iobusy, 99);
-    REQUIRE(iobusy.lsb == 0);
-    REQUIRE(iobusy.msb == 1LL << 35);
+    REQUIRE(iobusy.bits[0] == 0);
+    REQUIRE(iobusy.bits[1] == 1ULL << 35);
 }
 
 TEST_CASE("io_uring set slot available", "[linux][io_uring][slot]")
 {
-    struct hmll_iouring_iobusy iobusy = {0, 0};
+    struct hmll_iouring_iobusy iobusy = {};
     hmll_io_uring_slot_set_busy(&iobusy, 0);
-    REQUIRE(iobusy.lsb > 0);
+    REQUIRE(iobusy.bits[0] > 0);
     hmll_io_uring_slot_set_available(&iobusy, 0);
-    REQUIRE(iobusy.lsb == 0);
+    REQUIRE(iobusy.bits[0] == 0);
 
-    iobusy = {0, 0};
+    iobusy = {};
     hmll_io_uring_slot_set_busy(&iobusy, 13);
-    REQUIRE(iobusy.lsb == 1LL << 13);
+    REQUIRE(iobusy.bits[0] == 1ULL << 13);
     hmll_io_uring_slot_set_available(&iobusy, 13);
-    REQUIRE(iobusy.lsb == 0);
+    REQUIRE(iobusy.bits[0] == 0);
 
-    iobusy = {0, 0};
+    iobusy = {};
     hmll_io_uring_slot_set_busy(&iobusy, 56);
-    REQUIRE(iobusy.lsb == 1LL << 56);
+    REQUIRE(iobusy.bits[0] == 1ULL << 56);
     hmll_io_uring_slot_set_available(&iobusy, 56);
-    REQUIRE(iobusy.lsb == 0);
+    REQUIRE(iobusy.bits[0] == 0);
 
-    iobusy = {1, 0};
+    iobusy = {{0, 1}};
     hmll_io_uring_slot_set_busy(&iobusy, 38);
-    REQUIRE(iobusy.lsb == (1LL << 38));
+    REQUIRE(iobusy.bits[0] == (1ULL << 38));
     hmll_io_uring_slot_set_available(&iobusy, 38);
-    REQUIRE(iobusy.lsb == 0);
+    REQUIRE(iobusy.bits[0] == 0);
 
-    iobusy = {0, 0};
+    iobusy = {};
     hmll_io_uring_slot_set_busy(&iobusy, 64);
-    REQUIRE(iobusy.msb == 1LL << 0);
+    REQUIRE(iobusy.bits[1] == 1ULL << 0);
     hmll_io_uring_slot_set_available(&iobusy, 64);
-    REQUIRE(iobusy.msb == 0);
+    REQUIRE(iobusy.bits[1] == 0);
 
-    iobusy = {0, 0};
+    iobusy = {};
     hmll_io_uring_slot_set_busy(&iobusy, 99);
-    REQUIRE(iobusy.msb == 1LL << 35);
+    REQUIRE(iobusy.bits[1] == 1ULL << 35);
     hmll_io_uring_slot_set_available(&iobusy, 99);
-    REQUIRE(iobusy.msb == 0);
+    REQUIRE(iobusy.bits[1] == 0);
 }
 
 SCENARIO("io_uring find slot", "[linux][io_uring][slot]")
 {
     GIVEN("A bitmap where all the slot are available")
     {
-        struct hmll_iouring_iobusy iobusy = {0, 0};
+        struct hmll_iouring_iobusy iobusy = {};
 
         THEN("The first slot available is 0")
         {
-            REQUIRE(iobusy.lsb == 0);
+            REQUIRE(iobusy.bits[0] == 0);
             REQUIRE(hmll_io_uring_slot_find_available(iobusy) == 0);
         }
 
@@ -116,11 +116,11 @@ SCENARIO("io_uring find slot", "[linux][io_uring][slot]")
             }
         }
 
-        WHEN("All LSB slots become unavailable")
+        WHEN("All lower word slots become unavailable")
         {
-            iobusy.lsb = 0xFFFFFFFFFFFFFFFF;
-            iobusy.msb = 0;
-            THEN("The next available slot is 64 (first MSB slot)")
+            iobusy.bits[0] = 0xFFFFFFFFFFFFFFFF;
+            iobusy.bits[1] = 0;
+            THEN("The next available slot is 64")
             {
                 REQUIRE(hmll_io_uring_slot_find_available(iobusy) == 64);
             }
@@ -128,18 +128,18 @@ SCENARIO("io_uring find slot", "[linux][io_uring][slot]")
 
         WHEN("All the slots become unavailable")
         {
-            iobusy.lsb = 0xFFFFFFFFFFFFFFFF;
-            iobusy.msb = 0xFFFFFFFFFFFFFFFF;
+            iobusy.bits[0] = 0xFFFFFFFFFFFFFFFF;
+            iobusy.bits[1] = 0xFFFFFFFFFFFFFFFF;
             THEN("No slot are available and the next available slot is -1")
             {
                 REQUIRE(hmll_io_uring_slot_find_available(iobusy) == -1);
             }
         }
 
-        WHEN("A block in LSB becomes available")
+        WHEN("A block in the lower word becomes available")
         {
-            iobusy.lsb = 0xFFFFFFFFFFFFFFFF;
-            iobusy.msb = 0;
+            iobusy.bits[0] = 0xFFFFFFFFFFFFFFFF;
+            iobusy.bits[1] = 0;
             hmll_io_uring_slot_set_available(&iobusy, 63);
             THEN("The next slot available is 63")
             {
@@ -147,10 +147,10 @@ SCENARIO("io_uring find slot", "[linux][io_uring][slot]")
             }
         }
 
-        WHEN("A block in MSB becomes available")
+        WHEN("A block in the upper word becomes available")
         {
-            iobusy.lsb = 0xFFFFFFFFFFFFFFFF;
-            iobusy.msb = 0xFFFFFFFFFFFFFFFF;
+            iobusy.bits[0] = 0xFFFFFFFFFFFFFFFF;
+            iobusy.bits[1] = 0xFFFFFFFFFFFFFFFF;
             hmll_io_uring_slot_set_available(&iobusy, 100);
             THEN("The next slot available is 100")
             {
