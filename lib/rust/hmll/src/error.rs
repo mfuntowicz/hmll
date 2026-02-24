@@ -89,6 +89,12 @@ pub enum Error {
 
     #[error("Unknown error code")]
     Unknown,
+
+    #[error("fetchv iobufs iterator is exhausted when expected to yield an additional element")]
+    ExhaustedIterator,
+
+    #[error("select file index is invalid: {0}")]
+    InvalidFileIndex(usize),
 }
 
 impl Error {

@@ -1,7 +1,10 @@
 //! Weight loader implementation for efficient model loading.
 
+use hmll_sys::hmll_iobuf;
+
 use crate::source::SourceHandle;
 use crate::{Buffer, Device, Error, Range, Result, Source};
+use std::collections::HashSet;
 use std::marker::PhantomData;
 use std::ptr;
 use std::sync::Arc;
@@ -99,12 +102,11 @@ impl<'a> WeightLoader<'a> {
         }
 
         // Clone Arc handles to keep sources alive while views exist
-        let source_handles: Vec<Arc<SourceHandle>> = sources
-            .iter()
-            .map(|s| s.handle().clone())
-            .collect();
+        let source_handles: Vec<Arc<SourceHandle>> =
+            sources.iter().map(|s| s.handle().clone()).collect();
 
-        let mut sources_vec: Vec<hmll_sys::hmll_source> = sources.iter().map(|s| *s.as_raw()).collect();
+        let mut sources_vec: Vec<hmll_sys::hmll_source> =
+            sources.iter().map(|s| *s.as_raw()).collect();
         let mut context = Box::new(hmll_sys::hmll {
             fetcher: ptr::null_mut(),
             sources: ptr::null_mut(),
@@ -144,6 +146,129 @@ impl<'a> WeightLoader<'a> {
         })
     }
 
+    /// Fetch multiple ranges of bytes from a specific source file in a single batch.
+    ///
+    /// # Arguments
+    ///
+    /// * `ranges` - Slice of byte ranges to fetch
+    /// * `file_index` - Index of the source file to fetch from
+    ///
+    /// # Returns
+    ///
+    /// A `Vec<Buffer>` containing the fetched data for each range, in the same
+    /// order as the input ranges. Empty ranges will have corresponding empty
+    /// buffers in the output.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The file index is out of bounds
+    /// - Memory allocation fails for any buffer
+    /// - The fetch operation fails
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use hmll::{Source, WeightLoader, Device, LoaderKind, Range};
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let source = Source::open("model.safetensors")?;
+    /// # let sources = [source];
+    /// # let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)?;
+    ///
+    /// // Fetch multiple weight tensors in a single batch
+    /// let ranges = vec![
+    ///     Range::new(0, 1024),        // First tensor
+    ///     Range::new(4096, 8192),     // Second tensor
+    ///     Range::new(16384, 32768),   // Third tensor
+    /// ];
+    /// let buffers = loader.fetchv(&ranges, 0)?;
+    ///
+    /// assert_eq!(buffers.len(), 3);
+    /// println!("Fetched {} bytes total", buffers.iter().map(|b| b.len()).sum::<usize>());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn fetchv(&mut self, ranges: &[Range], file_index: usize) -> Result<Vec<Buffer>> {
+        if file_index >= self.sources.len() {
+            return Err(Error::InvalidFileIndex(file_index));
+        }
+
+        // XXX: error out instead?
+        if ranges.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let n = ranges.len();
+
+        let mut iobufs: Vec<hmll_iobuf> = Vec::with_capacity(n);
+        let mut offsets = Vec::with_capacity(n);
+        let mut non_empty_buffers = HashSet::with_capacity(n);
+
+        for (i, range) in ranges.iter().enumerate() {
+            if range.is_empty() {
+                continue;
+            }
+
+            let iobuf = unsafe {
+                hmll_sys::hmll_get_buffer_for_range(
+                    self.context.as_mut(),
+                    self.device.to_raw(),
+                    range.to_raw(),
+                )
+            };
+            if iobuf.ptr.is_null() {
+                for prev in &mut iobufs {
+                    if !prev.ptr.is_null() {
+                        unsafe { hmll_sys::hmll_free_buffer(prev) };
+                    }
+                }
+                return Err(Error::AllocationFailed);
+            }
+            iobufs.push(iobuf);
+            offsets.push(range.start);
+            non_empty_buffers.insert(i);
+        }
+
+        if iobufs.is_empty() {
+            return Ok(ranges.iter().map(|_| Buffer::empty(self.device)).collect());
+        }
+
+        let res = unsafe {
+            hmll_sys::hmll_fetchv(
+                self.context.as_mut(),
+                file_index as i32,
+                iobufs.as_ptr(),
+                offsets.as_ptr(),
+                iobufs.len(),
+            )
+        };
+
+        if res < 0 {
+            for buf in &mut iobufs {
+                if !buf.ptr.is_null() {
+                    unsafe { hmll_sys::hmll_free_buffer(buf) };
+                }
+            }
+            return Err(Error::from_hmll_error(hmll_sys::hmll_take_error(
+                self.context.as_mut(),
+            )));
+        }
+
+        let mut iter = iobufs.into_iter();
+        let buffers = (0..n)
+            .map(|i| {
+                if non_empty_buffers.contains(&i) {
+                    let raw_buf = iter.next().ok_or(Error::ExhaustedIterator)?;
+                    unsafe { Ok(Buffer::from_raw_owned(raw_buf)) }
+                } else {
+                    Ok(Buffer::empty(self.device))
+                }
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        Ok(buffers)
+    }
+
     /// Fetch a range of bytes from a specific source file.
     ///
     /// # Arguments
@@ -181,7 +306,7 @@ impl<'a> WeightLoader<'a> {
         let range = range.into();
 
         if file_index >= self.sources.len() {
-            return Err(Error::InvalidRange);
+            return Err(Error::InvalidFileIndex(file_index));
         }
 
         if range.is_empty() {
@@ -201,16 +326,18 @@ impl<'a> WeightLoader<'a> {
         }
 
         let res = unsafe {
-            hmll_sys::hmll_fetch(self.context.as_mut(), file_index as i32, &iobuf, range.start)
+            hmll_sys::hmll_fetch(
+                self.context.as_mut(),
+                file_index as i32,
+                &iobuf,
+                range.start,
+            )
         };
 
         if res < 0 {
-            let err = self.context.error;
-            self.context.error = hmll_sys::hmll_error {
-                code: hmll_sys::HMLL_ERR_SUCCESS,
-                sys_err: 0,
-            };
-            return Err(Error::from_hmll_error(err));
+            return Err(Error::from_hmll_error(hmll_sys::hmll_take_error(
+                self.context.as_mut(),
+            )));
         }
 
         Ok(unsafe { Buffer::from_raw_owned(iobuf) })
@@ -261,7 +388,7 @@ impl<'a> WeightLoader<'a> {
         let range = range.into();
 
         if file_index >= self.sources.len() {
-            return Err(Error::InvalidRange);
+            return Err(Error::InvalidFileIndex(file_index));
         }
 
         if range.is_empty() {
@@ -283,7 +410,8 @@ impl<'a> WeightLoader<'a> {
         }
 
         // Calculate the view pointer
-        let view_ptr = unsafe { (content_ptr as *mut u8).add(range.start) as *mut std::ffi::c_void };
+        let view_ptr =
+            unsafe { (content_ptr as *mut u8).add(range.start) as *mut std::ffi::c_void };
         let view_size = range.len();
 
         // Create a view buffer - Arc keeps source (and mmap) alive
@@ -612,7 +740,9 @@ mod tests {
         let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Mmap)
             .expect("Failed to create mmap loader");
 
-        let view = loader.fetch_view(5..5, 0).expect("Failed to get empty view");
+        let view = loader
+            .fetch_view(5..5, 0)
+            .expect("Failed to get empty view");
 
         assert!(view.is_empty());
         assert_eq!(view.len(), 0);
@@ -646,7 +776,9 @@ mod tests {
             let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Mmap)
                 .expect("Failed to create mmap loader");
 
-            loader.fetch_view(0..content.len(), 0).expect("Failed to get view")
+            loader
+                .fetch_view(0..content.len(), 0)
+                .expect("Failed to get view")
             // loader AND sources are dropped here, but view holds Arc to source
         };
 
@@ -699,8 +831,12 @@ mod tests {
         let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Mmap)
             .expect("Failed to create mmap loader");
 
-        let view1 = loader.fetch_view(0..content1.len(), 0).expect("Failed to get view 1");
-        let view2 = loader.fetch_view(0..content2.len(), 1).expect("Failed to get view 2");
+        let view1 = loader
+            .fetch_view(0..content1.len(), 0)
+            .expect("Failed to get view 1");
+        let view2 = loader
+            .fetch_view(0..content2.len(), 1)
+            .expect("Failed to get view 2");
 
         // Drop loader
         drop(loader);
@@ -708,5 +844,225 @@ mod tests {
         // Each view should keep its respective source alive
         assert_eq!(view1.as_slice().unwrap(), content1);
         assert_eq!(view2.as_slice().unwrap(), content2);
+    }
+
+    #[test]
+    fn test_fetchv_multiple_ranges() {
+        let content = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij";
+        let temp_file = create_test_file(content);
+
+        let source = Source::open(temp_file.path()).expect("Failed to open source");
+        let sources = [source];
+
+        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)
+            .expect("Failed to create loader");
+
+        let ranges = vec![Range::new(0, 10), Range::new(10, 20), Range::new(20, 36)];
+
+        let buffers = loader.fetchv(&ranges, 0).expect("Failed to fetchv");
+
+        assert_eq!(buffers.len(), 3);
+        assert_eq!(buffers[0].as_slice().unwrap(), b"0123456789");
+        assert_eq!(buffers[1].as_slice().unwrap(), b"ABCDEFGHIJ");
+        assert_eq!(buffers[2].as_slice().unwrap(), b"KLMNOPQRSTUVWXYZ");
+    }
+
+    #[test]
+    fn test_fetchv_single_range() {
+        let content = b"Hello, fetchv!";
+        let temp_file = create_test_file(content);
+
+        let source = Source::open(temp_file.path()).expect("Failed to open source");
+        let sources = [source];
+
+        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)
+            .expect("Failed to create loader");
+
+        let ranges = vec![Range::new(0, content.len())];
+        let buffers = loader.fetchv(&ranges, 0).expect("Failed to fetchv");
+
+        assert_eq!(buffers.len(), 1);
+        assert_eq!(buffers[0].as_slice().unwrap(), content);
+    }
+
+    #[test]
+    fn test_fetchv_empty_input() {
+        let content = b"Some content";
+        let temp_file = create_test_file(content);
+
+        let source = Source::open(temp_file.path()).expect("Failed to open source");
+        let sources = [source];
+
+        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)
+            .expect("Failed to create loader");
+
+        let buffers = loader.fetchv(&[], 0).expect("Failed to fetchv");
+        assert!(buffers.is_empty());
+    }
+
+    #[test]
+    fn test_fetchv_with_empty_ranges_interleaved() {
+        let content = b"0123456789ABCDEFGHIJ";
+        let temp_file = create_test_file(content);
+
+        let source = Source::open(temp_file.path()).expect("Failed to open source");
+        let sources = [source];
+
+        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)
+            .expect("Failed to create loader");
+
+        let ranges = vec![
+            Range::new(0, 10),  // non-empty
+            Range::new(5, 5),   // empty
+            Range::new(10, 20), // non-empty
+            Range::new(0, 0),   // empty
+        ];
+
+        let buffers = loader.fetchv(&ranges, 0).expect("Failed to fetchv");
+
+        assert_eq!(buffers.len(), 4);
+        assert_eq!(buffers[0].as_slice().unwrap(), b"0123456789");
+        assert!(buffers[1].is_empty());
+        assert_eq!(buffers[2].as_slice().unwrap(), b"ABCDEFGHIJ");
+        assert!(buffers[3].is_empty());
+    }
+
+    #[test]
+    fn test_fetchv_all_empty_ranges() {
+        let content = b"Some content";
+        let temp_file = create_test_file(content);
+
+        let source = Source::open(temp_file.path()).expect("Failed to open source");
+        let sources = [source];
+
+        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)
+            .expect("Failed to create loader");
+
+        let ranges = vec![Range::new(0, 0), Range::new(5, 5), Range::new(10, 3)];
+
+        let buffers = loader.fetchv(&ranges, 0).expect("Failed to fetchv");
+
+        assert_eq!(buffers.len(), 3);
+        assert!(buffers.iter().all(|b| b.is_empty()));
+    }
+
+    #[test]
+    fn test_fetchv_invalid_file_index() {
+        let content = b"Test content";
+        let temp_file = create_test_file(content);
+
+        let source = Source::open(temp_file.path()).expect("Failed to open source");
+        let sources = [source];
+
+        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)
+            .expect("Failed to create loader");
+
+        let ranges = vec![Range::new(0, 10)];
+        let result = loader.fetchv(&ranges, 99);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_fetchv_multiple_sources() {
+        let content1 = b"First file data here!";
+        let content2 = b"Second file data here!";
+
+        let temp1 = create_test_file(content1);
+        let temp2 = create_test_file(content2);
+
+        let source1 = Source::open(temp1.path()).expect("Failed to open source 1");
+        let source2 = Source::open(temp2.path()).expect("Failed to open source 2");
+        let sources = [source1, source2];
+
+        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)
+            .expect("Failed to create loader");
+
+        let ranges1 = vec![Range::new(0, content1.len())];
+        let ranges2 = vec![Range::new(0, content2.len())];
+
+        let bufs1 = loader.fetchv(&ranges1, 0).expect("Failed to fetchv file 0");
+        let bufs2 = loader.fetchv(&ranges2, 1).expect("Failed to fetchv file 1");
+
+        assert_eq!(bufs1[0].as_slice().unwrap(), content1);
+        assert_eq!(bufs2[0].as_slice().unwrap(), content2);
+    }
+
+    #[test]
+    fn test_fetchv_large_batch() {
+        let size = 256 * 1024; // 256 KiB
+        let content: Vec<u8> = (0..size).map(|i| (i % 256) as u8).collect();
+        let temp_file = create_test_file(&content);
+
+        let source = Source::open(temp_file.path()).expect("Failed to open source");
+        let sources = [source];
+
+        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)
+            .expect("Failed to create loader");
+
+        // Split into 16 equal chunks
+        let chunk_size = size / 16;
+        let ranges: Vec<Range> = (0..16)
+            .map(|i| Range::new(i * chunk_size, (i + 1) * chunk_size))
+            .collect();
+
+        let buffers = loader.fetchv(&ranges, 0).expect("Failed to fetchv");
+
+        assert_eq!(buffers.len(), 16);
+        for (i, buf) in buffers.iter().enumerate() {
+            let start = i * chunk_size;
+            let expected = &content[start..start + chunk_size];
+            assert_eq!(buf.as_slice().unwrap(), expected, "Chunk {i} mismatch");
+        }
+    }
+
+    #[test]
+    fn test_fetchv_matches_individual_fetches() {
+        let content = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij";
+        let temp_file = create_test_file(content);
+
+        let source = Source::open(temp_file.path()).expect("Failed to open source");
+        let sources = [source];
+
+        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)
+            .expect("Failed to create loader");
+
+        let ranges = vec![Range::new(0, 10), Range::new(10, 20), Range::new(36, 46)];
+
+        // Fetch individually
+        let individual: Vec<Vec<u8>> = ranges
+            .iter()
+            .map(|r| loader.fetch(r.start..r.end, 0).unwrap().to_vec().unwrap())
+            .collect();
+
+        // Fetch as batch
+        let batch = loader.fetchv(&ranges, 0).expect("Failed to fetchv");
+
+        // Results must match
+        for (i, (ind, bat)) in individual.iter().zip(batch.iter()).enumerate() {
+            assert_eq!(
+                ind.as_slice(),
+                bat.as_slice().unwrap(),
+                "Mismatch at index {i}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_fetchv_with_mmap_backend() {
+        let content = b"0123456789ABCDEFGHIJ";
+        let temp_file = create_test_file(content);
+
+        let source = Source::open(temp_file.path()).expect("Failed to open source");
+        let sources = [source];
+
+        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Mmap)
+            .expect("Failed to create mmap loader");
+
+        let ranges = vec![Range::new(0, 10), Range::new(10, 20)];
+        let buffers = loader.fetchv(&ranges, 0).expect("Failed to fetchv");
+
+        assert_eq!(buffers.len(), 2);
+        assert_eq!(buffers[0].as_slice().unwrap(), b"0123456789");
+        assert_eq!(buffers[1].as_slice().unwrap(), b"ABCDEFGHIJ");
     }
 }

@@ -34,24 +34,18 @@ impl Range {
     }
 
     /// Get the length of the range.
-    ///
-    /// Hot path - inline always for zero-cost abstraction.
     #[inline(always)]
     pub const fn len(&self) -> usize {
         self.end.saturating_sub(self.start)
     }
 
     /// Check if the range is empty.
-    ///
-    /// Hot path - inline always for zero-cost abstraction.
     #[inline(always)]
     pub const fn is_empty(&self) -> bool {
         self.start >= self.end
     }
 
     /// Convert to the underlying C struct.
-    ///
-    /// Hot path - always inline for FFI conversion.
     #[inline(always)]
     pub(crate) fn to_raw(self) -> hmll_sys::hmll_range {
         hmll_sys::hmll_range {
@@ -61,8 +55,6 @@ impl Range {
     }
 
     /// Convert from the underlying C struct.
-    ///
-    /// Hot path - always inline for FFI conversion.
     #[allow(unused)]
     #[inline(always)]
     pub(crate) const fn from_raw(range: hmll_sys::hmll_range) -> Self {
@@ -75,8 +67,6 @@ impl Range {
 
 impl From<ops::Range<usize>> for Range {
     /// Convert from standard library Range.
-    ///
-    /// Hot path - inline always for zero-cost conversion.
     #[inline(always)]
     fn from(range: ops::Range<usize>) -> Self {
         Self {
@@ -88,8 +78,6 @@ impl From<ops::Range<usize>> for Range {
 
 impl From<Range> for ops::Range<usize> {
     /// Convert to standard library Range.
-    ///
-    /// Hot path - inline always for zero-cost conversion.
     #[inline(always)]
     fn from(range: Range) -> Self {
         range.start..range.end
@@ -183,7 +171,12 @@ impl Buffer {
                 // Return empty slice for empty/null buffers
                 Some(&[])
             } else {
-                unsafe { Some(std::slice::from_raw_parts(self.buf.ptr as *const u8, self.buf.size)) }
+                unsafe {
+                    Some(std::slice::from_raw_parts(
+                        self.buf.ptr as *const u8,
+                        self.buf.size,
+                    ))
+                }
             }
         } else {
             None
@@ -233,10 +226,6 @@ impl Buffer {
         matches!(self.kind, BufferKind::Owned)
     }
 }
-
-// Buffer is Send and Sync as long as the device supports it
-unsafe impl Send for Buffer {}
-unsafe impl Sync for Buffer {}
 
 impl Drop for Buffer {
     fn drop(&mut self) {

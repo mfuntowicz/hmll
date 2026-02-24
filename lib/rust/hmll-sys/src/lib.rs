@@ -20,37 +20,48 @@ pub use hmll_status_code::*;
 
 // Optimized helper functions for zero-cost error checking
 
-/// Check if an error represents success (hot path - inline always)
+/// Check if an error represents success
 #[inline(always)]
 pub const fn hmll_is_success(error: hmll_error) -> bool {
     matches!(error.code, hmll_status_code::HMLL_ERR_SUCCESS) && error.sys_err == 0
 }
 
-/// Check if an error represents failure (hot path - inline always)
+/// Check if an error represents failure
 #[inline(always)]
 pub const fn hmll_check_error(res: hmll_error) -> bool {
     !matches!(res.code, hmll_status_code::HMLL_ERR_SUCCESS) || res.sys_err != 0
 }
 
-/// Get error code (hot path - inline always)
+/// Take latest error from context and reset it to success
+#[inline(always)]
+pub const fn hmll_take_error(ctx: &mut hmll) -> hmll_error {
+    let err = ctx.error;
+    ctx.error = hmll_error {
+        code: hmll_status_code::HMLL_ERR_SUCCESS,
+        sys_err: 0,
+    };
+    err
+}
+
+/// Get error code
 #[inline(always)]
 pub const fn hmll_error_code(error: hmll_error) -> hmll_status_code {
     error.code
 }
 
-/// Get system error as i32 (hot path - inline always)
+/// Get system error as i32
 #[inline(always)]
 pub const fn hmll_sys_error(error: hmll_error) -> i32 {
     error.sys_err
 }
 
-/// Check if device is CPU (hot path - inline always)
+/// Check if device is CPU
 #[inline(always)]
 pub const fn hmll_is_cpu(device: hmll_device) -> bool {
     matches!(device, hmll_device::HMLL_DEVICE_CPU)
 }
 
-/// Check if device is CUDA (hot path - inline always)
+/// Check if device is CUDA
 #[inline(always)]
 pub const fn hmll_is_cuda(device: hmll_device) -> bool {
     matches!(device, hmll_device::HMLL_DEVICE_CUDA)
@@ -118,7 +129,11 @@ mod tests {
 
     #[test]
     fn test_source_size() {
-        let source = hmll_source { fd: -1, size: 1024, content: std::ptr::null() };
+        let source = hmll_source {
+            fd: -1,
+            size: 1024,
+            content: std::ptr::null(),
+        };
         assert_eq!(source.size, 1024);
         assert_eq!(source.fd, -1);
         assert!(source.content.is_null());
@@ -129,6 +144,71 @@ mod tests {
         let range = hmll_range { start: 0, end: 100 };
         assert_eq!(range.start, 0);
         assert_eq!(range.end, 100);
+    }
+
+    #[test]
+    fn test_take_error_returns_error_and_resets() {
+        let mut ctx = hmll {
+            fetcher: std::ptr::null_mut(),
+            sources: std::ptr::null_mut(),
+            num_sources: 0,
+            error: hmll_error {
+                code: hmll_status_code::HMLL_ERR_IO_ERROR,
+                sys_err: 42,
+            },
+        };
+
+        let err = hmll_take_error(&mut ctx);
+
+        // Should return the original error
+        assert_eq!(err.code, hmll_status_code::HMLL_ERR_IO_ERROR);
+        assert_eq!(err.sys_err, 42);
+
+        // Context should be reset to success
+        assert!(hmll_is_success(ctx.error));
+        assert_eq!(ctx.error.code, hmll_status_code::HMLL_ERR_SUCCESS);
+        assert_eq!(ctx.error.sys_err, 0);
+    }
+
+    #[test]
+    fn test_take_error_on_success_is_noop() {
+        let mut ctx = hmll {
+            fetcher: std::ptr::null_mut(),
+            sources: std::ptr::null_mut(),
+            num_sources: 0,
+            error: hmll_error {
+                code: hmll_status_code::HMLL_ERR_SUCCESS,
+                sys_err: 0,
+            },
+        };
+
+        let err = hmll_take_error(&mut ctx);
+
+        assert!(hmll_is_success(err));
+        assert!(hmll_is_success(ctx.error));
+    }
+
+    #[test]
+    fn test_take_error_idempotent() {
+        let mut ctx = hmll {
+            fetcher: std::ptr::null_mut(),
+            sources: std::ptr::null_mut(),
+            num_sources: 0,
+            error: hmll_error {
+                code: hmll_status_code::HMLL_ERR_ALLOCATION_FAILED,
+                sys_err: -1,
+            },
+        };
+
+        let err1 = hmll_take_error(&mut ctx);
+        let err2 = hmll_take_error(&mut ctx);
+
+        // First call gets the error
+        assert_eq!(err1.code, hmll_status_code::HMLL_ERR_ALLOCATION_FAILED);
+        assert_eq!(err1.sys_err, -1);
+
+        // Second call gets success (already reset)
+        assert!(hmll_is_success(err2));
     }
 
     #[test]
