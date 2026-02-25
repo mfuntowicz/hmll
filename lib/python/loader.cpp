@@ -95,6 +95,53 @@ size_t WeightLoader::fetch(const int iofile, const size_t offset, const uintptr_
     }
 }
 
+size_t WeightLoader::fetchv(const int iofile, const std::vector<std::tuple<size_t, size_t>>& ranges, const uintptr_t dst) const
+{
+    nb::gil_scoped_release release;
+
+    const auto ctx = ctx_.get();
+    const auto dev = device();
+    const auto* fetcher = ctx->fetcher;
+
+    if (ranges.empty())
+        return 0;
+
+    ssize_t res = 0;
+    if (fetcher->fetchv_range_impl_) {
+        std::vector<hmll_iobuf_t> dsts(ranges.size());
+        std::vector<size_t> offsets(ranges.size());
+        size_t dst_offset = 0;
+        for (size_t i = 0; i < ranges.size(); ++i) {
+            const auto [start, end] = ranges[i];
+            const size_t nbytes = end - start;
+            dsts[i] = {nbytes, reinterpret_cast<void *>(dst + dst_offset), dev};
+            offsets[i] = start;
+            dst_offset += nbytes;
+        }
+        res = hmll_fetchv(ctx, iofile, dsts.data(), offsets.data(), ranges.size());
+        if (res < 0) {
+            const std::string err = hmll_strerr(ctx_->error);
+            throw std::runtime_error(fmt::format(PYHMLL_ERR_FETCH, err));
+        }
+        return static_cast<size_t>(res);
+    }
+
+    /* Fallback: sequential fetch when fetchv is not implemented (e.g. Win32 mmap) */
+    size_t total = 0;
+    size_t dst_offset = 0;
+    for (const auto& [start, end] : ranges) {
+        const size_t nbytes = end - start;
+        const hmll_iobuf_t buf = {nbytes, reinterpret_cast<void*>(dst + dst_offset), dev};
+        if (res = hmll_fetch(ctx, iofile, &buf, start); res <= 0) {
+            const std::string err = hmll_strerr(ctx_->error);
+            throw std::runtime_error(fmt::format(PYHMLL_ERR_FETCH, err));
+        }
+        total += static_cast<size_t>(res);
+        dst_offset += nbytes;
+    }
+    return total;
+}
+
 void init_loader(nb::module_& m)
 {
     nb::class_<hmll_device_t>(m, "Device", R"pbdoc(Define all the targetable devices)pbdoc")
@@ -149,6 +196,7 @@ void init_loader(nb::module_& m)
     .def_prop_ro("kind", &WeightLoader::kind)
     .def("afetch", &WeightLoader::afetch)
     .def("fetch", &WeightLoader::fetch)
+    .def("fetchv", &WeightLoader::fetchv, "iofile"_a.sig("int"), "ranges"_a.sig("list[tuple[int, int]]"), "dst"_a.sig("int"))
     .def("__repr__", [](const WeightLoader& self)
     {
         return fmt::format(FMT_COMPILE("WeightLoader(kind={}, device={}})"), self.kind(), self.device());
