@@ -11,10 +11,6 @@
 #define HMLL_URING_BUFFER_SIZE (512U * 1024)
 #endif
 
-#ifndef HMLL_URING_CQE_BATCH_SIZE
-#define HMLL_URING_CQE_BATCH_SIZE 16
-#endif
-
 #include <liburing.h>
 #include "hmll/types.h"
 

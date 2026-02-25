@@ -203,7 +203,7 @@ static ssize_t hmll_io_uring_fetch_range_impl(
     size_t n_dma = 0;
     size_t b_read = 0;
     size_t b_submitted = 0;
-    struct io_uring_cqe *cqes[HMLL_URING_CQE_BATCH_SIZE];
+    struct io_uring_cqe *cqes[HMLL_URING_QUEUE_DEPTH];
 
     struct io_uring_sqe *sqe = NULL;
     int slot;
@@ -249,7 +249,7 @@ static ssize_t hmll_io_uring_fetch_range_impl(
         }
 
         unsigned count = 0;
-        while ((count = io_uring_peek_batch_cqe(&fetcher->ioring, cqes, HMLL_URING_CQE_BATCH_SIZE)) > 0) {
+        while ((count = io_uring_peek_batch_cqe(&fetcher->ioring, cqes, fetcher->iocca.window)) > 0) {
             for (unsigned i = 0; i < count; i++) {
 
                 const struct io_uring_cqe *cqe = cqes[i];
@@ -340,7 +340,7 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
     const unsigned char is_cuda = hmll_device_is_cuda(dsts[0].device);
 
     size_t n_in_flight = 0, nbytes = 0, active_cursor = 0;
-    struct io_uring_cqe *cqes[HMLL_URING_CQE_BATCH_SIZE];
+    struct io_uring_cqe *cqes[HMLL_URING_QUEUE_DEPTH];
 
     while (n_active > 0 || n_in_flight > 0) {
         while (n_active > 0) {
@@ -416,7 +416,7 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
         if (nwait > 0) hmll_io_uring_cca_update(&fetcher->iocca, HMLL_URING_BUFFER_SIZE * nwait, ts_start, ts_end);
 
         unsigned count;
-        while ((count = io_uring_peek_batch_cqe(&fetcher->ioring, cqes, HMLL_URING_CQE_BATCH_SIZE)) > 0) {
+        while ((count = io_uring_peek_batch_cqe(&fetcher->ioring, cqes, fetcher->iocca.window)) > 0) {
             for (unsigned i = 0; i < count; i++) {
                 const struct io_uring_cqe *cqe = cqes[i];
                 const uint64_t data = cqe->user_data;

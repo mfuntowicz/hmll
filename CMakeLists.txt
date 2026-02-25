@@ -142,9 +142,9 @@ if(${HMLL_ENABLE_SAFETENSORS})
     add_compile_definitions(__HMLL_SAFETENSORS_ENABLED__=1)
     add_compile_definitions(__HMLL_TENSORS_ENABLED__=1)
     fetchcontent_declare(
-            yyjson
-            GIT_REPOSITORY https://github.com/ibireme/yyjson.git
-            GIT_TAG        master
+        yyjson
+        GIT_REPOSITORY https://github.com/ibireme/yyjson.git
+        GIT_TAG        master
     )
     fetchcontent_makeavailable(yyjson)
 
