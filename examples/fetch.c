@@ -32,7 +32,7 @@ int main(const int argc, const char** argv)
         printf("\t- %s -> %zu bytes (fd: %u)\n", argv[i + 1], src[i].size, src[i].fd);
     }
 
-    err = hmll_loader_init(&ctx, src, argc - 1, HMLL_DEVICE_CUDA, HMLL_FETCHER_AUTO);
+    err = hmll_loader_init(&ctx, src, argc - 1, hmll_device_cuda(0), HMLL_FETCHER_AUTO);
     if (hmll_check(err)) {
         fprintf(stderr, "Failed to initialize HMLL: %s\n", hmll_strerr(ctx.error));
         status = 4;
@@ -41,7 +41,7 @@ int main(const int argc, const char** argv)
 
     printf("Successfully initialized HMLL (n_sources=%zu)\n", ctx.num_sources);
 
-    struct hmll_iobuf buf = hmll_get_buffer_for_range(&ctx, HMLL_DEVICE_CUDA, (struct hmll_range){0, 1024});
+    struct hmll_iobuf buf = hmll_get_buffer_for_range(&ctx, (struct hmll_range){0, 1024});
     ssize_t res = hmll_fetch(&ctx, 0, &buf, 0);
     if (hmll_check(ctx.error)) {
         fprintf(stderr, "Failed to fetch tensor: %s\n", hmll_strerr(ctx.error));

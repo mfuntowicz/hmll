@@ -1,6 +1,6 @@
 //! Device types for specifying where data should be loaded.
 
-use hmll_sys::{hmll_device, HMLL_DEVICE_CPU, HMLL_DEVICE_CUDA};
+use hmll_sys::{hmll_device, hmll_device_kind};
 
 /// Represents a device where data can be loaded.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -8,7 +8,7 @@ pub enum Device {
     /// CPU memory
     Cpu,
     /// CUDA GPU memory
-    Cuda,
+    Cuda(usize),
 }
 
 impl Device {
@@ -16,8 +16,8 @@ impl Device {
     #[inline(always)]
     pub(crate) const fn to_raw(self) -> hmll_device {
         match self {
-            Device::Cpu => HMLL_DEVICE_CPU,
-            Device::Cuda => HMLL_DEVICE_CUDA,
+            Device::Cpu => hmll_sys::hmll_device_cpu(),
+            Device::Cuda(idx) => hmll_sys::hmll_device_cuda(idx),
         }
     }
 
@@ -25,9 +25,9 @@ impl Device {
     #[allow(dead_code)]
     #[inline(always)]
     pub(crate) const fn from_raw(device: hmll_device) -> Self {
-        match device {
-            HMLL_DEVICE_CPU => Device::Cpu,
-            HMLL_DEVICE_CUDA => Device::Cuda,
+        match device.kind {
+            hmll_device_kind::HMLL_DEVICE_CPU => Device::Cpu,
+            hmll_device_kind::HMLL_DEVICE_CUDA => Device::Cuda(device.idx as usize),
         }
     }
 }
@@ -43,8 +43,8 @@ impl Default for Device {
 impl std::fmt::Display for Device {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Device::Cpu => write!(f, "CPU"),
-            Device::Cuda => write!(f, "CUDA"),
+            Device::Cpu => write!(f, "cpu"),
+            Device::Cuda(idx) => write!(f, "cuda:{idx}"),
         }
     }
 }

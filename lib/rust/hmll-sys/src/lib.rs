@@ -12,7 +12,7 @@
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 // Re-export enum variants at module level for convenience
-pub use hmll_device::*;
+pub use hmll_device_kind::*;
 #[cfg(feature = "safetensors")]
 pub use hmll_dtype::*;
 pub use hmll_loader_kind::*;
@@ -43,6 +43,24 @@ pub const fn hmll_take_error(ctx: &mut hmll) -> hmll_error {
     err
 }
 
+/// Create CPU device
+#[inline(always)]
+pub const fn hmll_device_cpu() -> hmll_device {
+    hmll_device {
+        kind: hmll_device_kind::HMLL_DEVICE_CPU,
+        idx: 0,
+    }
+}
+
+/// Create CUDA device
+#[inline(always)]
+pub const fn hmll_device_cuda(idx: usize) -> hmll_device {
+    hmll_device {
+        kind: hmll_device_kind::HMLL_DEVICE_CUDA,
+        idx: idx as i32,
+    }
+}
+
 /// Get error code
 #[inline(always)]
 pub const fn hmll_error_code(error: hmll_error) -> hmll_status_code {
@@ -57,14 +75,20 @@ pub const fn hmll_sys_error(error: hmll_error) -> i32 {
 
 /// Check if device is CPU
 #[inline(always)]
-pub const fn hmll_is_cpu(device: hmll_device) -> bool {
-    matches!(device, hmll_device::HMLL_DEVICE_CPU)
+pub const fn hmll_is_cpu(device: &hmll_device) -> bool {
+    matches!(device.kind, hmll_device_kind::HMLL_DEVICE_CPU)
 }
 
 /// Check if device is CUDA
 #[inline(always)]
-pub const fn hmll_is_cuda(device: hmll_device) -> bool {
-    matches!(device, hmll_device::HMLL_DEVICE_CUDA)
+pub const fn hmll_is_cuda(device: &hmll_device) -> bool {
+    matches!(device.kind, hmll_device_kind::HMLL_DEVICE_CUDA)
+}
+
+/// Get device index
+#[inline(always)]
+pub const fn hmll_device_index(device: &hmll_device) -> i32 {
+    device.idx
 }
 
 #[cfg(test)]
@@ -103,10 +127,25 @@ mod tests {
 
     #[test]
     fn test_device_checks() {
-        assert!(hmll_is_cpu(hmll_device::HMLL_DEVICE_CPU));
-        assert!(!hmll_is_cuda(hmll_device::HMLL_DEVICE_CPU));
-        assert!(hmll_is_cuda(hmll_device::HMLL_DEVICE_CUDA));
-        assert!(!hmll_is_cpu(hmll_device::HMLL_DEVICE_CUDA));
+        let cpu = hmll_device {
+            kind: hmll_device_kind::HMLL_DEVICE_CPU,
+            idx: 0,
+        };
+        let cuda0 = hmll_device {
+            kind: hmll_device_kind::HMLL_DEVICE_CUDA,
+            idx: 0,
+        };
+        let cuda3 = hmll_device {
+            kind: hmll_device_kind::HMLL_DEVICE_CUDA,
+            idx: 3,
+        };
+
+        assert!(hmll_is_cpu(&cpu));
+        assert!(!hmll_is_cuda(&cpu));
+        assert!(hmll_is_cuda(&cuda0));
+        assert!(!hmll_is_cpu(&cuda0));
+        assert!(hmll_is_cuda(&cuda3));
+        assert_eq!(hmll_device_index(&cuda3), 3);
     }
 
     #[test]
@@ -123,8 +162,8 @@ mod tests {
     fn test_enum_values() {
         // Enums should have correct discriminant values
         assert_eq!(hmll_status_code::HMLL_ERR_SUCCESS as u32, 0);
-        assert_eq!(hmll_device::HMLL_DEVICE_CPU as u32, 0);
-        assert_eq!(hmll_device::HMLL_DEVICE_CUDA as u32, 1);
+        assert_eq!(hmll_device_kind::HMLL_DEVICE_CPU as u32, 0);
+        assert_eq!(hmll_device_kind::HMLL_DEVICE_CUDA as u32, 1);
     }
 
     #[test]
@@ -213,13 +252,17 @@ mod tests {
 
     #[test]
     fn test_iobuf_creation() {
+        let device = hmll_device {
+            kind: HMLL_DEVICE_CPU,
+            idx: 0,
+        };
         let iobuf = hmll_iobuf {
             size: 4096,
             ptr: std::ptr::null_mut(),
-            device: hmll_device::HMLL_DEVICE_CPU,
+            device,
         };
         assert_eq!(iobuf.size, 4096);
         assert!(iobuf.ptr.is_null());
-        assert_eq!(iobuf.device, hmll_device::HMLL_DEVICE_CPU);
+        assert!(hmll_is_cpu(&iobuf.device));
     }
 }

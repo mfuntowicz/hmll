@@ -85,7 +85,7 @@ TEST_CASE("safetensors integration - read multi-dtype file", "[safetensors][inte
             REQUIRE(registry.num_tensors == num_tensors);
 
             // Initialize loader
-            err = hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, backend);
+            err = hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), backend);
             INFO("Loader init error: " << hmll_strerr(err));
             REQUIRE_FALSE(hmll_check(err));
 
@@ -102,7 +102,7 @@ TEST_CASE("safetensors integration - read multi-dtype file", "[safetensors][inte
 
             hmll_registry_t registry = {};
             REQUIRE(hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) > 0);
-            REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, backend)));
+            REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), backend)));
 
             // Test dimensions 0 through 5
             for (uint8_t ndim = 0; ndim <= 5; ++ndim) {
@@ -122,7 +122,7 @@ TEST_CASE("safetensors integration - read multi-dtype file", "[safetensors][inte
 
                 // Fetch tensor data
                 const auto range = hmll_range_t {lookup.specs->start, lookup.specs->end};
-                auto buffer = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
+                auto buffer = hmll_get_buffer_for_range(&ctx, range);
                 REQUIRE_FALSE(hmll_check(ctx.error));
 
                 auto bytes_read = hmll_fetch(&ctx, lookup.file, &buffer, range.start);
@@ -156,7 +156,7 @@ TEST_CASE("safetensors integration - read multi-dtype file", "[safetensors][inte
 
             hmll_registry_t registry = {};
             REQUIRE(hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) > 0);
-            REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, backend)));
+            REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), backend)));
 
             for (uint8_t ndim = 0; ndim <= 5; ++ndim) {
                 std::string tensor_name = "int32.dim" + std::to_string(ndim);
@@ -169,7 +169,7 @@ TEST_CASE("safetensors integration - read multi-dtype file", "[safetensors][inte
                 REQUIRE(lookup.specs->rank == ndim);
 
                 const hmll_range_t range = {lookup.specs->start, lookup.specs->end};
-                hmll_iobuf_t buffer = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
+                hmll_iobuf_t buffer = hmll_get_buffer_for_range(&ctx, range);
                 REQUIRE_FALSE(hmll_check(ctx.error));
 
                 auto bytes_read = hmll_fetch(&ctx, lookup.file, &buffer, range.start);
@@ -201,7 +201,7 @@ TEST_CASE("safetensors integration - read multi-dtype file", "[safetensors][inte
 
             hmll_registry_t registry = {};
             REQUIRE(hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) > 0);
-            REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, backend)));
+            REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), backend)));
 
             for (uint8_t ndim = 0; ndim <= 5; ++ndim) {
                 std::string tensor_name = "uint8.dim" + std::to_string(ndim);
@@ -214,7 +214,7 @@ TEST_CASE("safetensors integration - read multi-dtype file", "[safetensors][inte
                 REQUIRE(lookup.specs->rank == ndim);
 
                 const auto range = hmll_range_t {lookup.specs->start, lookup.specs->end};
-                 auto buffer = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
+                 auto buffer = hmll_get_buffer_for_range(&ctx, range);
                 REQUIRE_FALSE(hmll_check(ctx.error));
 
                 auto bytes_read = hmll_fetch(&ctx, lookup.file, &buffer, range.start);
@@ -246,7 +246,7 @@ TEST_CASE("safetensors integration - read multi-dtype file", "[safetensors][inte
 
             hmll_registry_t registry = {};
             REQUIRE(hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) > 0);
-            REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, backend)));
+            REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), backend)));
 
             for (uint8_t ndim = 0; ndim <= 5; ++ndim) {
                 std::string tensor_name = "int64.dim" + std::to_string(ndim);
@@ -259,7 +259,7 @@ TEST_CASE("safetensors integration - read multi-dtype file", "[safetensors][inte
                 REQUIRE(lookup.specs->rank == ndim);
 
                 const hmll_range_t range = {lookup.specs->start, lookup.specs->end};
-                hmll_iobuf_t buffer = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
+                hmll_iobuf_t buffer = hmll_get_buffer_for_range(&ctx, range);
                 REQUIRE_FALSE(hmll_check(ctx.error));
 
                 auto bytes_read = hmll_fetch(&ctx, lookup.file, &buffer, range.start);
@@ -291,7 +291,7 @@ TEST_CASE("safetensors integration - read multi-dtype file", "[safetensors][inte
 
             hmll_registry_t registry = {};
             REQUIRE(hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) > 0);
-            REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, backend)));
+            REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), backend)));
 
             for (uint8_t ndim = 0; ndim <= 5; ++ndim) {
                 std::string tensor_name = "bfloat16.dim" + std::to_string(ndim);
@@ -304,7 +304,7 @@ TEST_CASE("safetensors integration - read multi-dtype file", "[safetensors][inte
                 REQUIRE(lookup.specs->rank == ndim);
 
                 const auto range = hmll_range_t {lookup.specs->start, lookup.specs->end};
-                auto buffer = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
+                auto buffer = hmll_get_buffer_for_range(&ctx, range);
                 REQUIRE_FALSE(hmll_check(ctx.error));
 
                 auto bytes_read = hmll_fetch(&ctx, lookup.file, &buffer, range.start);
@@ -324,7 +324,7 @@ TEST_CASE("safetensors integration - read multi-dtype file", "[safetensors][inte
 
             hmll_registry_t registry = {};
             REQUIRE(hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) > 0);
-            REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, backend)));
+            REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), backend)));
 
             for (uint8_t ndim = 0; ndim <= 5; ++ndim) {
                 std::string tensor_name = "complex64.dim" + std::to_string(ndim);
@@ -337,7 +337,7 @@ TEST_CASE("safetensors integration - read multi-dtype file", "[safetensors][inte
                 REQUIRE(lookup.specs->rank == ndim);
 
                 const auto range = hmll_range_t {lookup.specs->start, lookup.specs->end};
-                auto buffer = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
+                auto buffer = hmll_get_buffer_for_range(&ctx, range);
                 REQUIRE_FALSE(hmll_check(ctx.error));
 
                 auto bytes_read = hmll_fetch(&ctx, lookup.file, &buffer, range.start);
@@ -356,7 +356,7 @@ TEST_CASE("safetensors integration - read multi-dtype file", "[safetensors][inte
 
             hmll_registry_t registry = {};
             REQUIRE(hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) > 0);
-            REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, backend)));
+            REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), backend)));
 
             // Test a sampling of expected dtype+dimension combinations
             std::vector<std::string> expected_tensors = {

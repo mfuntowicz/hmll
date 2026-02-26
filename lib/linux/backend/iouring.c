@@ -34,9 +34,9 @@ static inline int hmll_io_uring_get_setup_flags(void)
 static struct hmll_error hmll_io_uring_register_staging_buffers(
     struct hmll *ctx,
     struct hmll_io_uring *fetcher,
-    const enum hmll_device device
+    const struct hmll_device device
 ) {
-    fetcher->iovecs = hmll_alloc(HMLL_URING_QUEUE_DEPTH * sizeof(struct iovec), HMLL_DEVICE_CPU, HMLL_MEM_DEVICE);
+    fetcher->iovecs = hmll_alloc(HMLL_URING_QUEUE_DEPTH * sizeof(struct iovec), hmll_device_cpu(), HMLL_MEM_DEVICE);
     if (!fetcher->iovecs) {
         ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
         return ctx->error;
@@ -62,9 +62,9 @@ static struct hmll_error hmll_io_uring_register_staging_buffers(
     return HMLL_OK;
 }
 
-static inline void hmll_io_uring_sync(const enum hmll_device device, const struct hmll_io_uring *fetcher)
+static inline void hmll_io_uring_sync(const struct hmll_device device, const struct hmll_io_uring *fetcher)
 {
-    if (device == HMLL_DEVICE_CUDA) {
+    if (hmll_device_is_cuda(device)) {
 #ifdef __HMLL_CUDA_ENABLED__
         // Wait for all pending CUDA operations to complete
         for (size_t i = 0; i < HMLL_URING_QUEUE_DEPTH; ++i) {
@@ -86,10 +86,10 @@ static inline void hmll_io_uring_sync(const enum hmll_device device, const struc
  */
 static inline void hmll_io_uring_reclaim_slots(
     struct hmll_io_uring *fetcher,
-    const enum hmll_device device
+    const struct hmll_device device
 ) {
 #ifdef __HMLL_CUDA_ENABLED__
-    if (device != HMLL_DEVICE_CUDA) return;
+    if (!hmll_device_is_cuda(device)) return;
 
     struct hmll_io_uring_cuda_context *dctx = fetcher->device_ctx;
 
@@ -115,7 +115,7 @@ static inline void hmll_io_uring_reclaim_slots(
  */
 static inline void hmll_io_uring_prep_sqe(
     const struct hmll_io_uring *fetcher,
-    const enum hmll_device device,
+    const struct hmll_device device,
     struct io_uring_sqe *sqe,
     void *dst,
     const size_t offset,
@@ -123,13 +123,13 @@ static inline void hmll_io_uring_prep_sqe(
     const unsigned short iofile,
     const int slot
 ) {
-    if (device == HMLL_DEVICE_CPU) {
+    if (hmll_device_is_cpu(device)) {
         // CPU: Read directly into user memory
         io_uring_prep_read(sqe, iofile, dst, len, offset);
         io_uring_sqe_set_data64(sqe, slot);
     }
 #if defined(__HMLL_CUDA_ENABLED__)
-    else if (device == HMLL_DEVICE_CUDA) {
+    else if (hmll_device_is_cuda(device)) {
         // CUDA: Read into registered staging buffers
         struct hmll_io_uring_cuda_context *dctx = fetcher->device_ctx;
         void *buf = fetcher->iovecs[slot].iov_base;
@@ -169,12 +169,12 @@ static inline void hmll_io_uring_handle_completion(
     const size_t offset,
     const int32_t len
 ) {
-    if (dst->device == HMLL_DEVICE_CPU) {
+    if (hmll_device_is_cpu(dst->device)) {
         const uint64_t cb_slot = cqe->user_data;
         hmll_io_uring_slot_set_available(&fetcher->iobusy, cb_slot);
     }
 #if defined(__HMLL_CUDA_ENABLED__)
-    else if (dst->device == HMLL_DEVICE_CUDA) {
+    else if (hmll_device_is_cuda(dst->device)) {
         struct hmll_io_uring_cuda_context *cctx = (struct hmll_io_uring_cuda_context *)cqe->user_data;
 
         void *to = (char *)dst->ptr + (cctx->offset - offset);
@@ -337,7 +337,7 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
     const uint64_t BIT_FADVISE    = 1ULL << 63;
     const uint64_t SHIFT_RANGE    = 32;
     const uint64_t MASK_SLOT      = 0xFFFFFFFFULL;
-    const unsigned char is_cuda = dsts[0].device == HMLL_DEVICE_CUDA;
+    const unsigned char is_cuda = hmll_device_is_cuda(dsts[0].device);
 
     size_t n_in_flight = 0, nbytes = 0, active_cursor = 0;
     struct io_uring_cqe *cqes[HMLL_URING_CQE_BATCH_SIZE];
@@ -463,7 +463,7 @@ cleanup:
     return -1;
 }
 
-struct hmll_error hmll_io_uring_init(struct hmll *ctx, const enum hmll_device device) {
+struct hmll_error hmll_io_uring_init(struct hmll *ctx, const struct hmll_device device) {
     if (hmll_check(ctx->error))
         return ctx->error;
 
@@ -475,8 +475,14 @@ struct hmll_error hmll_io_uring_init(struct hmll *ctx, const enum hmll_device de
         .sq_thread_idle = 500
     };
 
-    if (device == HMLL_DEVICE_CUDA) {
+    if (hmll_device_is_cuda(device)) {
 #if defined(__HMLL_CUDA_ENABLED__)
+        cudaError_t cuda_err = cudaSetDevice(device.idx);
+        if (cuda_err != cudaSuccess) {
+            ctx->error = HMLL_ERR(HMLL_ERR_CUDA_SET_DEVICE_FAILED);
+            return ctx->error;
+        }
+
         struct hmll_io_uring_cuda_context *data = calloc(HMLL_URING_QUEUE_DEPTH, sizeof(struct hmll_io_uring_cuda_context));
         backend->device_ctx = (void *)data;
 

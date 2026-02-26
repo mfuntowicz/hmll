@@ -16,7 +16,7 @@
 struct hmll_loader
 {
     enum hmll_loader_kind kind;
-    enum hmll_device device;
+    struct hmll_device device;
     void *backend_impl_;
     void(*backend_free)(void *backend);
     ssize_t(*fetch_range_impl_)(struct hmll *, int, const struct hmll_iobuf *, size_t);

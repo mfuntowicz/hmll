@@ -52,14 +52,14 @@ int main(const int argc, const char** argv)
     if (hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) == 0)
         return 2;
 
-    if (hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CUDA, HMLL_FETCHER_IO_URING)))
+    if (hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cuda(0), HMLL_FETCHER_IO_URING)))
         return 3;
 
     const hmll_lookup_result_t lookup = hmll_lookup_tensor(&ctx, &registry, TENSOR_NAME);
     if (hmll_success(ctx.error) && lookup.specs)
     {
         const hmll_range_t range = (struct hmll_range){ lookup.specs->start, lookup.specs->end };
-        const hmll_iobuf_t buffer = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
+        const hmll_iobuf_t buffer = hmll_get_buffer_for_range(&ctx, range);
         if (hmll_success(ctx.error)) {
             // Start timing
             timespec_t start, end;
@@ -86,7 +86,7 @@ int main(const int argc, const char** argv)
                 printf("Throughput: %.2f MB/s\n", throughput_mbps);
 
                 unsigned short *bf16_ptr;
-                if (ctx.fetcher->device == HMLL_DEVICE_CUDA) {
+                if (hmll_device_is_cuda(ctx.fetcher->device)) {
                     bf16_ptr = malloc(buffer.size);
                     cudaMemcpy(bf16_ptr, buffer.ptr, hmll_numel(lookup.specs) * sizeof(short), cudaMemcpyDeviceToHost);
                 } else {

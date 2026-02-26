@@ -24,7 +24,7 @@ TEST_CASE("release small memory chunk", "[memory]")
     constexpr size_t nbytes = 1024;
 
     hmll_t ctx;
-    hmll_iobuf buf = hmll_get_buffer(&ctx, HMLL_DEVICE_CPU, nbytes, HMLL_MEM_DEVICE);
+    hmll_iobuf buf = hmll_get_buffer(&ctx, nbytes, HMLL_MEM_DEVICE);
 
     REQUIRE(buf.ptr != nullptr);
     REQUIRE(buf.size == nbytes);
@@ -40,7 +40,7 @@ TEST_CASE("release large memory chunk", "[memory]")
     constexpr size_t nbytes = 1024 * 1024 * 500;
 
     hmll_t ctx;
-    hmll_iobuf buf = hmll_get_buffer(&ctx, HMLL_DEVICE_CPU, nbytes, HMLL_MEM_DEVICE);
+    hmll_iobuf buf = hmll_get_buffer(&ctx, nbytes, HMLL_MEM_DEVICE);
 
     REQUIRE(buf.ptr != nullptr);
     REQUIRE(buf.size == nbytes);

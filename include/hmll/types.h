@@ -49,6 +49,7 @@ enum hmll_status_code {
 
     HMLL_ERR_CUDA_NOT_ENABLED,
     HMLL_ERR_CUDA_NO_DEVICE,
+    HMLL_ERR_CUDA_SET_DEVICE_FAILED,
 
     HMLL_ERR_SYSTEM,
     HMLL_ERR_UNKNOWN_DTYPE,
@@ -119,18 +120,24 @@ struct hmll_registry
 typedef struct hmll_registry hmll_registry_t;
 #endif
 
-enum hmll_device
+enum hmll_device_kind
 {
     HMLL_DEVICE_CPU,
     HMLL_DEVICE_CUDA
 };
-typedef enum hmll_device hmll_device_t;
+
+struct hmll_device
+{
+    enum hmll_device_kind kind;
+    unsigned char idx;
+};
+typedef struct hmll_device hmll_device_t;
 
 struct hmll_iobuf
 {
     size_t size;
     void *ptr;
-    enum hmll_device device;
+    struct hmll_device device;
 };
 typedef struct hmll_iobuf hmll_iobuf_t;
 

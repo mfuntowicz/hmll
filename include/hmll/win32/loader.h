@@ -14,6 +14,6 @@ enum hmll_loader_kind
 };
 typedef enum hmll_loader_kind hmll_fetcher_kind_t;
 
-struct hmll_error hmll_fetcher_init_impl(struct hmll *ctx, enum hmll_device device, enum hmll_loader_kind kind);
+struct hmll_error hmll_fetcher_init_impl(struct hmll *ctx, struct hmll_device device, enum hmll_loader_kind kind);
 
 #endif //HMLL_WIN32_LOADER_H

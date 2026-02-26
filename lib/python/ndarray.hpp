@@ -99,11 +99,11 @@ static nb::ndarray<nb::c_contig> hmll_to_ndarray(
 ) {
 
     int32_t device_type, device_id;
-    switch (buffer->device)
+    switch (buffer->device.kind)
     {
     case HMLL_DEVICE_CUDA:
         device_type = kDLPACK_DEVICE_CUDA;
-        device_id = 0;
+        device_id = buffer->device.idx;
         break;
     default:
         device_type = kDLPACK_DEVICE_CPU;

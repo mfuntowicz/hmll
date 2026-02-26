@@ -77,14 +77,14 @@ int main(int argc, char **argv) {
     }
 
     // Create an hmll loader instance, automatically choosing the right backend to use
-    if (hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, HMLL_FETCHER_IO_URING))) {
+    if (hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), HMLL_FETCHER_IO_URING))) {
         fprintf(stderr, "Failed to initialize loader: %s\n", hmll_strerr(ctx.error));
         return 2;
     }
 
     // Create the range you'd like to fetch and allocate a buffer to store the content
     hmll_range_t range = (struct hmll_range){ 500, 4000 };
-    hmll_iobuf_t buffer = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
+    hmll_iobuf_t buffer = hmll_get_buffer_for_range(&ctx, range);
 
     if (hmll_check(ctx.error)) {
         fprintf(stderr, "Failed to allocate destination buffer: %s\n", hmll_strerr(ctx.error));

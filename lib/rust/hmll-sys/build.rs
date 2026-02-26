@@ -226,7 +226,7 @@ fn generate_bindings(include_path: &Path) {
         .size_t_is_usize(true)
         .layout_tests(false)
         .rustified_enum("hmll_status_code")
-        .rustified_enum("hmll_device")
+        .rustified_enum("hmll_device_kind")
         .rustified_enum("hmll_loader_kind")
         .rustified_enum("hmll_dtype");
 

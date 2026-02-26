@@ -81,6 +81,9 @@ pub enum Error {
     #[error("No CUDA device available")]
     CudaNoDevice,
 
+    #[error("Failed to set the CUDA device as context")]
+    CudaSetDeviceFailed,
+
     #[error("System error: {0}")]
     SystemError(String),
 
@@ -143,6 +146,7 @@ impl Error {
             HMLL_ERR_SAFETENSORS_JSON_MALFORMED_INDEX => Error::SafeTensorsJsonMalformedIndex,
             HMLL_ERR_CUDA_NOT_ENABLED => Error::CudaNotEnabled,
             HMLL_ERR_CUDA_NO_DEVICE => Error::CudaNoDevice,
+            HMLL_ERR_CUDA_SET_DEVICE_FAILED => Error::CudaSetDeviceFailed,
             HMLL_ERR_UNKNOWN_DTYPE => Error::UnknownDType,
             _ => Error::Unknown,
         }

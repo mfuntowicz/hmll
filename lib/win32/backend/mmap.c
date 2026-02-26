@@ -18,7 +18,7 @@ static ssize_t hmll_mmap_fetch_range_impl(
     const unsigned char *m_buf = fetcher->m_content[iofile];
 
 #ifdef __HMLL_CUDA_ENABLED__
-    if (ctx->fetcher->device == HMLL_DEVICE_CUDA) {
+    if (hmll_device_is_cuda(ctx->fetcher->device)) {
         cudaMemcpy(dst->ptr, m_buf + offset, dst->size, cudaMemcpyHostToDevice);
     } else {
         memcpy(dst->ptr, m_buf + offset, dst->size);
@@ -42,7 +42,7 @@ static inline void hmll_mmap_free(void *ptr)
     }
 }
 
-struct hmll_error hmll_mmap_init(struct hmll *ctx, const enum hmll_device device)
+struct hmll_error hmll_mmap_init(struct hmll *ctx, const struct hmll_device device)
 {
     if (hmll_check(ctx->error)) goto exit;
     if (ctx->num_sources <= 0 || !ctx->sources) {
@@ -93,7 +93,7 @@ struct hmll_error hmll_mmap_get_view(struct hmll *ctx, const int iofile, const s
     }
 
     // Only supported for CPU device (GPU needs to copy)
-    if (ctx->fetcher->device != HMLL_DEVICE_CPU) {
+    if (!hmll_device_is_cpu(ctx->fetcher->device)) {
         return HMLL_ERR(HMLL_ERR_UNSUPPORTED_DEVICE);
     }
 
@@ -109,7 +109,7 @@ struct hmll_error hmll_mmap_get_view(struct hmll *ctx, const int iofile, const s
     // Return a view directly into the mmap'd region
     out_view->ptr = m_buf + range.start;
     out_view->size = n_bytes;
-    out_view->device = HMLL_DEVICE_CPU;
+    out_view->device = hmll_device_cpu();
 
     return HMLL_OK;
 }

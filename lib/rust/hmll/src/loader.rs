@@ -212,7 +212,6 @@ impl<'a> WeightLoader<'a> {
             let iobuf = unsafe {
                 hmll_sys::hmll_get_buffer_for_range(
                     self.context.as_mut(),
-                    self.device.to_raw(),
                     range.to_raw(),
                 )
             };
@@ -316,7 +315,6 @@ impl<'a> WeightLoader<'a> {
         let iobuf = unsafe {
             hmll_sys::hmll_get_buffer_for_range(
                 self.context.as_mut(),
-                self.device.to_raw(),
                 range.to_raw(),
             )
         };

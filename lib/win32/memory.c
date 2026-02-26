@@ -11,13 +11,13 @@
 #endif
 
 
-void *hmll_alloc(const size_t size, const enum hmll_device device, const int flags)
+void *hmll_alloc(const size_t size, const struct hmll_device device, const int flags)
 {
     void *ptr = 0;
 #if !defined(__HMLL_CUDA_ENABLED__)
     HMLL_UNUSED(flags);
 #endif
-    if (device == HMLL_DEVICE_CPU) {
+    if (hmll_device_is_cpu(device)) {
         // Use VirtualAlloc with MEM_COMMIT | MEM_RESERVE for Windows
         ptr = VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
         if (ptr == NULL) {
@@ -27,10 +27,10 @@ void *hmll_alloc(const size_t size, const enum hmll_device device, const int fla
     }
 
 #if defined(__HMLL_CUDA_ENABLED__)
-    if (device == HMLL_DEVICE_CUDA && flags == HMLL_MEM_DEVICE)
+    if (hmll_device_is_cuda(device) && flags == HMLL_MEM_DEVICE)
         cudaMalloc(&ptr, size);
 
-    if (device == HMLL_DEVICE_CUDA && flags == HMLL_MEM_STAGING)
+    if (hmll_device_is_cuda(device) && flags == HMLL_MEM_STAGING)
         cudaHostAlloc(&ptr, size, cudaHostAllocDefault | cudaHostAllocPortable);
 
 #endif
@@ -43,12 +43,12 @@ void hmll_free_buffer(struct hmll_iobuf *buffer)
     if (!buffer) return;
 
 #if defined(__HMLL_CUDA_ENABLED__)
-    if (buffer->device == HMLL_DEVICE_CUDA) {
+    if (hmll_device_is_cuda(buffer->device)) {
         cudaFreeHost(buffer->ptr);
     }
     else
 #endif
-    if (buffer->device == HMLL_DEVICE_CPU) {
+    if (hmll_device_is_cpu(buffer->device)) {
         VirtualFree(buffer->ptr, 0, MEM_RELEASE);
     }
 
@@ -56,14 +56,16 @@ void hmll_free_buffer(struct hmll_iobuf *buffer)
     buffer->size = 0;
 }
 
-struct hmll_iobuf hmll_get_buffer(struct hmll *ctx, const enum hmll_device device, const size_t size, const int flags)
+struct hmll_iobuf hmll_get_buffer(struct hmll *ctx, const size_t size, const int flags)
 {
+    struct hmll_device device = ctx->fetcher->device;
+
     void* ptr = NULL;
 #if !defined(__HMLL_CUDA_ENABLED__)
     HMLL_UNUSED(flags);
 #endif
 
-    switch (device)
+    switch (device.kind)
     {
     case HMLL_DEVICE_CPU:
         ptr = hmll_alloc(size, device, HMLL_MEM_DEVICE);
@@ -71,6 +73,12 @@ struct hmll_iobuf hmll_get_buffer(struct hmll *ctx, const enum hmll_device devic
 
     case HMLL_DEVICE_CUDA:
 #if defined(__HMLL_CUDA_ENABLED__)
+        cudaError_t cuda_err = cudaSetDevice(device.idx);
+        if (cuda_err != cudaSuccess) {
+            ctx->error = HMLL_ERR(HMLL_ERR_CUDA_SET_DEVICE_FAILED);
+            return (struct hmll_iobuf){0};
+        }
+
         ptr = hmll_alloc(size, device, flags);
         if (!ptr) {
             ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
@@ -80,6 +88,7 @@ struct hmll_iobuf hmll_get_buffer(struct hmll *ctx, const enum hmll_device devic
         break;
 #else
         ctx->error = HMLL_ERR(HMLL_ERR_CUDA_NOT_ENABLED);
+        return (struct hmll_iobuf){0};
 #endif
     }
 

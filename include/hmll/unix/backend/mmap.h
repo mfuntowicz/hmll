@@ -9,7 +9,7 @@ struct hmll_mmap {
     size_t n;
 };
 
-struct hmll_error hmll_mmap_init(struct hmll *ctx, enum hmll_device device);
+struct hmll_error hmll_mmap_init(struct hmll *ctx, struct hmll_device device);
 ssize_t hmll_mmap_fetch_range(struct hmll *ctx, int iofile, const struct hmll_iobuf *dst, struct hmll_range range);
 
 /**
