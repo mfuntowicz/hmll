@@ -69,7 +69,7 @@ public:
             if (hmll_check(hmll_source_open(path_str.c_str(), &source)))
                 throw std::runtime_error("Failed to open file: " + path_str);
 
-            const auto registry = std::make_shared<hmll_registry_t>();
+            auto registry = std::make_shared<hmll_registry_t>();
             auto ctx = std::make_unique<hmll_t>();
 
             if (const auto n_tensors = hmll_safetensors_populate_registry(ctx.get(), registry.get(), source, 0, 0); n_tensors == 0) {
@@ -77,7 +77,7 @@ public:
                 throw std::runtime_error(fmt::format(FMT_COMPILE("Failed to read tensor definition in file {}: {}"), path, hmll_strerr(ctx->error)));
             }
 
-            auto sources = std::vector<hmll_source_t>{source};
+            auto sources = std::vector{source};
             loader_ = std::make_unique<WeightLoader>(std::move(sources), device, std::move(ctx), backend);
             registry_ = std::move(registry);
         }
@@ -157,7 +157,7 @@ public:
         return loader_->fetch(iofile, specs.start, dst, size);
     }
 
-    /** Fetch only the given element ranges into dst. Dtype is taken from registry. */
+    /** Fetch only the given element ranges into dst. Dtype is taken from the registry. */
     [[nodiscard]] size_t fetchv(const std::string& name, const std::vector<std::tuple<size_t, size_t>>& ranges, const uintptr_t dst) const
     {
         const auto registry = registry_.get();
