@@ -54,10 +54,10 @@ pub const fn hmll_device_cpu() -> hmll_device {
 
 /// Create CUDA device
 #[inline(always)]
-pub const fn hmll_device_cuda(idx: usize) -> hmll_device {
+pub const fn hmll_device_cuda(idx: u8) -> hmll_device {
     hmll_device {
         kind: hmll_device_kind::HMLL_DEVICE_CUDA,
-        idx: idx as i32,
+        idx,
     }
 }
 
@@ -87,7 +87,7 @@ pub const fn hmll_is_cuda(device: &hmll_device) -> bool {
 
 /// Get device index
 #[inline(always)]
-pub const fn hmll_device_index(device: &hmll_device) -> i32 {
+pub const fn hmll_device_index(device: &hmll_device) -> u8 {
     device.idx
 }
 

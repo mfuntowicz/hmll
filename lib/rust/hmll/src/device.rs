@@ -8,7 +8,7 @@ pub enum Device {
     /// CPU memory
     Cpu,
     /// CUDA GPU memory
-    Cuda(usize),
+    Cuda(u8),
 }
 
 impl Device {
@@ -27,7 +27,7 @@ impl Device {
     pub(crate) const fn from_raw(device: hmll_device) -> Self {
         match device.kind {
             hmll_device_kind::HMLL_DEVICE_CPU => Device::Cpu,
-            hmll_device_kind::HMLL_DEVICE_CUDA => Device::Cuda(device.idx as usize),
+            hmll_device_kind::HMLL_DEVICE_CUDA => Device::Cuda(device.idx),
         }
     }
 }
