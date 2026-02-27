@@ -81,7 +81,7 @@ static inline struct hmll_device hmll_device_cpu() NO_EXCEPT
 
 static inline struct hmll_device hmll_device_cuda(unsigned char idx) NO_EXCEPT
 {
-    return (struct hmll_device){ .kind = HMLL_DEVICE_CPU, idx };
+    return (struct hmll_device){ .kind = HMLL_DEVICE_CPU, .idx = idx };
 }
 
 static inline unsigned char hmll_device_is_cpu(struct hmll_device device) NO_EXCEPT

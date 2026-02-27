@@ -72,24 +72,26 @@ struct hmll_iobuf hmll_get_buffer(struct hmll *ctx, const size_t size, const int
         break;
 
     case HMLL_DEVICE_CUDA:
+        {
 #if defined(__HMLL_CUDA_ENABLED__)
-        cudaError_t cuda_err = cudaSetDevice(device.idx);
-        if (cuda_err != cudaSuccess) {
-            ctx->error = HMLL_ERR(HMLL_ERR_CUDA_SET_DEVICE_FAILED);
-            return (struct hmll_iobuf){0};
-        }
+            cudaError_t cuda_err = cudaSetDevice(device.idx);
+            if (cuda_err != cudaSuccess) {
+                ctx->error = HMLL_ERR(HMLL_ERR_CUDA_SET_DEVICE_FAILED);
+                return (struct hmll_iobuf){0};
+            }
 
-        ptr = hmll_alloc(size, device, flags);
-        if (!ptr) {
-            ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
-            return (struct hmll_iobuf){0};
-        }
+            ptr = hmll_alloc(size, device, flags);
+            if (!ptr) {
+                ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
+                return (struct hmll_iobuf){0};
+            }
 
-        break;
+            break;
 #else
-        ctx->error = HMLL_ERR(HMLL_ERR_CUDA_NOT_ENABLED);
-        return (struct hmll_iobuf){0};
+            ctx->error = HMLL_ERR(HMLL_ERR_CUDA_NOT_ENABLED);
+            return (struct hmll_iobuf){0};
 #endif
+        }
     }
 
     return (struct hmll_iobuf){size, ptr, device};
