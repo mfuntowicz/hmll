@@ -125,6 +125,7 @@ enum hmll_device_kind
     HMLL_DEVICE_CPU,
     HMLL_DEVICE_CUDA
 };
+typedef enum hmll_device_kind hmll_device_kind_t;
 
 struct hmll_device
 {
