@@ -49,7 +49,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create a weight loader for all sources
     println!("\nCreating weight loader for {} sources...", sources.len());
-    let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)?;
+    let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Auto)?;
     println!("✓ Loader created successfully");
 
     // Display information about each source

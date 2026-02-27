@@ -30,18 +30,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Store in an array to ensure proper lifetime
-    let sources = [source];
+    let source_size = source.size();
+    let sources = vec![source];
 
     // Create a weight loader
     println!("\nCreating weight loader...");
-    let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)?;
+    let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Auto)?;
     println!("✓ Loader created successfully");
     println!("  Device: {}", loader.device());
     println!("  Number of sources: {}", loader.num_sources());
 
     // Fetch some data from the beginning of the file
     let fetch_size = end - start;
-    let actual_fetch_size = fetch_size.min(sources[0].size());
+    let actual_fetch_size = fetch_size.min(source_size);
     println!(
         "\nFetching {} bytes ({:.2} MB)...",
         actual_fetch_size,
