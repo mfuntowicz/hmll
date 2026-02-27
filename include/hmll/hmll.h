@@ -74,14 +74,16 @@ static inline unsigned char hmll_success(const struct hmll_error error) NO_EXCEP
     return (int)error.code == HMLL_ERR_SUCCESS && error.sys_err == HMLL_ERR_SUCCESS;
 }
 
-static inline struct hmll_device hmll_device_cpu() NO_EXCEPT
+static inline struct hmll_device hmll_device_cpu(void) NO_EXCEPT
 {
-    return (struct hmll_device){ .kind = HMLL_DEVICE_CPU, .idx = 0};
+    struct hmll_device d = { HMLL_DEVICE_CPU, 0 };
+    return d;
 }
 
 static inline struct hmll_device hmll_device_cuda(unsigned char idx) NO_EXCEPT
 {
-    return (struct hmll_device){ .kind = HMLL_DEVICE_CPU, .idx = idx };
+    struct hmll_device d = { HMLL_DEVICE_CUDA, idx };
+    return d;
 }
 
 static inline unsigned char hmll_device_is_cpu(struct hmll_device device) NO_EXCEPT
