@@ -33,8 +33,6 @@ impl LoaderKind {
 
 impl Default for LoaderKind {
     /// Default loader kind is Auto.
-    ///
-    /// Hot path - inline always for zero-cost default.
     #[inline(always)]
     fn default() -> Self {
         LoaderKind::Auto
@@ -56,11 +54,11 @@ impl Default for LoaderKind {
 /// let source1 = Source::open("model-00001-of-00003.safetensors")?;
 /// let source2 = Source::open("model-00002-of-00003.safetensors")?;
 /// let source3 = Source::open("model-00003-of-00003.safetensors")?;
-/// let sources = [source1, source2, source3];
+/// let sources = vec![source1, source2, source3];
 ///
 /// // Create a loader
 /// let mut loader = WeightLoader::new(
-///     &sources,
+///     sources,
 ///     Device::Cpu,
 ///     LoaderKind::Auto
 /// )?;
@@ -158,8 +156,8 @@ impl WeightLoader {
     /// # use hmll::{Source, WeightLoader, Device, LoaderKind, Range};
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let source = Source::open("model.safetensors")?;
-    /// # let sources = [source];
-    /// # let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)?;
+    /// # let sources = vec![source];
+    /// # let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Auto)?;
     ///
     /// // Fetch multiple weight tensors in a single batch
     /// let ranges = vec![
@@ -275,8 +273,8 @@ impl WeightLoader {
     /// # use hmll::{Source, WeightLoader, Device, LoaderKind};
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let source = Source::open("model.safetensors")?;
-    /// # let sources = [source];
-    /// # let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)?;
+    /// # let sources = vec![source];
+    /// # let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Auto)?;
     ///
     /// // Fetch first 1MB from the first file
     /// let data = loader.fetch(0..1024 * 1024, 0)?;
@@ -350,8 +348,8 @@ impl WeightLoader {
     /// # use hmll::{Source, WeightLoader, Device, LoaderKind};
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let source = Source::open("model.safetensors")?;
-    /// # let sources = [source];
-    /// # let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Mmap)?;
+    /// # let sources = vec![source];
+    /// # let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Mmap)?;
     ///
     /// // Get a zero-copy view into the first 1MB
     /// let view = loader.fetch_view(0..1024 * 1024, 0)?;
