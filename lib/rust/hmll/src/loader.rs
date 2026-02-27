@@ -210,10 +210,7 @@ impl<'a> WeightLoader<'a> {
             }
 
             let iobuf = unsafe {
-                hmll_sys::hmll_get_buffer_for_range(
-                    self.context.as_mut(),
-                    range.to_raw(),
-                )
+                hmll_sys::hmll_get_buffer_for_range(self.context.as_mut(), range.to_raw())
             };
             if iobuf.ptr.is_null() {
                 for prev in &mut iobufs {
@@ -312,12 +309,8 @@ impl<'a> WeightLoader<'a> {
             return Ok(Buffer::empty(self.device));
         }
 
-        let iobuf = unsafe {
-            hmll_sys::hmll_get_buffer_for_range(
-                self.context.as_mut(),
-                range.to_raw(),
-            )
-        };
+        let iobuf =
+            unsafe { hmll_sys::hmll_get_buffer_for_range(self.context.as_mut(), range.to_raw()) };
 
         if iobuf.ptr.is_null() {
             return Err(Error::AllocationFailed);
