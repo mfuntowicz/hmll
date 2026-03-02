@@ -69,6 +69,7 @@ impl Default for LoaderKind {
 /// # Ok(())
 /// # }
 /// ```
+#[derive(Debug)]
 pub struct WeightLoader {
     context: Box<hmll_sys::hmll>,
     sources: Vec<Source>,
