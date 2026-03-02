@@ -270,48 +270,54 @@ static ssize_t hmll_io_uring_fetchv_impl(
     if (unlikely(n == 0)) return 0;
 
     struct hmll_io_uring *fetcher = ctx->fetcher->backend_impl_;
+    const int is_cuda = (dsts[0].device == HMLL_DEVICE_CUDA);
 
-    struct fetch_state {
+    /* user_data encoding for CQEs: high bit = fadvise (skip), else (bidx << 8) | slot */
+    static const uint64_t FETCHV_FADVISE_TAG = 1ULL << 63;
+    static const unsigned FETCHV_BIDX_SHIFT = 8;
+    static const uint64_t FETCHV_SLOT_MASK = HMLL_URING_QUEUE_DEPTH - 1;
+
+    struct fetchv_buf_state {
         size_t submitted;
         size_t size;
         unsigned char fadvise_sent;
     };
 
-    struct fetch_state *states;
+    /* Scratch layout: [buf_states][active_indices][slot_offsets] */
+    const size_t sz_state = (sizeof(struct fetchv_buf_state) * n + _Alignof(uint32_t) - 1) & ~(_Alignof(uint32_t) - 1);
+    const size_t sz_idx   = (sizeof(uint32_t) * n + _Alignof(size_t) - 1) & ~(_Alignof(size_t) - 1);
+    const size_t sz_slot  = sizeof(size_t) * HMLL_URING_QUEUE_DEPTH;
+    const size_t scratch_size = sz_state + sz_idx + sz_slot;
+
+    _Alignas(16) uint8_t stack_scratch[8192];
+    struct fetchv_buf_state *buf_states;
     uint32_t *active_indices;
     size_t *slot_offsets;
+    void *scratch_to_free = NULL;
 
-    _Alignas(16) uint8_t stack_mem[8192];
-
-    /*
-     * Align each sub-array to the requirement of the next type to avoid UB
-     * on strict-alignment targets (e.g. slot_offsets needs 8-byte alignment).
-     */
-    const size_t state_mem_req = (sizeof(struct fetch_state) * n + (_Alignof(uint32_t) - 1)) & ~(_Alignof(uint32_t) - 1);
-    const size_t idx_mem_req   = (sizeof(uint32_t) * n + (_Alignof(size_t) - 1)) & ~(_Alignof(size_t) - 1);
-    const size_t slot_mem_req  = sizeof(size_t) * HMLL_URING_QUEUE_DEPTH;
-    const size_t total_req     = state_mem_req + idx_mem_req + slot_mem_req;
-
-    if (likely(total_req <= sizeof(stack_mem))) {
-        uint8_t *ptr = stack_mem;
-        states        = (struct fetch_state *)ptr; ptr += state_mem_req;
-        active_indices = (uint32_t *)ptr;          ptr += idx_mem_req;
-        slot_offsets   = (size_t *)ptr;
+    if (scratch_size <= sizeof(stack_scratch)) {
+        uint8_t *p = stack_scratch;
+        buf_states     = (struct fetchv_buf_state *)p; p += sz_state;
+        active_indices = (uint32_t *)p;                p += sz_idx;
+        slot_offsets   = (size_t *)p;
     } else {
-        states = calloc(1, total_req);
-        if (unlikely(!states)) {
+        void *p = calloc(1, scratch_size);
+        if (!p) {
             ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
             return -1;
         }
-        active_indices = (uint32_t *)((char *)states + state_mem_req);
-        slot_offsets   = (size_t *)((char *)active_indices + idx_mem_req);
+        scratch_to_free = p;
+        buf_states     = (struct fetchv_buf_state *)p; p = (char *)p + sz_state;
+        active_indices = (uint32_t *)p;                p = (char *)p + sz_idx;
+        slot_offsets   = (size_t *)p;
     }
 
+    /* Build list of buffers that have bytes to read */
     size_t n_active = 0;
-    for (size_t i = 0; i < n; ++i) {
-        states[i].submitted   = 0;
-        states[i].size        = dsts[i].size;
-        states[i].fadvise_sent = 0;
+    for (size_t i = 0; i < n; i++) {
+        buf_states[i].submitted = 0;
+        buf_states[i].size      = dsts[i].size;
+        buf_states[i].fadvise_sent = 0;
         if (dsts[i].size > 0)
             active_indices[n_active++] = (uint32_t)i;
     }
@@ -321,54 +327,47 @@ static ssize_t hmll_io_uring_fetchv_impl(
     struct io_uring_cqe *cqes[HMLL_URING_QUEUE_DEPTH];
 
     while (n_active > 0 || n_in_flight > 0) {
-        /* Eagerly reclaim completed CUDA staging slots each outer iteration */
         hmll_io_uring_reclaim_slots(fetcher, dsts[0].device);
 
-        /* Submit as many read SQEs as possible, round-robining across active buffers */
+        /* Submit: round-robin over active buffers, send fadvise then chunked reads */
         while (n_active > 0) {
             if (active_cursor >= n_active) active_cursor = 0;
             const uint32_t bidx = active_indices[active_cursor];
-            struct fetch_state *st = &states[bidx];
+            struct fetchv_buf_state *st = &buf_states[bidx];
 
-            /* Send fadvise hint once per buffer; active_cursor stays unchanged so
-               the same buffer gets its data read SQE on the very next iteration. */
-            if (unlikely(!st->fadvise_sent)) {
-                struct io_uring_sqe *fadvise_sqe = io_uring_get_sqe(&fetcher->ioring);
-                if (!fadvise_sqe) break;  // ring full, submit what we have and retry
-                io_uring_prep_fadvise(fadvise_sqe, iofile, offsets[bidx], st->size, POSIX_FADV_WILLNEED);
-                io_uring_sqe_set_flags(fadvise_sqe, IOSQE_FIXED_FILE);
-                io_uring_sqe_set_data64(fadvise_sqe, BIT_FADVISE);
+            if (!st->fadvise_sent) {
+                struct io_uring_sqe *sqe = io_uring_get_sqe(&fetcher->ioring);
+                if (!sqe) break;
+                io_uring_prep_fadvise(sqe, iofile, offsets[bidx], st->size, POSIX_FADV_WILLNEED);
+                io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
+                io_uring_sqe_set_data64(sqe, FETCHV_FADVISE_TAG);
                 st->fadvise_sent = 1;
                 continue;
             }
 
             const int slot = hmll_io_uring_slot_find_available(fetcher->iobusy);
-            if (slot == -1) break;
-
+            if (slot < 0) break;
             struct io_uring_sqe *sqe = io_uring_get_sqe(&fetcher->ioring);
             if (!sqe) break;
 
             hmll_io_uring_slot_set_busy(&fetcher->iobusy, slot);
             slot_offsets[slot] = st->submitted;
 
-            const size_t remaining   = st->size - st->submitted;
-            const size_t to_read     = remaining < HMLL_URING_BUFFER_SIZE ? remaining : HMLL_URING_BUFFER_SIZE;
-            const size_t file_offset = offsets[bidx] + st->submitted;
+            const size_t remaining = st->size - st->submitted;
+            const size_t to_read = remaining < HMLL_URING_BUFFER_SIZE ? remaining : HMLL_URING_BUFFER_SIZE;
+            const size_t file_off = offsets[bidx] + st->submitted;
+            void *read_dst = (char *)dsts[bidx].ptr + st->submitted;
 
-            /* CPU: read directly into the destination buffer.
-               CUDA: read into a pinned staging buffer; the async memcpy to GPU
-               is dispatched on CQE completion below. */
 #if defined(__HMLL_CUDA_ENABLED__)
             if (is_cuda)
-                io_uring_prep_read_fixed(sqe, iofile, fetcher->iovecs[slot].iov_base, to_read, file_offset, slot);
+                io_uring_prep_read_fixed(sqe, iofile, fetcher->iovecs[slot].iov_base, to_read, file_off, slot);
             else
-                io_uring_prep_read(sqe, iofile, (char *)dsts[bidx].ptr + st->submitted, to_read, file_offset);
+                io_uring_prep_read(sqe, iofile, read_dst, to_read, file_off);
 #else
-            io_uring_prep_read(sqe, iofile, (char *)dsts[bidx].ptr + st->submitted, to_read, file_offset);
+            io_uring_prep_read(sqe, iofile, read_dst, to_read, file_off);
 #endif
             io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
-            /* Pack buffer index and staging slot into user_data for CQE dispatch */
-            io_uring_sqe_set_data64(sqe, ((uint64_t)bidx << SHIFT_RANGE) | (uint64_t)slot);
+            io_uring_sqe_set_data64(sqe, ((uint64_t)bidx << FETCHV_BIDX_SHIFT) | (uint64_t)slot);
 
             st->submitted += to_read;
             n_in_flight++;
@@ -383,32 +382,19 @@ static ssize_t hmll_io_uring_fetchv_impl(
 
         if (n_in_flight == 0) {
             if (n_active == 0) break;
-
-            /*
-             * n_in_flight == 0 but n_active > 0: the inner loop couldn't claim
-             * any staging slot.  For CUDA this means all 128 slots are occupied
-             * by pending cudaMemcpyAsync operations whose events haven't fired
-             * yet.  Spinning here (nwait=0 path) would burn 100 % CPU for
-             * hundreds of milliseconds on large models.
-             *
-             * Fix: flush any queued fadvise SQEs, then block on the first
-             * outstanding CUDA event so we reclaim at least one slot before
-             * retrying.  For CPU this case is transient (SQPOLL catching up), so
-             * the io_uring_submit() wake-up is sufficient.
-             */
             io_uring_submit(&fetcher->ioring);
-
 #if defined(__HMLL_CUDA_ENABLED__)
-            if (is_cuda && hmll_io_uring_slot_find_available(fetcher->iobusy) == -1) {
+            if (is_cuda && hmll_io_uring_slot_find_available(fetcher->iobusy) < 0) {
                 struct hmll_io_uring_cuda_context *dctx = fetcher->device_ctx;
-                for (size_t i = 0; i < HMLL_URING_QUEUE_DEPTH; ++i) {
-                    struct hmll_io_uring_cuda_context *cd = dctx + i;
-                    if (hmll_io_uring_slot_is_busy(fetcher->iobusy, i) &&
-                            cd->state == HMLL_CUDA_STREAM_MEMCPY) {
-                        cudaEventSynchronize(cd->done);
-                        hmll_io_uring_cuda_stream_set_idle(&cd->state);
-                        hmll_io_uring_slot_set_available(&fetcher->iobusy, i);
-                        break;
+                for (size_t i = 0; i < HMLL_URING_QUEUE_DEPTH; i++) {
+                    if (hmll_io_uring_slot_is_busy(fetcher->iobusy, i)) {
+                        struct hmll_io_uring_cuda_context *cd = &dctx[i];
+                        if (cd->state == HMLL_CUDA_STREAM_MEMCPY) {
+                            cudaEventSynchronize(cd->done);
+                            hmll_io_uring_cuda_stream_set_idle(&cd->state);
+                            hmll_io_uring_slot_set_available(&fetcher->iobusy, (unsigned)i);
+                            break;
+                        }
                     }
                 }
             }
@@ -417,16 +403,13 @@ static ssize_t hmll_io_uring_fetchv_impl(
         }
 
         const size_t nwait = n_in_flight < fetcher->iocca.window ? n_in_flight : fetcher->iocca.window;
-
         struct timespec ts_start, ts_end;
         clock_gettime(CLOCK_MONOTONIC, &ts_start);
-
-        if (unlikely(io_uring_submit_and_wait(&fetcher->ioring, nwait) < 0)) {
+        if (io_uring_submit_and_wait(&fetcher->ioring, nwait) < 0) {
             ctx->error = HMLL_ERR(HMLL_ERR_IO_ERROR);
             goto cleanup;
         }
         clock_gettime(CLOCK_MONOTONIC, &ts_end);
-
         hmll_io_uring_cca_update(&fetcher->iocca, HMLL_URING_BUFFER_SIZE * nwait, ts_start, ts_end);
 
         unsigned count;
@@ -435,33 +418,28 @@ static ssize_t hmll_io_uring_fetchv_impl(
                 const struct io_uring_cqe *cqe = cqes[i];
                 const uint64_t data = cqe->user_data;
 
-                /* Skip fadvise completions; use exact equality to avoid false
-                   positives if future encodings ever set high bits. */
-                if (unlikely(data == BIT_FADVISE)) continue;
+                if (data == FETCHV_FADVISE_TAG) continue;
 
                 n_in_flight--;
-
-                if (unlikely(cqe->res < 0)) {
+                if (cqe->res < 0) {
                     ctx->error = HMLL_SYS_ERR(-cqe->res);
                     io_uring_cq_advance(&fetcher->ioring, count);
                     goto cleanup;
                 }
+                nbytes += (size_t)cqe->res;
 
-                nbytes += cqe->res;
-
-                const uint32_t slot = (uint32_t)(data & MASK_SLOT);
-                const uint32_t bidx = (uint32_t)(data >> SHIFT_RANGE);
+                const uint32_t slot = (uint32_t)(data & FETCHV_SLOT_MASK);
+                const uint32_t bidx = (uint32_t)(data >> FETCHV_BIDX_SHIFT);
 
                 if (!is_cuda) {
                     hmll_io_uring_slot_set_available(&fetcher->iobusy, slot);
                 }
 #if defined(__HMLL_CUDA_ENABLED__)
                 else {
-                    struct hmll_io_uring_cuda_context *cctx =
-                        &((struct hmll_io_uring_cuda_context *)fetcher->device_ctx)[slot];
+                    struct hmll_io_uring_cuda_context *cctx = &((struct hmll_io_uring_cuda_context *)fetcher->device_ctx)[slot];
+                    void *to = (char *)dsts[bidx].ptr + slot_offsets[slot];
                     void *from = fetcher->iovecs[slot].iov_base;
-                    void *to   = (char *)dsts[bidx].ptr + slot_offsets[slot];
-                    cudaMemcpyAsync(to, from, cqe->res, cudaMemcpyHostToDevice, cctx->stream);
+                    cudaMemcpyAsync(to, from, (size_t)cqe->res, cudaMemcpyHostToDevice, cctx->stream);
                     cudaEventRecord(cctx->done, cctx->stream);
                     hmll_io_uring_cuda_stream_set_memcpy(&cctx->state);
                 }
@@ -474,11 +452,11 @@ static ssize_t hmll_io_uring_fetchv_impl(
     }
 
     hmll_io_uring_sync(dsts[0].device, fetcher);
-    if ((unsigned char *)states != stack_mem) free(states);
+    if (scratch_to_free) free(scratch_to_free);
     return (ssize_t)nbytes;
 
 cleanup:
-    if ((unsigned char *)states != stack_mem) free(states);
+    if (scratch_to_free) free(scratch_to_free);
     return -1;
 }
 
