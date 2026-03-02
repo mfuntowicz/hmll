@@ -4,7 +4,7 @@
 #include "hmll/linux/backend/iouring.h"
 #include "sys/mman.h"
 
-#define HMLL_IO_URING_ADVISORY_FLAG UINT64_MAX
+#define HMLL_IO_URING_FADVISE_TAG (1ULL << 63)
 
 #if defined(__HMLL_CUDA_ENABLED__)
 #include "hmll/cuda.h"
@@ -194,7 +194,7 @@ static ssize_t hmll_io_uring_fetch_impl(
     if ((sqe = io_uring_get_sqe(&fetcher->ioring))) {
         io_uring_prep_fadvise(sqe, iofile, offset, dst->size, POSIX_FADV_WILLNEED);
         io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
-        io_uring_sqe_set_data64(sqe, HMLL_IO_URING_ADVISORY_FLAG);
+        io_uring_sqe_set_data64(sqe, HMLL_IO_URING_FADVISE_TAG);
     }
 
     while (b_read < dst->size) {
@@ -237,7 +237,7 @@ static ssize_t hmll_io_uring_fetch_impl(
             for (unsigned i = 0; i < count; i++) {
 
                 const struct io_uring_cqe *cqe = cqes[i];
-                if (unlikely(cqe->user_data == HMLL_IO_URING_ADVISORY_FLAG))
+                if (unlikely(cqe->user_data == HMLL_IO_URING_FADVISE_TAG))
                     continue;
 
                 --n_dma;
@@ -273,7 +273,6 @@ static ssize_t hmll_io_uring_fetchv_impl(
     const int is_cuda = (dsts[0].device == HMLL_DEVICE_CUDA);
 
     /* user_data encoding for CQEs: high bit = fadvise (skip), else (bidx << 8) | slot */
-    static const uint64_t FETCHV_FADVISE_TAG = 1ULL << 63;
     static const unsigned FETCHV_BIDX_SHIFT = 8;
     static const uint64_t FETCHV_SLOT_MASK = HMLL_URING_QUEUE_DEPTH - 1;
 
@@ -340,7 +339,7 @@ static ssize_t hmll_io_uring_fetchv_impl(
                 if (!sqe) break;
                 io_uring_prep_fadvise(sqe, iofile, offsets[bidx], st->size, POSIX_FADV_WILLNEED);
                 io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
-                io_uring_sqe_set_data64(sqe, FETCHV_FADVISE_TAG);
+                io_uring_sqe_set_data64(sqe, HMLL_IO_URING_FADVISE_TAG);
                 st->fadvise_sent = 1;
                 continue;
             }
@@ -418,7 +417,7 @@ static ssize_t hmll_io_uring_fetchv_impl(
                 const struct io_uring_cqe *cqe = cqes[i];
                 const uint64_t data = cqe->user_data;
 
-                if (data == FETCHV_FADVISE_TAG) continue;
+                if (data == HMLL_IO_URING_FADVISE_TAG) continue;
 
                 n_in_flight--;
                 if (cqe->res < 0) {
