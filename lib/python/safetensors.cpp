@@ -142,7 +142,7 @@ public:
         return loader_->afetch(iofile, start, end, dtype, shape, rank);
     }
 
-    [[nodiscard]] size_t fetch(const std::string& name, void *const dst, const size_t capacity) const
+    [[nodiscard]] size_t fetch(const std::string& name, const uintptr_t dst, const size_t capacity) const
     {
         const auto registry = registry_.get();
         const auto index = hmll_find_by_name(loader_->context(), registry, name.c_str());
