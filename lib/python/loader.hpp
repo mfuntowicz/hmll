@@ -42,7 +42,7 @@ public:
     afetch(int iofile, size_t start, size_t end, hmll_dtype_t dtype, const size_t* shape, uint8_t rank) const;
 
     [[nodiscard]] size_t
-    fetch(int iofile, size_t offset, uintptr_t dst, size_t capacity) const;
+    fetch(int iofile, size_t offset, uintptr_t dst, size_t size) const;
 
     /** Batched fetch: write multiple byte ranges from the file into a single pre-allocated buffer. */
     [[nodiscard]] size_t

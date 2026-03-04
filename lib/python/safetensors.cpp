@@ -142,7 +142,7 @@ public:
         return loader_->afetch(iofile, start, end, dtype, shape, rank);
     }
 
-    [[nodiscard]] size_t fetch(const std::string& name, const uintptr_t dst, const size_t capacity) const
+    [[nodiscard]] size_t fetch(const std::string& name, const uintptr_t dst, const size_t size) const
     {
         const auto registry = registry_.get();
         const auto index = hmll_find_by_name(loader_->context(), registry, name.c_str());
@@ -154,15 +154,13 @@ public:
         const auto iofile = registry->indexes[index];
         const auto nbytes = hmll_nbytes(&specs);
 
-        if (capacity == 0)
-            throw std::runtime_error("Invalid 0-size for fetch operation");
-
-        if (capacity < nbytes)
+        if (size < nbytes)
             throw std::runtime_error(fmt::format(
-                FMT_COMPILE("Provided destination buffer cannot be smaller than tensor size (provided={}, required={})"), capacity, nbytes));
+                FMT_COMPILE("Provided destination buffer cannot be smaller than tensor size (provided={}, required={})"), size, nbytes));
+
 
         // Delegate to WeightLoader for actual fetching
-        return loader_->fetch(iofile, specs.start, dst, capacity);
+        return loader_->fetch(iofile, specs.start, dst, size);
     }
 
     /** Fetch only the given element ranges into dst. Dtype is taken from the registry. */
