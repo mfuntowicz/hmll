@@ -78,15 +78,15 @@ nb::ndarray<nb::c_contig> WeightLoader::afetch(const int iofile, const size_t st
     return hmll_to_ndarray(buffer, dtype, shape, rank, std::move(deleter));
 }
 
-size_t WeightLoader::fetch(const int iofile, const size_t offset, const uintptr_t dst, const size_t size) const
+size_t WeightLoader::fetch(const int iofile, const size_t offset, void *const dst, const size_t capacity) const
 {
     nb::gil_scoped_release release;
 
     const auto ctx = ctx_.get();
     const auto dev = device();
 
-    const hmll_iobuf_t buf = {size, reinterpret_cast<void *>(dst), dev};
-    const auto [start, end] = hmll_range_t{offset, offset + size};
+    const hmll_iobuf_t buf = {capacity, dst, dev};
+    const auto [start, end] = hmll_range_t{offset, offset + capacity};
     if (const auto res = hmll_fetch(ctx, iofile, &buf, start); res <= 0) {
         const std::string err = hmll_strerr(ctx_->error);
         throw std::runtime_error(fmt::format(PYHMLL_ERR_FETCH, err));

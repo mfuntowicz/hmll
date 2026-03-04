@@ -99,8 +99,18 @@ uint8_t hmll_nbits(const enum hmll_dtype dtype)
     }
 }
 
-size_t hmll_numel(const hmll_tensor_specs_t *specs)
+size_t hmll_nbytes(const struct hmll_tensor_specs *specs)
 {
+    if (!specs) return 0;
+
+    const size_t numel = hmll_numel(specs);
+    const size_t nbits = hmll_nbits(specs->dtype);
+    return numel * (nbits / 8);
+}
+
+size_t hmll_numel(const struct hmll_tensor_specs *specs)
+{
+    if (!specs) return 0;
     if (specs->rank > HMLL_MAX_TENSOR_RANK) __builtin_unreachable();
 
     size_t numel = 1;
