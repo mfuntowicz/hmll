@@ -18,6 +18,9 @@
 #include <liburing.h>
 #include "hmll/types.h"
 
+#define HMLL_IOFILE_BUFFERED(iofile) ((iofile) * 2)
+#define HMLL_IOFILE_DIRECT(iofile)   ((iofile) * 2 + 1)
+
 struct hmll_iouring_iobusy
 {
     unsigned long long bits[HMLL_URING_IOBUSY_WORDS];
@@ -92,9 +95,9 @@ struct hmll_io_uring {
     struct io_uring ioring;
     struct iovec *iovecs;
     struct hmll_iouring_iobusy iobusy;
-    struct hmll_iouring_cca iocca;  // congestion control
+    struct hmll_iouring_cca iocca;
 
-    // store optional device data
+    unsigned char has_direct;
     void *device_ctx;
 };
 

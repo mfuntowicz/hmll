@@ -59,7 +59,8 @@ impl Source {
             .map_err(|_| Error::FileNotFound("Path contains null byte".to_string()))?;
 
         let mut source = hmll_sys::hmll_source {
-            fd: -1,
+            b_fd: -1,
+            d_fd: -1,
             size: 0,
             content: null_mut(),
         };

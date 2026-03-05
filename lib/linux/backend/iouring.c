@@ -112,6 +112,7 @@ static inline void hmll_io_uring_reclaim_slots(
 /**
  * Prepares a single SQE (Submission Queue Entry).
  * Handles the difference between direct CPU buffer reads and CUDA staging buffer reads.
+ * `reg_fd` is the registered file index (already mapped through HMLL_IOFILE_*).
  */
 static inline void hmll_io_uring_prep_sqe(
     const struct hmll_io_uring *fetcher,
@@ -120,22 +121,20 @@ static inline void hmll_io_uring_prep_sqe(
     void *dst,
     const size_t offset,
     const size_t len,
-    const unsigned short iofile,
+    const int reg_fd,
     const int slot
 ) {
     if (hmll_device_is_cpu(device)) {
-        // CPU: Read directly into user memory
-        io_uring_prep_read(sqe, iofile, dst, len, offset);
+        io_uring_prep_read(sqe, reg_fd, dst, len, offset);
         io_uring_sqe_set_data64(sqe, slot);
     }
 #if defined(__HMLL_CUDA_ENABLED__)
     else if (hmll_device_is_cuda(device)) {
-        // CUDA: Read into registered staging buffers
         struct hmll_io_uring_cuda_context *dctx = fetcher->device_ctx;
         void *buf = fetcher->iovecs[slot].iov_base;
 
         dctx[slot].offset = offset;
-        io_uring_prep_read_fixed(sqe, iofile, buf, len, offset, slot);
+        io_uring_prep_read_fixed(sqe, reg_fd, buf, len, offset, slot);
         io_uring_sqe_set_data(sqe, dctx + slot);
     }
 #else
@@ -190,68 +189,64 @@ static inline void hmll_io_uring_handle_completion(
 #endif
 }
 
-static ssize_t hmll_io_uring_fetch_range_impl(
+/**
+ * Submits chunked read SQEs and drains CQEs until `total` bytes are read.
+ * `buf_offset` is the offset into dst->ptr where data starts being placed.
+ * `file_offset` is the starting offset in the file.
+ * `reg_fd` is the registered file index to target.
+ */
+static ssize_t hmll_io_uring_drain_reads(
     struct hmll *ctx,
-    const int iofile,
+    struct hmll_io_uring *fetcher,
     const struct hmll_iobuf *dst,
-    const size_t offset
+    const size_t buf_offset,
+    const size_t file_offset,
+    const size_t total,
+    const int reg_fd
 ) {
-    if (hmll_check(ctx->error)) return -1;
-
-    struct hmll_io_uring *fetcher = ctx->fetcher->backend_impl_;
-
-    size_t n_dma = 0;
-    size_t b_read = 0;
-    size_t b_submitted = 0;
+    size_t n_dma = 0, b_read = 0, b_submitted = 0;
     struct io_uring_cqe *cqes[HMLL_URING_CQE_BATCH_SIZE];
-
-    struct io_uring_sqe *sqe = NULL;
+    struct io_uring_sqe *sqe;
     int slot;
-    if ((sqe = io_uring_get_sqe(&fetcher->ioring))) {
-        io_uring_prep_fadvise(sqe, iofile, offset, dst->size, POSIX_FADV_SEQUENTIAL | POSIX_FADV_WILLNEED);
-        io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
-        io_uring_sqe_set_data64(sqe, HMLL_IO_URING_ADVISORY_FLAG);
-    }
 
-    while (b_read < dst->size) {
+    while (b_read < total) {
         hmll_io_uring_reclaim_slots(fetcher, dst->device);
 
-        while (b_submitted < dst->size) {
+        while (b_submitted < total) {
             if (unlikely((slot = hmll_io_uring_get_sqe(fetcher, &sqe)) < 0))
                 break;
 
-            const size_t remaining = dst->size - b_submitted;
-            const size_t to_read = (remaining < HMLL_URING_BUFFER_SIZE) ? remaining : HMLL_URING_BUFFER_SIZE;
-            const size_t file_offset = offset + b_submitted;
+            const size_t remaining = total - b_submitted;
+            const size_t to_read = remaining < HMLL_URING_BUFFER_SIZE ? remaining : HMLL_URING_BUFFER_SIZE;
 
-            hmll_io_uring_prep_sqe(fetcher, dst->device, sqe, (char *)dst->ptr + b_submitted, file_offset, to_read, iofile, slot);
+            hmll_io_uring_prep_sqe(
+                fetcher, dst->device, sqe,
+                (char *)dst->ptr + buf_offset + b_submitted,
+                file_offset + b_submitted,
+                to_read, reg_fd, slot
+            );
 
             b_submitted += to_read;
             ++n_dma;
         }
 
-        // update congestion control algorithm
         if (likely(n_dma > 0)) {
-             const size_t nwait = n_dma < fetcher->iocca.window ? n_dma : fetcher->iocca.window;
+            const size_t nwait = n_dma < fetcher->iocca.window ? n_dma : fetcher->iocca.window;
 
             struct timespec ts_start, ts_end;
             clock_gettime(CLOCK_MONOTONIC, &ts_start);
 
             if (unlikely(io_uring_submit_and_wait(&fetcher->ioring, nwait) < 0)) {
-                // todo: do we need to reset the cca? hmll_io_uring_cca_init(&fetcher->iocca)
                 ctx->error = HMLL_ERR(HMLL_ERR_IO_ERROR);
                 return -1;
             }
             clock_gettime(CLOCK_MONOTONIC, &ts_end);
-
-            // todo: approximated version of the number of bytes actually reads because it assumes full reads
             hmll_io_uring_cca_update(&fetcher->iocca, HMLL_URING_BUFFER_SIZE * nwait, ts_start, ts_end);
         }
 
         unsigned count = 0;
         while ((count = io_uring_peek_batch_cqe(&fetcher->ioring, cqes, HMLL_URING_CQE_BATCH_SIZE)) > 0) {
             for (unsigned i = 0; i < count; i++) {
-
                 const struct io_uring_cqe *cqe = cqes[i];
                 if (unlikely(cqe->user_data == HMLL_IO_URING_ADVISORY_FLAG))
                     continue;
@@ -264,15 +259,98 @@ static ssize_t hmll_io_uring_fetch_range_impl(
                 }
 
                 b_read += cqe->res;
-                hmll_io_uring_handle_completion(fetcher, cqe, dst, offset, cqe->res);
+                hmll_io_uring_handle_completion(fetcher, cqe, dst, file_offset, cqe->res);
             }
-
             io_uring_cq_advance(&fetcher->ioring, count);
         }
     }
 
-    hmll_io_uring_sync(dst->device, fetcher);
     return (ssize_t)b_read;
+}
+
+static ssize_t hmll_io_uring_fetch_range_impl(
+    struct hmll *ctx,
+    const int iofile,
+    const struct hmll_iobuf *dst,
+    const size_t offset
+) {
+    if (hmll_check(ctx->error)) return -1;
+
+    struct hmll_io_uring *fetcher = ctx->fetcher->backend_impl_;
+    const int fd_buf = HMLL_IOFILE_BUFFERED(iofile);
+    const int fd_dir = HMLL_IOFILE_DIRECT(iofile);
+    const size_t end = offset + dst->size;
+
+    const size_t aligned_start = ALIGN_UP(offset, ALIGN_PAGE);
+    const size_t aligned_end   = ALIGN_DOWN(end, ALIGN_PAGE);
+
+    const unsigned char use_direct =
+        fetcher->has_direct
+        && hmll_device_is_cuda(dst->device)
+        && aligned_end > aligned_start;
+
+    const size_t head_size = use_direct ? (aligned_start - offset) : 0;
+    const size_t core_size = use_direct ? (aligned_end - aligned_start) : 0;
+    const size_t tail_size = use_direct ? (end - aligned_end) : 0;
+
+    struct io_uring_sqe *sqe;
+    ssize_t total_read = 0;
+
+    if (!use_direct) {
+        // Pure buffered path: fadvise + chunked reads through buffered fd
+        if ((sqe = io_uring_get_sqe(&fetcher->ioring))) {
+            io_uring_prep_fadvise(sqe, fd_buf, offset, dst->size,
+                                  POSIX_FADV_SEQUENTIAL | POSIX_FADV_WILLNEED);
+            io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
+            io_uring_sqe_set_data64(sqe, HMLL_IO_URING_ADVISORY_FLAG);
+        }
+
+        total_read = hmll_io_uring_drain_reads(
+            ctx, fetcher, dst, 0, offset, dst->size, fd_buf);
+        if (total_read < 0) return -1;
+
+        hmll_io_uring_sync(dst->device, fetcher);
+        return total_read;
+    }
+
+    // --- Hybrid O_DIRECT path (CUDA only) ---
+
+    // 1) fadvise head and tail on the buffered fd so the kernel prefetches
+    if (head_size > 0 && (sqe = io_uring_get_sqe(&fetcher->ioring))) {
+        io_uring_prep_fadvise(sqe, fd_buf, offset, head_size, POSIX_FADV_WILLNEED);
+        io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
+        io_uring_sqe_set_data64(sqe, HMLL_IO_URING_ADVISORY_FLAG);
+    }
+    if (tail_size > 0 && (sqe = io_uring_get_sqe(&fetcher->ioring))) {
+        io_uring_prep_fadvise(sqe, fd_buf, aligned_end, tail_size, POSIX_FADV_WILLNEED);
+        io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
+        io_uring_sqe_set_data64(sqe, HMLL_IO_URING_ADVISORY_FLAG);
+    }
+
+    // 2) Read aligned core via O_DIRECT fd
+    ssize_t n = hmll_io_uring_drain_reads(
+        ctx, fetcher, dst, head_size, aligned_start, core_size, fd_dir);
+    if (n < 0) return -1;
+    total_read += n;
+
+    // 3) Read head via buffered fd
+    if (head_size > 0) {
+        n = hmll_io_uring_drain_reads(
+            ctx, fetcher, dst, 0, offset, head_size, fd_buf);
+        if (n < 0) return -1;
+        total_read += n;
+    }
+
+    // 4) Read tail via buffered fd
+    if (tail_size > 0) {
+        n = hmll_io_uring_drain_reads(
+            ctx, fetcher, dst, head_size + core_size, aligned_end, tail_size, fd_buf);
+        if (n < 0) return -1;
+        total_read += n;
+    }
+
+    hmll_io_uring_sync(dst->device, fetcher);
+    return total_read;
 }
 
 static ssize_t hmll_io_uring_fetchv_range_impl(
@@ -285,11 +363,25 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
     if (hmll_check(ctx->error)) return -1;
 
     struct hmll_io_uring *fetcher = ctx->fetcher->backend_impl_;
+    const int fd_buf = HMLL_IOFILE_BUFFERED(iofile);
+    const int fd_dir = HMLL_IOFILE_DIRECT(iofile);
+    const unsigned char is_cuda = hmll_device_is_cuda(dsts[0].device);
+    const unsigned char use_direct = fetcher->has_direct && is_cuda;
+
+    enum fetch_phase { PHASE_CORE, PHASE_FRINGE };
 
     struct fetch_state {
         size_t submitted;
         size_t size;
+
+        size_t head_size;
+        size_t core_offset;
+        size_t core_size;
+        size_t tail_offset;
+        size_t tail_size;
+
         unsigned char fadvise_sent;
+        unsigned char phase;
     };
 
     struct fetch_state *states;
@@ -305,13 +397,8 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
 
     if (likely(total_req <= sizeof(stack_mem))) {
         uint8_t *ptr = stack_mem;
-
-        states = (struct fetch_state *)ptr;
-        ptr += state_mem_req;
-
-        active_indices = (uint32_t *)ptr;
-        ptr += idx_mem_req;
-
+        states = (struct fetch_state *)ptr; ptr += state_mem_req;
+        active_indices = (uint32_t *)ptr;   ptr += idx_mem_req;
         slot_offsets = (size_t *)ptr;
     } else {
         states = calloc(1, total_req);
@@ -325,24 +412,55 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
 
     size_t n_active = 0;
     for (size_t i = 0; i < n; ++i) {
-        states[i].submitted = 0;
-        states[i].size = dsts[i].size;
-        states[i].fadvise_sent = false;
+        if (dsts[i].size == 0) continue;
 
-        if (dsts[i].size > 0) {
-            active_indices[n_active++] = i;
+        struct fetch_state *st = &states[i];
+        const size_t off = offsets[i];
+        const size_t end = off + dsts[i].size;
+        const size_t a_start = ALIGN_UP(off, ALIGN_PAGE);
+        const size_t a_end   = ALIGN_DOWN(end, ALIGN_PAGE);
+
+        st->size = dsts[i].size;
+        st->submitted = 0;
+        st->fadvise_sent = 0;
+
+        if (use_direct && a_end > a_start) {
+            st->head_size    = a_start - off;
+            st->core_offset  = a_start;
+            st->core_size    = a_end - a_start;
+            st->tail_offset  = a_end;
+            st->tail_size    = end - a_end;
+            st->phase        = PHASE_CORE;
+        } else {
+            st->head_size    = 0;
+            st->core_offset  = 0;
+            st->core_size    = 0;
+            st->tail_offset  = 0;
+            st->tail_size    = 0;
+            st->phase        = PHASE_FRINGE;
         }
+
+        active_indices[n_active++] = i;
     }
 
-    const uint64_t BIT_FADVISE    = 1ULL << 63;
-    const uint64_t SHIFT_RANGE    = 32;
-    const uint64_t MASK_SLOT      = 0xFFFFFFFFULL;
-    const unsigned char is_cuda = hmll_device_is_cuda(dsts[0].device);
+    const uint64_t BIT_FADVISE = 1ULL << 63;
+    const uint64_t SHIFT_RANGE = 32;
+    const uint64_t MASK_SLOT   = 0xFFFFFFFFULL;
 
     size_t n_in_flight = 0, nbytes = 0, active_cursor = 0;
     struct io_uring_cqe *cqes[HMLL_URING_CQE_BATCH_SIZE];
 
-    while (n_active > 0 || n_in_flight > 0) {
+    // Tracks ranges whose core is done and need fringe (head+tail) reads
+    uint32_t fringe_indices[128];
+    size_t n_fringe = 0;
+
+    while (n_active > 0 || n_in_flight > 0 || n_fringe > 0) {
+
+        // Enqueue fringe ranges that just finished their core phase
+        while (n_fringe > 0 && n_active < n) {
+            active_indices[n_active++] = fringe_indices[--n_fringe];
+        }
+
         while (n_active > 0) {
             struct io_uring_sqe *sqe = io_uring_get_sqe(&fetcher->ioring);
             if (!sqe) break;
@@ -351,10 +469,44 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
             const uint32_t current_idx = active_indices[active_cursor];
             struct fetch_state *st = &states[current_idx];
 
+            // Submit fadvise before first read of this range
             if (unlikely(!st->fadvise_sent)) {
-                io_uring_prep_fadvise(sqe, iofile, offsets[current_idx], st->size, POSIX_FADV_SEQUENTIAL | POSIX_FADV_WILLNEED);
-                io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
-                io_uring_sqe_set_data64(sqe, BIT_FADVISE);
+                if (st->phase == PHASE_CORE) {
+                    // Prefetch head + tail on buffered fd while core goes through O_DIRECT
+                    if (st->head_size > 0) {
+                        io_uring_prep_fadvise(sqe, fd_buf, offsets[current_idx],
+                                              st->head_size, POSIX_FADV_WILLNEED);
+                        io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
+                        io_uring_sqe_set_data64(sqe, BIT_FADVISE);
+
+                        if (st->tail_size > 0) {
+                            struct io_uring_sqe *sqe2 = io_uring_get_sqe(&fetcher->ioring);
+                            if (sqe2) {
+                                io_uring_prep_fadvise(sqe2, fd_buf, st->tail_offset,
+                                                      st->tail_size, POSIX_FADV_WILLNEED);
+                                io_uring_sqe_set_flags(sqe2, IOSQE_FIXED_FILE);
+                                io_uring_sqe_set_data64(sqe2, BIT_FADVISE);
+                            }
+                        }
+                    } else if (st->tail_size > 0) {
+                        io_uring_prep_fadvise(sqe, fd_buf, st->tail_offset,
+                                              st->tail_size, POSIX_FADV_WILLNEED);
+                        io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
+                        io_uring_sqe_set_data64(sqe, BIT_FADVISE);
+                    } else {
+                        // Core-only, no head/tail -- issue fadvise for full range on direct fd
+                        io_uring_prep_fadvise(sqe, fd_dir, st->core_offset,
+                                              st->core_size, POSIX_FADV_SEQUENTIAL);
+                        io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
+                        io_uring_sqe_set_data64(sqe, BIT_FADVISE);
+                    }
+                } else {
+                    // PHASE_FRINGE (buffered-only): fadvise the whole range
+                    io_uring_prep_fadvise(sqe, fd_buf, offsets[current_idx],
+                                          st->size, POSIX_FADV_SEQUENTIAL | POSIX_FADV_WILLNEED);
+                    io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
+                    io_uring_sqe_set_data64(sqe, BIT_FADVISE);
+                }
                 st->fadvise_sent = 1;
                 continue;
             }
@@ -365,23 +517,49 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
                 slot = hmll_io_uring_slot_find_available(fetcher->iobusy);
                 if (slot == -1) break;
             }
-
             hmll_io_uring_slot_set_busy(&fetcher->iobusy, slot);
 
-            slot_offsets[slot] = st->submitted;
-            const size_t remaining = st->size - st->submitted;
+            size_t file_offset, buf_offset, region_size;
+            int target_fd;
+
+            if (st->phase == PHASE_CORE) {
+                // Submit core reads via O_DIRECT fd
+                region_size = st->core_size;
+                file_offset = st->core_offset + st->submitted;
+                buf_offset  = st->head_size + st->submitted;
+                target_fd   = fd_dir;
+            } else {
+                // PHASE_FRINGE: submit head, then tail, via buffered fd
+                if (st->core_size > 0) {
+                    // We had a core phase; now reading head then tail
+                    if (st->submitted < st->head_size) {
+                        region_size = st->head_size;
+                        file_offset = offsets[current_idx] + st->submitted;
+                        buf_offset  = st->submitted;
+                    } else {
+                        region_size = st->head_size + st->tail_size;
+                        const size_t fringe_done = st->submitted - st->head_size;
+                        file_offset = st->tail_offset + fringe_done;
+                        buf_offset  = st->head_size + st->core_size + fringe_done;
+                    }
+                } else {
+                    // Pure buffered (no O_DIRECT for this range)
+                    region_size = st->size;
+                    file_offset = offsets[current_idx] + st->submitted;
+                    buf_offset  = st->submitted;
+                }
+                target_fd = fd_buf;
+            }
+
+            const size_t remaining = region_size - st->submitted;
             const size_t to_read = remaining < HMLL_URING_BUFFER_SIZE ? remaining : HMLL_URING_BUFFER_SIZE;
-            const size_t file_offset = offsets[current_idx] + st->submitted;
+
+            slot_offsets[slot] = buf_offset;
 
             hmll_io_uring_prep_sqe(
-                fetcher,
-                dsts[current_idx].device,
-                sqe,
-                (char *)dsts[current_idx].ptr + st->submitted,
-                file_offset,
-                to_read,
-                iofile,
-                slot
+                fetcher, dsts[current_idx].device, sqe,
+                (char *)dsts[current_idx].ptr + buf_offset,
+                file_offset, to_read, target_fd, slot
             );
 
             io_uring_sqe_set_data64(sqe, ((uint64_t)current_idx << SHIFT_RANGE) | slot);
@@ -389,9 +567,22 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
             st->submitted += to_read;
             n_in_flight++;
 
-            if (st->submitted >= st->size) {
-                n_active--;
-                active_indices[active_cursor] = active_indices[n_active];
+            if (st->submitted >= region_size) {
+                if (st->phase == PHASE_CORE && (st->head_size > 0 || st->tail_size > 0)) {
+                    // Core done, transition to fringe reads
+                    st->phase = PHASE_FRINGE;
+                    st->submitted = 0;
+                    st->fadvise_sent = 1;
+
+                    // Remove from active and queue for fringe
+                    n_active--;
+                    active_indices[active_cursor] = active_indices[n_active];
+                    fringe_indices[n_fringe++] = current_idx;
+                } else {
+                    // Fully done
+                    n_active--;
+                    active_indices[active_cursor] = active_indices[n_active];
+                }
             } else {
                 active_cursor++;
             }
@@ -400,7 +591,7 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
         size_t nwait = 0;
         if (n_in_flight > 0) {
             nwait = (n_in_flight < fetcher->iocca.window) ? n_in_flight : fetcher->iocca.window;
-        } else if (n_active == 0) {
+        } else if (n_active == 0 && n_fringe == 0) {
             break;
         }
 
@@ -455,6 +646,7 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
         }
     }
 
+    hmll_io_uring_sync(dsts[0].device, fetcher);
     if ((unsigned char*)states != stack_mem) free(states);
     return (ssize_t)nbytes;
 
@@ -515,11 +707,21 @@ struct hmll_error hmll_io_uring_init(struct hmll *ctx, const struct hmll_device 
         }
     }
 
-    int *iofiles = calloc(ctx->num_sources, sizeof(int));
-    for (size_t i = 0; i < ctx->num_sources; ++i)
-        iofiles[i] = ctx->sources[i].fd;
+    const size_t n_iofiles = ctx->num_sources * 2;
+    int *iofiles = calloc(n_iofiles, sizeof(int));
+    unsigned char any_direct = 0;
+    for (size_t i = 0; i < ctx->num_sources; ++i) {
+        iofiles[i * 2] = ctx->sources[i].b_fd;
+        if (ctx->sources[i].d_fd > 0) {
+            iofiles[i * 2 + 1] = ctx->sources[i].d_fd;
+            any_direct = 1;
+        } else {
+            iofiles[i * 2 + 1] = ctx->sources[i].b_fd;
+        }
+    }
+    backend->has_direct = any_direct;
 
-    const int res = io_uring_register_files(&backend->ioring, iofiles, ctx->num_sources);
+    const int res = io_uring_register_files(&backend->ioring, iofiles, (unsigned)n_iofiles);
     free(iofiles);
 
     if (res != 0) {

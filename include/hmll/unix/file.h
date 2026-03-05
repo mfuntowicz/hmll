@@ -5,7 +5,8 @@
 #include <unistd.h>
 
 struct hmll_source {
-    int fd;
+    int b_fd;
+    int d_fd;
     size_t size;
     const unsigned char *content;
 };
@@ -14,7 +15,7 @@ typedef struct hmll_source hmll_source_t;
 // Duplicate the fd and return a FILE* that can be safely closed
 // without affecting the original fd in hmll_source
 static FILE *hmll_get_file_from_fd(const hmll_source_t source) {
-    int dup_fd = dup(source.fd);
+    int dup_fd = dup(source.b_fd);
     if (dup_fd == -1) {
         return NULL;
     }

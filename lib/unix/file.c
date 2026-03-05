@@ -10,6 +10,7 @@
 struct hmll_error hmll_source_open(const char *path, struct hmll_source *src)
 {
     struct hmll_error error = HMLL_OK;
+    src->d_fd = -1;
 
     int fd;
     if ((fd = open(path, O_RDONLY)) == -1) {
@@ -18,7 +19,6 @@ struct hmll_error hmll_source_open(const char *path, struct hmll_source *src)
     }
 
 #if defined(__APPLE__)
-    // Disable file caching on macOS (similar to O_DIRECT on Linux)
     fcntl(fd, F_NOCACHE, 1);
 #endif
 
@@ -39,9 +39,13 @@ struct hmll_error hmll_source_open(const char *path, struct hmll_source *src)
         goto close_fd_then_exit;
     }
 
-    src->fd = fd;
+    src->b_fd = fd;
     src->size = sb.st_size;
     src->content = content;
+
+#if defined(__linux__)
+    src->d_fd = open(path, O_RDONLY | O_DIRECT);
+#endif
 
     return HMLL_OK;
 
@@ -55,9 +59,15 @@ exit:
 
 void hmll_source_close(struct hmll_source *src)
 {
-    if (src && src->fd > 0) {
-        close(src->fd);
-        src->fd = -1;  // Mark as closed
+    if (src) {
+        if (src->b_fd > 0) {
+            close(src->b_fd);
+            src->b_fd = -1;
+        }
+        if (src->d_fd > 0) {
+            close(src->d_fd);
+            src->d_fd = -1;
+        }
     }
 }
 

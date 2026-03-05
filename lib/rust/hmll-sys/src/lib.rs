@@ -169,12 +169,14 @@ mod tests {
     #[test]
     fn test_source_size() {
         let source = hmll_source {
-            fd: -1,
+            b_fd: -1,
+            d_fd: -1,
             size: 1024,
             content: std::ptr::null(),
         };
         assert_eq!(source.size, 1024);
-        assert_eq!(source.fd, -1);
+        assert_eq!(source.b_fd, -1);
+        assert_eq!(source.d_fd, -1);
         assert!(source.content.is_null());
     }
 
