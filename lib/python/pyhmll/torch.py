@@ -71,8 +71,8 @@ def device_to_hmll(device: torch.device) -> Device:
     """
     match device.type:
         case "cuda":
-            return Device.CUDA
+            return Device.cuda(device.index)
         case "cpu":
-            return Device.CPU
+            return Device.cpu()
         case _:
             raise ValueError(f"Unsupported device for pyhmll: {device!r}")

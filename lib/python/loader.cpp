@@ -1,12 +1,15 @@
 #include "loader.hpp"
 #include <hmll/hmll.h>
+#include <fmt/format.h>
+#include <fmt/compile.h>
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 
-#include "formatters.hpp"
-#include "ndarray.hpp"
-#include "fmt/compile.h"
+
 #include "hmll/memory.h"
+#include "formatters.hpp"
+
+#include "ndarray.hpp"
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -146,52 +149,6 @@ size_t WeightLoader::fetchv(const int iofile, const std::vector<std::tuple<size_
 
 void init_loader(nb::module_& m)
 {
-    nb::class_<hmll_device_t>(m, "Device", R"pbdoc(Define all the targetable devices)pbdoc")
-    .def_static("cpu", &hmll_device_cpu, "Create CPU device")
-    .def_static("cuda", &hmll_device_cuda, "idx"_a = 0, "Create CUDA device with index")
-    .def_prop_ro("kind", [](const hmll_device_t& d) { return d.kind; })
-    .def_prop_ro("idx", [](const hmll_device_t& d) { return d.idx; })
-    .def_prop_ro("is_cpu", [](const hmll_device_t& d) { return hmll_device_is_cpu(d); })
-    .def_prop_ro("is_cuda", [](const hmll_device_t& d) { return hmll_device_is_cuda(d); })
-    .def("__eq__", [](const hmll_device_t& a, const hmll_device_t& b) { return hmll_device_eq(a, b); })
-    .def("__repr__", [](const hmll_device_t& d) { return hmll_device_is_cpu(d) ? "Device.cpu()" : fmt::format("Device.cuda({})", d.idx); });
-
-    nb::enum_<hmll_device_kind_t>(m, "DeviceKind", R"pbdoc(Define all the targetable devices)pbdoc")
-    .value("CPU", HMLL_DEVICE_CPU)
-    .value("CUDA", HMLL_DEVICE_CUDA);
-
-    nb::enum_<hmll_fetcher_kind_t>(m, "Backend", R"pbdoc(Define the I/O backend to use)pbdoc")
-    .value("AUTO", HMLL_FETCHER_AUTO, "Automatically select backend (defaults to MMAP)")
-#ifdef __HMLL_IO_URING_ENABLED__
-    .value("IO_URING", HMLL_FETCHER_IO_URING, "Use io_uring for async I/O (Linux only)")
-#endif
-    .value("MMAP", HMLL_FETCHER_MMAP, "Use memory-mapped I/O");
-
-    nb::enum_<hmll_dtype_t>(m, "dtype", R"pbdoc(Define all the targetable element type in a tensor)pbdoc")
-    .value("BOOL", HMLL_DTYPE_BOOL)
-    .value("BFLOAT16", HMLL_DTYPE_BFLOAT16)
-    .value("COMPLEX", HMLL_DTYPE_COMPLEX)
-    .value("FLOAT4", HMLL_DTYPE_FLOAT4)
-    .value("FLOAT6_E2M3", HMLL_DTYPE_FLOAT6_E2M3)
-    .value("FLOAT6_E3M2", HMLL_DTYPE_FLOAT6_E3M2)
-    .value("FLOAT8_E5M2", HMLL_DTYPE_FLOAT8_E5M2)
-    .value("FLOAT8_E4M3", HMLL_DTYPE_FLOAT8_E4M3)
-    .value("FLOAT8_E8M0", HMLL_DTYPE_FLOAT8_E8M0)
-    .value("FLOAT16", HMLL_DTYPE_FLOAT16)
-    .value("FLOAT32", HMLL_DTYPE_FLOAT32)
-    .value("FLOAT64", HMLL_DTYPE_FLOAT64)
-    .value("SIGNED_INT4", HMLL_DTYPE_SIGNED_INT4)
-    .value("SIGNED_INT8", HMLL_DTYPE_SIGNED_INT8)
-    .value("SIGNED_INT16", HMLL_DTYPE_SIGNED_INT16)
-    .value("SIGNED_INT32", HMLL_DTYPE_SIGNED_INT32)
-    .value("SIGNED_INT64", HMLL_DTYPE_SIGNED_INT64)
-    .value("UNSIGNED_INT4", HMLL_DTYPE_UNSIGNED_INT4)
-    .value("UNSIGNED_INT8", HMLL_DTYPE_UNSIGNED_INT8)
-    .value("UNSIGNED_INT16", HMLL_DTYPE_UNSIGNED_INT16)
-    .value("UNSIGNED_INT32", HMLL_DTYPE_UNSIGNED_INT32)
-    .value("UNSIGNED_INT64", HMLL_DTYPE_UNSIGNED_INT64)
-    .value("UNKNOWN", HMLL_DTYPE_UNKNOWN);
-
     nb::class_<WeightLoader>(m, "WeightLoader", R"pbdoc("Opaque type representing an allocated fetcher backend)pbdoc")
     .def(nb::new_(&WeightLoader::from_paths), "paths"_a.sig("list[str]"), "device"_a.sig("Device"))
     .def_prop_ro("device", &WeightLoader::device)
@@ -201,6 +158,6 @@ void init_loader(nb::module_& m)
     .def("fetchv", &WeightLoader::fetchv, "iofile"_a.sig("int"), "ranges"_a.sig("list[tuple[int, int]]"), "dst"_a.sig("int"))
     .def("__repr__", [](const WeightLoader& self)
     {
-        return fmt::format(FMT_COMPILE("WeightLoader(kind={}, device={}})"), self.kind(), self.device());
+        return fmt::format(FMT_COMPILE("WeightLoader(kind={}, device={})"), self.kind(), self.device());
     });
 }
