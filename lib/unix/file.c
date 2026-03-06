@@ -43,6 +43,15 @@ struct hmll_error hmll_source_open(const char *path, struct hmll_source *src)
     src->size = sb.st_size;
     src->content = content;
 
+#if defined(__linux__)
+    src->d_fd = open(path, O_RDONLY | O_DIRECT);
+    /* non-fatal: fall back to buffered-only if O_DIRECT unsupported (e.g. tmpfs) */
+    if (src->d_fd == -1)
+        src->d_fd = -1;
+#else
+    src->d_fd = -1;
+#endif
+
     return HMLL_OK;
 
 close_fd_then_exit:
@@ -57,7 +66,11 @@ void hmll_source_close(struct hmll_source *src)
 {
     if (src && src->fd > 0) {
         close(src->fd);
-        src->fd = -1;  // Mark as closed
+        src->fd = -1;
+    }
+    if (src && src->d_fd > 0) {
+        close(src->d_fd);
+        src->d_fd = -1;
     }
 }
 

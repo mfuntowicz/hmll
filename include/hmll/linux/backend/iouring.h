@@ -119,6 +119,18 @@ static inline void hmll_io_uring_slot_set_available(struct hmll_iouring_iobusy *
     iobusy->bits[slot >> 6] &= ~(1ULL << (slot & 63));
 }
 
+/**
+ * Map a user-visible source index to the io_uring registered-file index
+ * for the buffered (page-cache) fd.  Layout: [b0, d0, b1, d1, ...].
+ */
+static inline int hmll_io_uring_bfd(int source_idx) { return source_idx * 2; }
+
+/**
+ * Map a user-visible source index to the io_uring registered-file index
+ * for the O_DIRECT fd.
+ */
+static inline int hmll_io_uring_dfd(int source_idx) { return source_idx * 2 + 1; }
+
 struct hmll_error hmll_io_uring_init(struct hmll *, struct hmll_device);
 void hmll_io_uring_destroy(void *backend);
 #endif // HMLL_FETCHER_IOURING_H

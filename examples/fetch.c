@@ -29,7 +29,7 @@ int main(const int argc, const char** argv)
             status = 3;
             goto exit;
         }
-        printf("\t- %s -> %zu bytes (fd: %u)\n", argv[i + 1], src[i].size, src[i].fd);
+        printf("\t- %s -> %zu bytes (b_fd: %d, d_fd: %d)\n", argv[i + 1], src[i].size, src[i].fd, src[i].d_fd);
     }
 
     err = hmll_loader_init(&ctx, src, argc - 1, hmll_device_cuda(0), HMLL_FETCHER_AUTO);

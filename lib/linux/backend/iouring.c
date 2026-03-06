@@ -104,7 +104,7 @@ static inline void hmll_io_uring_prep_sqe(
     void *dst,
     const size_t offset,
     const size_t len,
-    const unsigned short iofile,
+    const int iofile,
     const int slot
 ) {
     if (hmll_device_is_cpu(device)) {
@@ -174,14 +174,18 @@ static inline void hmll_io_uring_handle_completion(
 #endif
 }
 
-static ssize_t hmll_io_uring_fetch_impl(
+/**
+ * Generic fetch loop for a single buffer.  When @p fadvise is non-zero an
+ * initial POSIX_FADV_WILLNEED is queued; suppress it (pass 0) when the caller
+ * has already arranged readahead or when using an O_DIRECT fd.
+ */
+static ssize_t hmll_io_uring_fetch_loop(
     struct hmll *ctx,
-    const int iofile,
+    const int iofd,
     const struct hmll_iobuf *dst,
-    const size_t offset
+    const size_t offset,
+    const int fadvise
 ) {
-    if (hmll_check(ctx->error)) return -1;
-
     struct hmll_io_uring *fetcher = ctx->fetcher->backend_impl_;
 
     size_t n_dma = 0;
@@ -191,10 +195,12 @@ static ssize_t hmll_io_uring_fetch_impl(
 
     struct io_uring_sqe *sqe = NULL;
     int slot;
-    if ((sqe = io_uring_get_sqe(&fetcher->ioring))) {
-        io_uring_prep_fadvise(sqe, iofile, offset, dst->size, POSIX_FADV_WILLNEED);
-        io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
-        io_uring_sqe_set_data64(sqe, HMLL_IO_URING_FADVISE_TAG);
+    if (fadvise) {
+        if ((sqe = io_uring_get_sqe(&fetcher->ioring))) {
+            io_uring_prep_fadvise(sqe, iofd, offset, dst->size, POSIX_FADV_WILLNEED);
+            io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
+            io_uring_sqe_set_data64(sqe, HMLL_IO_URING_FADVISE_TAG);
+        }
     }
 
     while (b_read < dst->size) {
@@ -208,34 +214,29 @@ static ssize_t hmll_io_uring_fetch_impl(
             const size_t to_read = (remaining < HMLL_URING_BUFFER_SIZE) ? remaining : HMLL_URING_BUFFER_SIZE;
             const size_t file_offset = offset + b_submitted;
 
-            hmll_io_uring_prep_sqe(fetcher, dst->device, sqe, (char *)dst->ptr + b_submitted, file_offset, to_read, iofile, slot);
+            hmll_io_uring_prep_sqe(fetcher, dst->device, sqe, (char *)dst->ptr + b_submitted, file_offset, to_read, iofd, slot);
 
             b_submitted += to_read;
             ++n_dma;
         }
 
-        // update congestion control algorithm
         if (likely(n_dma > 0)) {
-             const size_t nwait = n_dma < fetcher->iocca.window ? n_dma : fetcher->iocca.window;
+            const size_t nwait = n_dma < fetcher->iocca.window ? n_dma : fetcher->iocca.window;
 
             struct timespec ts_start, ts_end;
             clock_gettime(CLOCK_MONOTONIC, &ts_start);
 
             if (unlikely(io_uring_submit_and_wait(&fetcher->ioring, nwait) < 0)) {
-                // todo: do we need to reset the cca? hmll_io_uring_cca_init(&fetcher->iocca)
                 ctx->error = HMLL_ERR(HMLL_ERR_IO_ERROR);
                 return -1;
             }
             clock_gettime(CLOCK_MONOTONIC, &ts_end);
-
-            // todo: approximated version of the number of bytes actually reads because it assumes full reads
             hmll_io_uring_cca_update(&fetcher->iocca, HMLL_URING_BUFFER_SIZE * nwait, ts_start, ts_end);
         }
 
         unsigned count = 0;
         while ((count = io_uring_peek_batch_cqe(&fetcher->ioring, cqes, fetcher->iocca.window)) > 0) {
             for (unsigned i = 0; i < count; i++) {
-
                 const struct io_uring_cqe *cqe = cqes[i];
                 if (unlikely(cqe->user_data == HMLL_IO_URING_FADVISE_TAG))
                     continue;
@@ -250,7 +251,6 @@ static ssize_t hmll_io_uring_fetch_impl(
                 b_read += cqe->res;
                 hmll_io_uring_handle_completion(fetcher, cqe, dst, offset, cqe->res);
             }
-
             io_uring_cq_advance(&fetcher->ioring, count);
         }
     }
@@ -259,22 +259,139 @@ static ssize_t hmll_io_uring_fetch_impl(
     return (ssize_t)b_read;
 }
 
-static ssize_t hmll_io_uring_fetchv_impl(
+#if defined(__HMLL_CUDA_ENABLED__)
+/**
+ * CUDA split-I/O fetch: O_DIRECT for the page-aligned core, buffered I/O for
+ * the unaligned head/tail.  fadvise(WILLNEED) is issued for the edge regions
+ * before reading the core, giving the kernel time to readahead.
+ */
+static ssize_t hmll_io_uring_fetch_cuda_split(
+    struct hmll *ctx,
+    const int bfd,
+    const int dfd,
+    const struct hmll_iobuf *dst,
+    const size_t offset
+) {
+    const size_t end = offset + dst->size;
+    const size_t aligned_start = ALIGN_UP(offset, ALIGN_PAGE);
+    const size_t aligned_end   = ALIGN_DOWN(end, ALIGN_PAGE);
+
+    const size_t head_size = aligned_start - offset;
+    const size_t tail_size = end - aligned_end;
+    const size_t core_size = (aligned_end > aligned_start) ? aligned_end - aligned_start : 0;
+
+    /*
+     * If the request is smaller than 2 pages there's no aligned core worth
+     * going O_DIRECT for — just fall through to the buffered path.
+     */
+    if (core_size < ALIGN_PAGE * 2)
+        return hmll_io_uring_fetch_loop(ctx, bfd, dst, offset, 1);
+
+    struct hmll_io_uring *fetcher = ctx->fetcher->backend_impl_;
+    struct io_uring_sqe *sqe;
+    ssize_t total = 0;
+
+    /* 1. fadvise(WILLNEED) on the buffered fd for head and tail edges */
+    if (head_size > 0) {
+        if ((sqe = io_uring_get_sqe(&fetcher->ioring))) {
+            io_uring_prep_fadvise(sqe, bfd, offset, head_size, POSIX_FADV_WILLNEED);
+            io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
+            io_uring_sqe_set_data64(sqe, HMLL_IO_URING_FADVISE_TAG);
+        }
+    }
+    if (tail_size > 0) {
+        if ((sqe = io_uring_get_sqe(&fetcher->ioring))) {
+            io_uring_prep_fadvise(sqe, bfd, aligned_end, tail_size, POSIX_FADV_WILLNEED);
+            io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
+            io_uring_sqe_set_data64(sqe, HMLL_IO_URING_FADVISE_TAG);
+        }
+    }
+
+    /* 2. Read aligned core via O_DIRECT fd into staging → GPU */
+    if (core_size > 0) {
+        struct hmll_iobuf core_dst = {
+            .size   = core_size,
+            .ptr    = (char *)dst->ptr + head_size,
+            .device = dst->device,
+        };
+
+        ssize_t n = hmll_io_uring_fetch_loop(ctx, dfd, &core_dst, aligned_start, 0);
+        if (n < 0) return -1;
+        total += n;
+    }
+
+    /* 3. Read head from buffered fd (fadvise already issued above) */
+    if (head_size > 0) {
+        struct hmll_iobuf head_dst = {
+            .size   = head_size,
+            .ptr    = dst->ptr,
+            .device = dst->device,
+        };
+
+        ssize_t n = hmll_io_uring_fetch_loop(ctx, bfd, &head_dst, offset, 0);
+        if (n < 0) return -1;
+        total += n;
+    }
+
+    /* 4. Read tail from buffered fd (fadvise already issued above) */
+    if (tail_size > 0) {
+        struct hmll_iobuf tail_dst = {
+            .size   = tail_size,
+            .ptr    = (char *)dst->ptr + head_size + core_size,
+            .device = dst->device,
+        };
+
+        ssize_t n = hmll_io_uring_fetch_loop(ctx, bfd, &tail_dst, aligned_end, 0);
+        if (n < 0) return -1;
+        total += n;
+    }
+
+    return total;
+}
+#endif /* __HMLL_CUDA_ENABLED__ */
+
+static ssize_t hmll_io_uring_fetch_impl(
     struct hmll *ctx,
     const int iofile,
+    const struct hmll_iobuf *dst,
+    const size_t offset
+) {
+    if (hmll_check(ctx->error)) return -1;
+
+    const int bfd = hmll_io_uring_bfd(iofile);
+
+#if defined(__HMLL_CUDA_ENABLED__)
+    if (hmll_device_is_cuda(dst->device)) {
+        const int dfd = hmll_io_uring_dfd(iofile);
+        return hmll_io_uring_fetch_cuda_split(ctx, bfd, dfd, dst, offset);
+    }
+#endif
+
+    return hmll_io_uring_fetch_loop(ctx, bfd, dst, offset, 1);
+}
+
+/**
+ * Generic fetchv loop: reads all buffers through a single registered file index.
+ * Used for the CPU path and as a building block for the CUDA split-I/O path.
+ * When @p fadvise is 0, per-buffer POSIX_FADV_WILLNEED is suppressed (useful
+ * when the caller already issued readahead or when reading via O_DIRECT).
+ */
+static ssize_t hmll_io_uring_fetchv_loop(
+    struct hmll *ctx,
+    const int iofd,
     const struct hmll_iobuf *dsts,
     const size_t *offsets,
-    const size_t n
+    const size_t n,
+    const int fadvise
 ) {
     if (hmll_check(ctx->error)) return -1;
     if (unlikely(n == 0)) return 0;
 
     struct hmll_io_uring *fetcher = ctx->fetcher->backend_impl_;
-    const int is_cuda = (dsts[0].device == HMLL_DEVICE_CUDA);
+    const int is_cuda = hmll_device_is_cuda(dsts[0].device);
 
-    /* user_data encoding for CQEs: high bit = fadvise (skip), else (bidx << 8) | slot */
     static const unsigned FETCHV_BIDX_SHIFT = 8;
-    static const uint64_t FETCHV_SLOT_MASK = HMLL_URING_QUEUE_DEPTH - 1;
+    static const uint64_t FETCHV_SLOT_MASK  = HMLL_URING_QUEUE_DEPTH - 1;
 
     struct fetchv_buf_state {
         size_t submitted;
@@ -282,7 +399,6 @@ static ssize_t hmll_io_uring_fetchv_impl(
         unsigned char fadvise_sent;
     };
 
-    /* Scratch layout: [buf_states][active_indices][slot_offsets] */
     const size_t sz_state = (sizeof(struct fetchv_buf_state) * n + _Alignof(uint32_t) - 1) & ~(_Alignof(uint32_t) - 1);
     const size_t sz_idx   = (sizeof(uint32_t) * n + _Alignof(size_t) - 1) & ~(_Alignof(size_t) - 1);
     const size_t sz_slot  = sizeof(size_t) * HMLL_URING_QUEUE_DEPTH;
@@ -311,7 +427,6 @@ static ssize_t hmll_io_uring_fetchv_impl(
         slot_offsets   = (size_t *)p;
     }
 
-    /* Build list of buffers that have bytes to read */
     size_t n_active = 0;
     for (size_t i = 0; i < n; i++) {
         buf_states[i].submitted = 0;
@@ -321,26 +436,26 @@ static ssize_t hmll_io_uring_fetchv_impl(
             active_indices[n_active++] = (uint32_t)i;
     }
 
-    const unsigned char is_cuda = hmll_device_is_cuda(dsts[0].device);
     size_t n_in_flight = 0, nbytes = 0, active_cursor = 0;
     struct io_uring_cqe *cqes[HMLL_URING_QUEUE_DEPTH];
 
     while (n_active > 0 || n_in_flight > 0) {
         hmll_io_uring_reclaim_slots(fetcher, dsts[0].device);
 
-        /* Submit: round-robin over active buffers, send fadvise then chunked reads */
         while (n_active > 0) {
             if (active_cursor >= n_active) active_cursor = 0;
             const uint32_t bidx = active_indices[active_cursor];
             struct fetchv_buf_state *st = &buf_states[bidx];
 
             if (!st->fadvise_sent) {
-                struct io_uring_sqe *sqe = io_uring_get_sqe(&fetcher->ioring);
-                if (!sqe) break;
-                io_uring_prep_fadvise(sqe, iofile, offsets[bidx], st->size, POSIX_FADV_WILLNEED);
-                io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
-                io_uring_sqe_set_data64(sqe, HMLL_IO_URING_FADVISE_TAG);
                 st->fadvise_sent = 1;
+                if (fadvise) {
+                    struct io_uring_sqe *sqe = io_uring_get_sqe(&fetcher->ioring);
+                    if (!sqe) break;
+                    io_uring_prep_fadvise(sqe, iofd, offsets[bidx], st->size, POSIX_FADV_WILLNEED);
+                    io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
+                    io_uring_sqe_set_data64(sqe, HMLL_IO_URING_FADVISE_TAG);
+                }
                 continue;
             }
 
@@ -359,11 +474,11 @@ static ssize_t hmll_io_uring_fetchv_impl(
 
 #if defined(__HMLL_CUDA_ENABLED__)
             if (is_cuda)
-                io_uring_prep_read_fixed(sqe, iofile, fetcher->iovecs[slot].iov_base, to_read, file_off, slot);
+                io_uring_prep_read_fixed(sqe, iofd, fetcher->iovecs[slot].iov_base, to_read, file_off, slot);
             else
-                io_uring_prep_read(sqe, iofile, read_dst, to_read, file_off);
+                io_uring_prep_read(sqe, iofd, read_dst, to_read, file_off);
 #else
-            io_uring_prep_read(sqe, iofile, read_dst, to_read, file_off);
+            io_uring_prep_read(sqe, iofd, read_dst, to_read, file_off);
 #endif
             io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
             io_uring_sqe_set_data64(sqe, ((uint64_t)bidx << FETCHV_BIDX_SHIFT) | (uint64_t)slot);
@@ -459,6 +574,180 @@ cleanup:
     return -1;
 }
 
+#if defined(__HMLL_CUDA_ENABLED__)
+/**
+ * CUDA split-I/O fetchv: decomposes each buffer into an aligned core (O_DIRECT)
+ * and unaligned head/tail edges (buffered).  fadvise(WILLNEED) is issued for all
+ * edge regions before core I/O begins.
+ *
+ * Layout per buffer:
+ *   [head: offset..aligned_start]  ->  buffered fd
+ *   [core: aligned_start..aligned_end] -> O_DIRECT fd
+ *   [tail: aligned_end..end]       ->  buffered fd
+ */
+static ssize_t hmll_io_uring_fetchv_cuda_split(
+    struct hmll *ctx,
+    const int bfd,
+    const int dfd,
+    const struct hmll_iobuf *dsts,
+    const size_t *offsets,
+    const size_t n
+) {
+    struct hmll_io_uring *fetcher = ctx->fetcher->backend_impl_;
+    ssize_t total = 0;
+
+    /*
+     * We decompose each buffer into up to 3 sub-requests.
+     * Phase 0: issue fadvise for all edges
+     * Phase 1: bulk-read all aligned cores via O_DIRECT
+     * Phase 2: bulk-read all edges via buffered fd
+     *
+     * VLA-safe scratch: 3 iobufs + 3 offsets per original buffer.
+     */
+    const size_t max_parts = n * 3;
+    const size_t scratch_bytes = max_parts * (sizeof(struct hmll_iobuf) + sizeof(size_t));
+
+    _Alignas(16) uint8_t stack_scratch[16384];
+    void *scratch_to_free = NULL;
+    uint8_t *scratch;
+
+    if (scratch_bytes <= sizeof(stack_scratch)) {
+        scratch = stack_scratch;
+    } else {
+        scratch = calloc(1, scratch_bytes);
+        if (!scratch) {
+            ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
+            return -1;
+        }
+        scratch_to_free = scratch;
+    }
+
+    struct hmll_iobuf *core_dsts = (struct hmll_iobuf *)scratch;
+    size_t *core_offs            = (size_t *)(scratch + max_parts * sizeof(struct hmll_iobuf));
+    struct hmll_iobuf *edge_dsts = core_dsts + n;
+    size_t *edge_offs            = core_offs + n;
+    size_t n_core = 0, n_edge = 0;
+
+    /* Phase 0: decompose each buffer; issue fadvise for edge regions */
+    for (size_t i = 0; i < n; i++) {
+        if (dsts[i].size == 0) continue;
+
+        const size_t off = offsets[i];
+        const size_t end = off + dsts[i].size;
+        const size_t a_start = ALIGN_UP(off, ALIGN_PAGE);
+        const size_t a_end   = ALIGN_DOWN(end, ALIGN_PAGE);
+
+        const size_t head_sz = a_start - off;
+        const size_t tail_sz = end - a_end;
+        const size_t core_sz = (a_end > a_start) ? a_end - a_start : 0;
+
+        /* Small buffer or no meaningful aligned core: treat entirely as edge */
+        if (core_sz < ALIGN_PAGE * 2) {
+            edge_dsts[n_edge] = dsts[i];
+            edge_offs[n_edge] = off;
+            n_edge++;
+
+            struct io_uring_sqe *sqe;
+            if ((sqe = io_uring_get_sqe(&fetcher->ioring))) {
+                io_uring_prep_fadvise(sqe, bfd, off, dsts[i].size, POSIX_FADV_WILLNEED);
+                io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
+                io_uring_sqe_set_data64(sqe, HMLL_IO_URING_FADVISE_TAG);
+            }
+            continue;
+        }
+
+        /* Aligned core */
+        core_dsts[n_core] = (struct hmll_iobuf){
+            .size   = core_sz,
+            .ptr    = (char *)dsts[i].ptr + head_sz,
+            .device = dsts[i].device,
+        };
+        core_offs[n_core] = a_start;
+        n_core++;
+
+        /* Head edge */
+        if (head_sz > 0) {
+            struct io_uring_sqe *sqe;
+            if ((sqe = io_uring_get_sqe(&fetcher->ioring))) {
+                io_uring_prep_fadvise(sqe, bfd, off, head_sz, POSIX_FADV_WILLNEED);
+                io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
+                io_uring_sqe_set_data64(sqe, HMLL_IO_URING_FADVISE_TAG);
+            }
+            edge_dsts[n_edge] = (struct hmll_iobuf){
+                .size   = head_sz,
+                .ptr    = dsts[i].ptr,
+                .device = dsts[i].device,
+            };
+            edge_offs[n_edge] = off;
+            n_edge++;
+        }
+
+        /* Tail edge */
+        if (tail_sz > 0) {
+            struct io_uring_sqe *sqe;
+            if ((sqe = io_uring_get_sqe(&fetcher->ioring))) {
+                io_uring_prep_fadvise(sqe, bfd, a_end, tail_sz, POSIX_FADV_WILLNEED);
+                io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
+                io_uring_sqe_set_data64(sqe, HMLL_IO_URING_FADVISE_TAG);
+            }
+            edge_dsts[n_edge] = (struct hmll_iobuf){
+                .size   = tail_sz,
+                .ptr    = (char *)dsts[i].ptr + head_sz + core_sz,
+                .device = dsts[i].device,
+            };
+            edge_offs[n_edge] = a_end;
+            n_edge++;
+        }
+    }
+
+    /* Flush the fadvise SQEs so the kernel starts readahead while we do the core */
+    io_uring_submit(&fetcher->ioring);
+
+    /* Phase 1: bulk-read all aligned cores via O_DIRECT fd */
+    if (n_core > 0) {
+        ssize_t r = hmll_io_uring_fetchv_loop(ctx, dfd, core_dsts, core_offs, n_core, 0);
+        if (r < 0) goto cleanup;
+        total += r;
+    }
+
+    /* Phase 2: bulk-read all edge fragments via buffered fd */
+    if (n_edge > 0) {
+        ssize_t r = hmll_io_uring_fetchv_loop(ctx, bfd, edge_dsts, edge_offs, n_edge, 0);
+        if (r < 0) goto cleanup;
+        total += r;
+    }
+
+    if (scratch_to_free) free(scratch_to_free);
+    return total;
+
+cleanup:
+    if (scratch_to_free) free(scratch_to_free);
+    return -1;
+}
+#endif /* __HMLL_CUDA_ENABLED__ */
+
+static ssize_t hmll_io_uring_fetchv_impl(
+    struct hmll *ctx,
+    const int iofile,
+    const struct hmll_iobuf *dsts,
+    const size_t *offsets,
+    const size_t n
+) {
+    if (hmll_check(ctx->error)) return -1;
+    if (unlikely(n == 0)) return 0;
+
+    const int bfd = hmll_io_uring_bfd(iofile);
+
+#if defined(__HMLL_CUDA_ENABLED__)
+    if (hmll_device_is_cuda(dsts[0].device)) {
+        const int dfd = hmll_io_uring_dfd(iofile);
+        return hmll_io_uring_fetchv_cuda_split(ctx, bfd, dfd, dsts, offsets, n);
+    }
+#endif
+
+    return hmll_io_uring_fetchv_loop(ctx, bfd, dsts, offsets, n, 1);
+}
+
 struct hmll_error hmll_io_uring_init(struct hmll *ctx, const struct hmll_device device) {
     if (hmll_check(ctx->error))
         return ctx->error;
@@ -511,11 +800,15 @@ struct hmll_error hmll_io_uring_init(struct hmll *ctx, const struct hmll_device 
         }
     }
 
-    int *iofiles = calloc(ctx->num_sources, sizeof(int));
-    for (size_t i = 0; i < ctx->num_sources; ++i)
-        iofiles[i] = ctx->sources[i].fd;
+    const size_t n_iofiles = ctx->num_sources * 2;
+    int *iofiles = calloc(n_iofiles, sizeof(int));
+    for (size_t i = 0; i < ctx->num_sources; ++i) {
+        iofiles[hmll_io_uring_bfd(i)] = ctx->sources[i].fd;
+        int dfd = ctx->sources[i].d_fd;
+        iofiles[hmll_io_uring_dfd(i)] = (dfd > 0) ? dfd : ctx->sources[i].fd;
+    }
 
-    const int res = io_uring_register_files(&backend->ioring, iofiles, ctx->num_sources);
+    const int res = io_uring_register_files(&backend->ioring, iofiles, n_iofiles);
     free(iofiles);
 
     if (res != 0) {
