@@ -259,20 +259,22 @@ static ssize_t hmll_io_uring_fetch_loop(
 ) {
     struct hmll_io_uring *fetcher = ctx->fetcher->backend_impl_;
 
-    size_t n_dma = 0;
+    size_t n_inflight = 0;
     size_t b_read = 0;
     size_t b_submitted = 0;
     struct io_uring_cqe *cqes[HMLL_URING_QUEUE_DEPTH];
 
-    struct io_uring_sqe *sqe = NULL;
-    int slot;
     if (fadvise)
         hmll_io_uring_queue_fadvise(fetcher, iofd, offset, dst->size);
 
     while (b_read < dst->size) {
         hmll_io_uring_reclaim_slots(fetcher, dst->device);
 
-        while (b_submitted < dst->size) {
+        /* ── submit: iocca window caps in-flight depth ── */
+        int submitted_this_iter = 0;
+        while (b_submitted < dst->size && n_inflight < fetcher->iocca.window) {
+            struct io_uring_sqe *sqe = NULL;
+            int slot;
             if (unlikely((slot = hmll_io_uring_get_sqe(fetcher, &sqe)) < 0))
                 break;
 
@@ -283,42 +285,49 @@ static ssize_t hmll_io_uring_fetch_loop(
             hmll_io_uring_prep_sqe(fetcher, dst->device, sqe, (char *)dst->ptr + b_submitted, file_offset, to_read, iofd, slot);
 
             b_submitted += to_read;
-            ++n_dma;
+            n_inflight++;
+            submitted_this_iter++;
         }
 
-        if (likely(n_dma > 0)) {
-            const size_t nwait = n_dma < fetcher->iocca.window ? n_dma : fetcher->iocca.window;
-
+        if (submitted_this_iter > 0) {
             struct timespec ts_start, ts_end;
             clock_gettime(CLOCK_MONOTONIC, &ts_start);
+            io_uring_submit(&fetcher->ioring);
+            clock_gettime(CLOCK_MONOTONIC, &ts_end);
+            hmll_io_uring_cca_update(&fetcher->iocca,
+                                     HMLL_URING_BUFFER_SIZE * submitted_this_iter,
+                                     ts_start, ts_end);
+        }
 
-            if (unlikely(io_uring_submit_and_wait(&fetcher->ioring, nwait) < 0)) {
+        /* ── complete: non-blocking peek first, block only when pipeline full ── */
+        unsigned count = io_uring_peek_batch_cqe(&fetcher->ioring, cqes,
+                                                  HMLL_URING_QUEUE_DEPTH);
+        if (count == 0 && n_inflight >= fetcher->iocca.window) {
+            struct io_uring_cqe *cqe;
+            if (unlikely(io_uring_wait_cqe(&fetcher->ioring, &cqe) < 0)) {
                 ctx->error = HMLL_ERR(HMLL_ERR_IO_ERROR);
                 return -1;
             }
-            clock_gettime(CLOCK_MONOTONIC, &ts_end);
-            hmll_io_uring_cca_update(&fetcher->iocca, HMLL_URING_BUFFER_SIZE * nwait, ts_start, ts_end);
+            cqes[0] = cqe;
+            count = 1;
         }
 
-        unsigned count = 0;
-        while ((count = io_uring_peek_batch_cqe(&fetcher->ioring, cqes, fetcher->iocca.window)) > 0) {
-            for (unsigned i = 0; i < count; i++) {
-                const struct io_uring_cqe *cqe = cqes[i];
-                if (unlikely(cqe->user_data == HMLL_IO_URING_FADVISE_TAG))
-                    continue;
+        for (unsigned i = 0; i < count; i++) {
+            const struct io_uring_cqe *cqe = cqes[i];
+            if (unlikely(cqe->user_data == HMLL_IO_URING_FADVISE_TAG))
+                continue;
 
-                --n_dma;
-                if (unlikely(cqe->res < 0)) {
-                    ctx->error = HMLL_SYS_ERR(-cqe->res);
-                    io_uring_cq_advance(&fetcher->ioring, count);
-                    return -1;
-                }
-
-                b_read += cqe->res;
-                hmll_io_uring_handle_completion(fetcher, cqe, dst, offset, cqe->res);
+            if (unlikely(cqe->res < 0)) {
+                ctx->error = HMLL_SYS_ERR(-cqe->res);
+                io_uring_cq_advance(&fetcher->ioring, count);
+                return -1;
             }
-            io_uring_cq_advance(&fetcher->ioring, count);
+
+            b_read += cqe->res;
+            n_inflight--;
+            hmll_io_uring_handle_completion(fetcher, cqe, dst, offset, cqe->res);
         }
+        io_uring_cq_advance(&fetcher->ioring, count);
     }
 
     hmll_io_uring_sync(dst->device, fetcher);
@@ -514,8 +523,9 @@ static ssize_t hmll_io_uring_fetchv_loop(
     while (n_active > 0 || n_in_flight > 0) {
         hmll_io_uring_reclaim_slots(fetcher, dsts[0].device);
 
-        /* ── submit round-robin over active buffers ── */
-        while (n_active > 0) {
+        /* ── submit: iocca window caps in-flight depth, round-robin across buffers ── */
+        int submitted_this_iter = 0;
+        while (n_active > 0 && n_in_flight < fetcher->iocca.window) {
             if (active_cursor >= n_active) active_cursor = 0;
             const uint32_t bidx = active_indices[active_cursor];
             struct fetchv_buf_state *st = &buf_states[bidx];
@@ -552,6 +562,7 @@ static ssize_t hmll_io_uring_fetchv_loop(
 
             st->submitted += to_read;
             n_in_flight++;
+            submitted_this_iter++;
 
             if (st->submitted >= st->size) {
                 active_indices[active_cursor] = active_indices[--n_active];
@@ -560,42 +571,51 @@ static ssize_t hmll_io_uring_fetchv_loop(
             }
         }
 
-        /* ── nothing in flight but buffers remain: flush + relieve pressure ── */
-        if (n_in_flight == 0) {
-            if (n_active == 0) break;
-            io_uring_submit(&fetcher->ioring);
-            if (is_cuda)
-                hmll_io_uring_cuda_relieve_pressure(fetcher);
+        /* ── nothing in flight but buffers remain: relieve CUDA pressure ── */
+        if (n_in_flight == 0 && n_active > 0) {
+            if (submitted_this_iter == 0) {
+                io_uring_submit(&fetcher->ioring);
+                if (is_cuda)
+                    hmll_io_uring_cuda_relieve_pressure(fetcher);
+            }
             continue;
         }
 
-        /* ── submit & wait ── */
-        const size_t nwait = n_in_flight < fetcher->iocca.window ? n_in_flight : fetcher->iocca.window;
-        struct timespec ts_start, ts_end;
-        clock_gettime(CLOCK_MONOTONIC, &ts_start);
-        if (io_uring_submit_and_wait(&fetcher->ioring, nwait) < 0) {
-            ctx->error = HMLL_ERR(HMLL_ERR_IO_ERROR);
-            goto cleanup;
+        if (submitted_this_iter > 0) {
+            struct timespec ts_start, ts_end;
+            clock_gettime(CLOCK_MONOTONIC, &ts_start);
+            io_uring_submit(&fetcher->ioring);
+            clock_gettime(CLOCK_MONOTONIC, &ts_end);
+            hmll_io_uring_cca_update(&fetcher->iocca,
+                                     HMLL_URING_BUFFER_SIZE * submitted_this_iter,
+                                     ts_start, ts_end);
         }
-        clock_gettime(CLOCK_MONOTONIC, &ts_end);
-        hmll_io_uring_cca_update(&fetcher->iocca, HMLL_URING_BUFFER_SIZE * nwait, ts_start, ts_end);
 
-        /* ── drain CQEs ── */
-        unsigned count;
-        while ((count = io_uring_peek_batch_cqe(&fetcher->ioring, cqes, fetcher->iocca.window)) > 0) {
-            for (unsigned i = 0; i < count; i++) {
-                if (cqes[i]->user_data == HMLL_IO_URING_FADVISE_TAG) continue;
-
-                n_in_flight--;
-                ssize_t r = hmll_io_uring_fetchv_handle_cqe(ctx, fetcher, cqes[i], dsts, slot_offsets, is_cuda);
-                if (r < 0) {
-                    io_uring_cq_advance(&fetcher->ioring, count);
-                    goto cleanup;
-                }
-                nbytes += (size_t)r;
+        /* ── complete: non-blocking peek first, block only when pipeline full ── */
+        unsigned count = io_uring_peek_batch_cqe(&fetcher->ioring, cqes,
+                                                  HMLL_URING_QUEUE_DEPTH);
+        if (count == 0 && n_in_flight >= fetcher->iocca.window) {
+            struct io_uring_cqe *cqe;
+            if (unlikely(io_uring_wait_cqe(&fetcher->ioring, &cqe) < 0)) {
+                ctx->error = HMLL_ERR(HMLL_ERR_IO_ERROR);
+                goto cleanup;
             }
-            io_uring_cq_advance(&fetcher->ioring, count);
+            cqes[0] = cqe;
+            count = 1;
         }
+
+        for (unsigned i = 0; i < count; i++) {
+            if (cqes[i]->user_data == HMLL_IO_URING_FADVISE_TAG) continue;
+
+            n_in_flight--;
+            ssize_t r = hmll_io_uring_fetchv_handle_cqe(ctx, fetcher, cqes[i], dsts, slot_offsets, is_cuda);
+            if (r < 0) {
+                io_uring_cq_advance(&fetcher->ioring, count);
+                goto cleanup;
+            }
+            nbytes += (size_t)r;
+        }
+        io_uring_cq_advance(&fetcher->ioring, count);
     }
 
     hmll_io_uring_sync(dsts[0].device, fetcher);
