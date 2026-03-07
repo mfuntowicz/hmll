@@ -287,9 +287,15 @@ static ssize_t hmll_io_uring_fetch_loop(
             n_inflight++;
         }
 
+        io_uring_submit(&fetcher->ioring);
+
+        /* if slots are exhausted by CUDA memcpy, relieve pressure before blocking */
+        if (b_submitted < dst->size)
+            hmll_io_uring_cuda_relieve_pressure(fetcher);
+
         /* ── complete: non-blocking peek first, block only when pipeline full ── */
         unsigned count = io_uring_peek_batch_cqe(&fetcher->ioring, cqes, HMLL_URING_QUEUE_DEPTH);
-        if (count == 0 && n_inflight >= HMLL_URING_QUEUE_DEPTH) {
+        if (count == 0 && n_inflight > 0) {
             struct io_uring_cqe *cqe;
             if (unlikely(io_uring_wait_cqe(&fetcher->ioring, &cqe) < 0)) {
                 ctx->error = HMLL_ERR(HMLL_ERR_IO_ERROR);
