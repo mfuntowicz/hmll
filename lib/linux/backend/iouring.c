@@ -577,7 +577,7 @@ static ssize_t hmll_io_uring_fetchv_loop(
             if (is_cuda) hmll_io_uring_cuda_relieve_pressure(fetcher);
         }
 
-        /* ── complete: non-blocking peek first, block only when pipeline full ── */
+        /* ── complete: non-blocking peek first, block only when the pipeline full ── */
         unsigned count = io_uring_peek_batch_cqe(&fetcher->ioring, cqes, HMLL_URING_QUEUE_DEPTH);
         if (count == 0 && n_in_flight > 0) {
             struct io_uring_cqe *cqe;

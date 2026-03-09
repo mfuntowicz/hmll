@@ -77,7 +77,7 @@ TEST_CASE("fetchv - single-element fetchv (n=1)", "[fetchv][safetensors]") {
 
     for (const auto& [name, backend] : kBackends) {
         INFO("Backend: " << name);
-        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, backend)));
+        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), backend)));
 
         const auto* tensor_name = "float32.vec16";
         hmll_lookup_result_t lookup = hmll_lookup_tensor(&ctx, &registry, tensor_name);
@@ -85,7 +85,7 @@ TEST_CASE("fetchv - single-element fetchv (n=1)", "[fetchv][safetensors]") {
         REQUIRE(lookup.specs != nullptr);
 
         hmll_range_t range = {lookup.specs->start, lookup.specs->end};
-        hmll_iobuf_t buffer = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
+        hmll_iobuf_t buffer = hmll_get_buffer_for_range(&ctx, range);
         REQUIRE_FALSE(hmll_check(ctx.error));
 
         size_t offsets[1] = {range.start};
@@ -114,7 +114,7 @@ TEST_CASE("fetchv - multi-element same dtype", "[fetchv][safetensors]") {
 
     for (const auto& [name, backend] : kBackends) {
         INFO("Backend: " << name);
-        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, backend)));
+        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), backend)));
 
         const char* names[] = {"float32.vec16", "float32.vec1024", "float32.vec8192", "float32.scalar"};
         hmll_iobuf_t dsts[4];
@@ -124,7 +124,7 @@ TEST_CASE("fetchv - multi-element same dtype", "[fetchv][safetensors]") {
             hmll_lookup_result_t lookup = hmll_lookup_tensor(&ctx, &registry, names[i]);
             REQUIRE(lookup.specs != nullptr);
             hmll_range_t range = {lookup.specs->start, lookup.specs->end};
-            dsts[i] = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
+            dsts[i] = hmll_get_buffer_for_range(&ctx, range);
             REQUIRE_FALSE(hmll_check(ctx.error));
             offsets[i] = range.start;
             total += dsts[i].size;
@@ -157,7 +157,7 @@ TEST_CASE("fetchv - multi-element mixed dtypes", "[fetchv][safetensors]") {
 
     for (const auto& [name, backend] : kBackends) {
         INFO("Backend: " << name);
-        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, backend)));
+        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), backend)));
 
         hmll_lookup_result_t l_f32 = hmll_lookup_tensor(&ctx, &registry, "float32.vec16");
         hmll_lookup_result_t l_i32 = hmll_lookup_tensor(&ctx, &registry, "int32.vec16");
@@ -165,9 +165,9 @@ TEST_CASE("fetchv - multi-element mixed dtypes", "[fetchv][safetensors]") {
         REQUIRE((l_f32.specs && l_i32.specs && l_u8.specs));
 
         hmll_iobuf_t dsts[3] = {
-            hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, {l_f32.specs->start, l_f32.specs->end}),
-            hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, {l_i32.specs->start, l_i32.specs->end}),
-            hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, {l_u8.specs->start, l_u8.specs->end}),
+            hmll_get_buffer_for_range(&ctx, {l_f32.specs->start, l_f32.specs->end}),
+            hmll_get_buffer_for_range(&ctx, {l_i32.specs->start, l_i32.specs->end}),
+            hmll_get_buffer_for_range(&ctx, {l_u8.specs->start, l_u8.specs->end}),
         };
         size_t offsets[3] = {l_f32.specs->start, l_i32.specs->start, l_u8.specs->start};
         REQUIRE_FALSE(hmll_check(ctx.error));
@@ -198,7 +198,7 @@ TEST_CASE("fetchv - scattered reads within single tensor", "[fetchv][safetensors
 
     for (const auto& [name, backend] : kBackends) {
         INFO("Backend: " << name);
-        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, backend)));
+        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), backend)));
 
         hmll_lookup_result_t lookup = hmll_lookup_tensor(&ctx, &registry, "float32.vec8192");
         REQUIRE(lookup.specs != nullptr);
@@ -216,7 +216,7 @@ TEST_CASE("fetchv - scattered reads within single tensor", "[fetchv][safetensors
         for (int i = 0; i < 3; ++i) {
             size_t len = ranges[i].numel * elem_size;
             hmll_range_t r = {base + ranges[i].start_off, base + ranges[i].start_off + len};
-            dsts[i] = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, r);
+            dsts[i] = hmll_get_buffer_for_range(&ctx, r);
             offsets[i] = r.start;
         }
 
@@ -245,13 +245,13 @@ TEST_CASE("fetchv - full tensor via fetchv matches hmll_fetch", "[fetchv][safete
 
     for (const auto& [name, backend] : kBackends) {
         INFO("Backend: " << name);
-        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, backend)));
+        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), backend)));
 
         hmll_lookup_result_t lookup = hmll_lookup_tensor(&ctx, &registry, "float32.vec1024");
         REQUIRE(lookup.specs != nullptr);
         hmll_range_t range = {lookup.specs->start, lookup.specs->end};
-        hmll_iobuf_t buf_fetch = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
-        hmll_iobuf_t buf_fetchv = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
+        hmll_iobuf_t buf_fetch = hmll_get_buffer_for_range(&ctx, range);
+        hmll_iobuf_t buf_fetchv = hmll_get_buffer_for_range(&ctx, range);
         REQUIRE_FALSE(hmll_check(ctx.error));
 
         ssize_t r1 = hmll_fetch(&ctx, lookup.file, &buf_fetch, range.start);
@@ -281,7 +281,7 @@ TEST_CASE("fetchv - n=0 returns 0", "[fetchv][safetensors]") {
     REQUIRE_FALSE(hmll_check(hmll_source_open(fpath, &src)));
     hmll_registry_t registry = {};
     REQUIRE(hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) > 0);
-    REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, kBackends[0].second)));
+    REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), kBackends[0].second)));
 
     ssize_t ret = hmll_fetchv(&ctx, 0, nullptr, nullptr, 0);
     REQUIRE(ret == 0);
@@ -304,7 +304,7 @@ TEST_CASE("fetchv - scalar tensors", "[fetchv][safetensors]") {
 
     for (const auto& [name, backend] : kBackends) {
         INFO("Backend: " << name);
-        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, backend)));
+        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), backend)));
 
         hmll_lookup_result_t l0 = hmll_lookup_tensor(&ctx, &registry, "float32.scalar");
         hmll_lookup_result_t l1 = hmll_lookup_tensor(&ctx, &registry, "int32.scalar");
@@ -312,9 +312,9 @@ TEST_CASE("fetchv - scalar tensors", "[fetchv][safetensors]") {
         REQUIRE((l0.specs && l1.specs && l2.specs));
 
         hmll_iobuf_t dsts[3] = {
-            hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, {l0.specs->start, l0.specs->end}),
-            hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, {l1.specs->start, l1.specs->end}),
-            hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, {l2.specs->start, l2.specs->end}),
+            hmll_get_buffer_for_range(&ctx, {l0.specs->start, l0.specs->end}),
+            hmll_get_buffer_for_range(&ctx, {l1.specs->start, l1.specs->end}),
+            hmll_get_buffer_for_range(&ctx, {l2.specs->start, l2.specs->end}),
         };
         size_t offsets[3] = {l0.specs->start, l1.specs->start, l2.specs->start};
 
@@ -344,12 +344,12 @@ TEST_CASE("fetchv - large tensor exceeds io_uring buffer", "[fetchv][safetensors
 
     for (const auto& [name, backend] : kBackends) {
         INFO("Backend: " << name);
-        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, backend)));
+        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), backend)));
 
         hmll_lookup_result_t lookup = hmll_lookup_tensor(&ctx, &registry, "float32.large");
         REQUIRE(lookup.specs != nullptr);
         hmll_range_t range = {lookup.specs->start, lookup.specs->end};
-        hmll_iobuf_t buffer = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
+        hmll_iobuf_t buffer = hmll_get_buffer_for_range(&ctx, range);
         REQUIRE_FALSE(hmll_check(ctx.error));
         REQUIRE(buffer.size > 512 * 1024u); // > HMLL_URING_BUFFER_SIZE
 
@@ -380,7 +380,7 @@ TEST_CASE("fetchv - many concurrent ranges", "[fetchv][safetensors]") {
 
     for (const auto& [name, backend] : kBackends) {
         INFO("Backend: " << name);
-        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, backend)));
+        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), backend)));
 
         const size_t N = 40;
         std::vector<hmll_lookup_result_t> lookups(N);
@@ -390,7 +390,7 @@ TEST_CASE("fetchv - many concurrent ranges", "[fetchv][safetensors]") {
             lookups[i] = hmll_lookup_tensor(&ctx, &registry, "float32.vec16");
             REQUIRE(lookups[i].specs != nullptr);
             hmll_range_t range = {lookups[i].specs->start, lookups[i].specs->end};
-            dsts[i] = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
+            dsts[i] = hmll_get_buffer_for_range(&ctx, range);
             offsets[i] = range.start;
         }
 
@@ -416,7 +416,7 @@ TEST_CASE("fetchv - return value equals sum of dst sizes", "[fetchv][safetensors
     REQUIRE_FALSE(hmll_check(hmll_source_open(fpath, &src)));
     hmll_registry_t registry = {};
     REQUIRE(hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) > 0);
-    REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, kBackends[0].second)));
+    REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), kBackends[0].second)));
 
     const char* names[] = {"float32.vec16", "int32.vec16", "float32.scalar"};
     hmll_iobuf_t dsts[3];
@@ -426,7 +426,7 @@ TEST_CASE("fetchv - return value equals sum of dst sizes", "[fetchv][safetensors
         hmll_lookup_result_t l = hmll_lookup_tensor(&ctx, &registry, names[i]);
         REQUIRE(l.specs != nullptr);
         hmll_range_t r = {l.specs->start, l.specs->end};
-        dsts[i] = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, r);
+        dsts[i] = hmll_get_buffer_for_range(&ctx, r);
         offsets[i] = r.start;
         expected_total += dsts[i].size;
     }
@@ -449,13 +449,13 @@ TEST_CASE("fetchv - overlapping logical range same data", "[fetchv][safetensors]
     REQUIRE_FALSE(hmll_check(hmll_source_open(fpath, &src)));
     hmll_registry_t registry = {};
     REQUIRE(hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) > 0);
-    REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, kBackends[0].second)));
+    REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), kBackends[0].second)));
 
     hmll_lookup_result_t lookup = hmll_lookup_tensor(&ctx, &registry, "float32.vec16");
     REQUIRE(lookup.specs != nullptr);
     hmll_range_t range = {lookup.specs->start, lookup.specs->end};
-    hmll_iobuf_t buf1 = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
-    hmll_iobuf_t buf2 = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, range);
+    hmll_iobuf_t buf1 = hmll_get_buffer_for_range(&ctx, range);
+    hmll_iobuf_t buf2 = hmll_get_buffer_for_range(&ctx, range);
     size_t offsets[2] = {range.start, range.start};
     hmll_iobuf_t dsts[2] = {buf1, buf2};
     ssize_t ret = hmll_fetchv(&ctx, lookup.file, dsts, offsets, 2);
@@ -519,11 +519,11 @@ TEST_CASE("fetchv - sharded fetchv across files", "[fetchv][safetensors][sharded
         REQUIRE(n > 0);
         offset += n;
     }
-    REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, sources.data(), num_files, HMLL_DEVICE_CPU, kBackends[0].second)));
+    REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, sources.data(), num_files, hmll_device_cpu(), kBackends[0].second)));
 
     for (const auto& [name, backend] : kBackends) {
         hmll_destroy(&ctx);
-        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, sources.data(), num_files, HMLL_DEVICE_CPU, backend)));
+        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, sources.data(), num_files, hmll_device_cpu(), backend)));
 
         hmll_lookup_result_t l0 = hmll_lookup_tensor(&ctx, &registry, "float32.shard0.vec16");
         hmll_lookup_result_t l1 = hmll_lookup_tensor(&ctx, &registry, "int32.shard1.vec16");
@@ -536,9 +536,9 @@ TEST_CASE("fetchv - sharded fetchv across files", "[fetchv][safetensors][sharded
         REQUIRE(l2.file == 2);
 
         hmll_iobuf_t dsts[3] = {
-            hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, {l0.specs->start, l0.specs->end}),
-            hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, {l1.specs->start, l1.specs->end}),
-            hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, {l2.specs->start, l2.specs->end}),
+            hmll_get_buffer_for_range(&ctx, {l0.specs->start, l0.specs->end}),
+            hmll_get_buffer_for_range(&ctx, {l1.specs->start, l1.specs->end}),
+            hmll_get_buffer_for_range(&ctx, {l2.specs->start, l2.specs->end}),
         };
         size_t offsets[3] = {l0.specs->start, l1.specs->start, l2.specs->start};
         int iofiles[3] = {l0.file, l1.file, l2.file};
@@ -574,7 +574,7 @@ TEST_CASE("fetchv - fetchv matches fetch for several tensors", "[fetchv][safeten
 
     for (const auto& [name, backend] : kBackends) {
         INFO("Backend: " << name);
-        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, backend)));
+        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), backend)));
 
         const char* names[] = {"float32.vec16", "int32.vec16", "uint8.vec16", "float32.scalar"};
         const size_t n_tensors = 4;
@@ -586,8 +586,8 @@ TEST_CASE("fetchv - fetchv matches fetch for several tensors", "[fetchv][safeten
             hmll_lookup_result_t l = hmll_lookup_tensor(&ctx, &registry, names[i]);
             REQUIRE(l.specs != nullptr);
             hmll_range_t r = {l.specs->start, l.specs->end};
-            buf_fetch[i] = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, r);
-            buf_fetchv[i] = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, r);
+            buf_fetch[i] = hmll_get_buffer_for_range(&ctx, r);
+            buf_fetchv[i] = hmll_get_buffer_for_range(&ctx, r);
             offsets[i] = r.start;
             total += buf_fetch[i].size;
         }
@@ -620,7 +620,7 @@ TEST_CASE("fetchv - pre-existing error returns -1", "[fetchv][error]") {
     REQUIRE_FALSE(hmll_check(hmll_source_open(fpath, &src)));
     hmll_registry_t registry = {};
     REQUIRE(hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) > 0);
-    REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, kBackends[0].second)));
+    REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), kBackends[0].second)));
 
     // Poison the context with an error
     ctx.error = HMLL_ERR(HMLL_ERR_IO_ERROR);
@@ -648,7 +648,7 @@ TEST_CASE("fetchv - multiple large tensors interleaved", "[fetchv][safetensors]"
 
     for (const auto& [name, backend] : kBackends) {
         INFO("Backend: " << name);
-        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, backend)));
+        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), backend)));
 
         // Two large tensors, each > HMLL_URING_BUFFER_SIZE
         const char* names[] = {"float32.large", "int32.large"};
@@ -659,7 +659,7 @@ TEST_CASE("fetchv - multiple large tensors interleaved", "[fetchv][safetensors]"
             hmll_lookup_result_t l = hmll_lookup_tensor(&ctx, &registry, names[i]);
             REQUIRE(l.specs != nullptr);
             hmll_range_t r = {l.specs->start, l.specs->end};
-            dsts[i] = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, r);
+            dsts[i] = hmll_get_buffer_for_range(&ctx, r);
             offsets[i] = r.start;
             total += dsts[i].size;
             REQUIRE(dsts[i].size > 512 * 1024u);
@@ -687,7 +687,7 @@ TEST_CASE("fetchv - heap scratch path (large N)", "[fetchv][safetensors]") {
     REQUIRE_FALSE(hmll_check(hmll_source_open(fpath, &src)));
     hmll_registry_t registry = {};
     REQUIRE(hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) > 0);
-    REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, kBackends[0].second)));
+    REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), kBackends[0].second)));
 
     const size_t N = 300; // exceeds stack_scratch[8192]
     hmll_lookup_result_t l = hmll_lookup_tensor(&ctx, &registry, "float32.vec16");
@@ -697,7 +697,7 @@ TEST_CASE("fetchv - heap scratch path (large N)", "[fetchv][safetensors]") {
     std::vector<size_t> offsets(N);
     for (size_t i = 0; i < N; ++i) {
         hmll_range_t r = {l.specs->start, l.specs->end};
-        dsts[i] = hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, r);
+        dsts[i] = hmll_get_buffer_for_range(&ctx, r);
         offsets[i] = r.start;
     }
 
@@ -722,16 +722,16 @@ TEST_CASE("fetchv - zero-size buffer interspersed", "[fetchv][safetensors]") {
     REQUIRE_FALSE(hmll_check(hmll_source_open(fpath, &src)));
     hmll_registry_t registry = {};
     REQUIRE(hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) > 0);
-    REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, HMLL_DEVICE_CPU, kBackends[0].second)));
+    REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), kBackends[0].second)));
 
     hmll_lookup_result_t l = hmll_lookup_tensor(&ctx, &registry, "float32.vec16");
     REQUIRE(l.specs != nullptr);
     hmll_range_t r = {l.specs->start, l.specs->end};
 
     hmll_iobuf_t dsts[3] = {
-        hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, r),
-        {.size = 0, .ptr = nullptr, .device = HMLL_DEVICE_CPU},  // zero-size
-        hmll_get_buffer_for_range(&ctx, ctx.fetcher->device, r),
+        hmll_get_buffer_for_range(&ctx, r),
+        {.size = 0, .ptr = nullptr, .device = hmll_device_cpu()},  // zero-size
+        hmll_get_buffer_for_range(&ctx, r),
     };
     size_t offsets[3] = {r.start, 0, r.start};
 
