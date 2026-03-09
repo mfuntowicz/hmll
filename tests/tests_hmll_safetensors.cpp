@@ -65,9 +65,9 @@ TEST_CASE("safetensors dtype parsing", "[safetensors]")
 TEST_CASE("safetensors path creation", "[safetensors]")
 {
     SECTION("create valid path") {
-        const char* base = "/path/to/model.safetensors";
-        const char* file = "model-00002-of-00005.safetensors";
-        char* result = hmll_safetensors_path_create(base, file);
+        const auto base = "/path/to/model.safetensors";
+        const auto file = "model-00002-of-00005.safetensors";
+        auto result = hmll_safetensors_path_create(base, file);
 
         REQUIRE(result != nullptr);
         REQUIRE(strcmp(result, "/path/to/model-00002-of-00005.safetensors") == 0);
@@ -81,9 +81,9 @@ TEST_CASE("safetensors path creation", "[safetensors]")
     }
 
     SECTION("handle path without directory") {
-        const char* base = "model.safetensors";
-        const char* file = "other.safetensors";
-        char* result = hmll_safetensors_path_create(base, file);
+        const auto base = "model.safetensors";
+        const auto file = "other.safetensors";
+        auto result = hmll_safetensors_path_create(base, file);
 
         REQUIRE(result != nullptr);
         REQUIRE(strcmp(result, "other.safetensors") == 0);
@@ -95,9 +95,9 @@ TEST_CASE("safetensors path creation", "[safetensors]")
 TEST_CASE("safetensors offset parsing", "[safetensors]")
 {
     SECTION("parse valid offsets") {
-        const char* json = "[100, 500]";
-        yyjson_doc* doc = yyjson_read(json, strlen(json), 0);
-        yyjson_val* root = yyjson_doc_get_root(doc);
+        const auto json = "[100, 500]";
+        auto doc = yyjson_read(json, strlen(json), 0);
+        auto root = yyjson_doc_get_root(doc);
 
         hmll_tensor_specs_t tensor = {};
         hmll_error_t err = hmll_safetensors_header_parse_offsets(root, &tensor);
@@ -110,9 +110,9 @@ TEST_CASE("safetensors offset parsing", "[safetensors]")
     }
 
     SECTION("parse offsets with large values") {
-        const char* json = "[1073741824, 2147483648]";
-        yyjson_doc* doc = yyjson_read(json, strlen(json), 0);
-        yyjson_val* root = yyjson_doc_get_root(doc);
+        const auto json = "[1073741824, 2147483648]";
+        auto doc = yyjson_read(json, strlen(json), 0);
+        auto root = yyjson_doc_get_root(doc);
 
         hmll_tensor_specs_t tensor = {};
         hmll_error_t err = hmll_safetensors_header_parse_offsets(root, &tensor);
@@ -125,9 +125,9 @@ TEST_CASE("safetensors offset parsing", "[safetensors]")
     }
 
     SECTION("reject malformed offsets - not array") {
-        const char* json = "\"not an array\"";
-        yyjson_doc* doc = yyjson_read(json, strlen(json), 0);
-        yyjson_val* root = yyjson_doc_get_root(doc);
+        const auto json = "\"not an array\"";
+        auto doc = yyjson_read(json, strlen(json), 0);
+        auto root = yyjson_doc_get_root(doc);
 
         hmll_tensor_specs_t tensor = {};
         hmll_error_t err = hmll_safetensors_header_parse_offsets(root, &tensor);
@@ -139,9 +139,9 @@ TEST_CASE("safetensors offset parsing", "[safetensors]")
     }
 
     SECTION("reject malformed offsets - single element") {
-        const char* json = "[100]";
-        yyjson_doc* doc = yyjson_read(json, strlen(json), 0);
-        yyjson_val* root = yyjson_doc_get_root(doc);
+        const auto json = "[100]";
+        auto doc = yyjson_read(json, strlen(json), 0);
+        auto root = yyjson_doc_get_root(doc);
 
         hmll_tensor_specs_t tensor = {};
         hmll_error_t err = hmll_safetensors_header_parse_offsets(root, &tensor);
@@ -153,9 +153,9 @@ TEST_CASE("safetensors offset parsing", "[safetensors]")
     }
 
     SECTION("reject malformed offsets - empty array") {
-        const char* json = "[]";
-        yyjson_doc* doc = yyjson_read(json, strlen(json), 0);
-        yyjson_val* root = yyjson_doc_get_root(doc);
+        const auto json = "[]";
+        auto doc = yyjson_read(json, strlen(json), 0);
+        auto root = yyjson_doc_get_root(doc);
 
         hmll_tensor_specs_t tensor = {};
         hmll_error_t err = hmll_safetensors_header_parse_offsets(root, &tensor);
@@ -170,9 +170,9 @@ TEST_CASE("safetensors offset parsing", "[safetensors]")
 TEST_CASE("safetensors shape parsing", "[safetensors]")
 {
     SECTION("parse 1D shape") {
-        const char* json = "[1024]";
-        yyjson_doc* doc = yyjson_read(json, strlen(json), 0);
-        yyjson_val* root = yyjson_doc_get_root(doc);
+        const auto json = "[1024]";
+        auto doc = yyjson_read(json, strlen(json), 0);
+        auto root = yyjson_doc_get_root(doc);
 
         hmll_tensor_specs_t tensor = {};
         hmll_error_t err = hmll_safetensors_header_parse_shape(root, &tensor);
@@ -185,9 +185,9 @@ TEST_CASE("safetensors shape parsing", "[safetensors]")
     }
 
     SECTION("parse 2D shape") {
-        const char* json = "[32, 64]";
-        yyjson_doc* doc = yyjson_read(json, strlen(json), 0);
-        yyjson_val* root = yyjson_doc_get_root(doc);
+        const auto json = "[32, 64]";
+        auto doc = yyjson_read(json, strlen(json), 0);
+        auto root = yyjson_doc_get_root(doc);
 
         hmll_tensor_specs_t tensor = {};
         hmll_error_t err = hmll_safetensors_header_parse_shape(root, &tensor);
@@ -201,9 +201,9 @@ TEST_CASE("safetensors shape parsing", "[safetensors]")
     }
 
     SECTION("parse 4D shape") {
-        const char* json = "[2, 3, 224, 224]";
-        yyjson_doc* doc = yyjson_read(json, strlen(json), 0);
-        yyjson_val* root = yyjson_doc_get_root(doc);
+        const auto json = "[2, 3, 224, 224]";
+        auto doc = yyjson_read(json, strlen(json), 0);
+        auto root = yyjson_doc_get_root(doc);
 
         hmll_tensor_specs_t tensor = {};
         hmll_error_t err = hmll_safetensors_header_parse_shape(root, &tensor);
@@ -219,9 +219,9 @@ TEST_CASE("safetensors shape parsing", "[safetensors]")
     }
 
     SECTION("parse scalar (empty shape)") {
-        const char* json = "[]";
-        yyjson_doc* doc = yyjson_read(json, strlen(json), 0);
-        yyjson_val* root = yyjson_doc_get_root(doc);
+        const auto json = "[]";
+        auto doc = yyjson_read(json, strlen(json), 0);
+        auto root = yyjson_doc_get_root(doc);
 
         hmll_tensor_specs_t tensor = {};
         hmll_error_t err = hmll_safetensors_header_parse_shape(root, &tensor);
@@ -233,9 +233,9 @@ TEST_CASE("safetensors shape parsing", "[safetensors]")
     }
 
     SECTION("reject malformed shape - not array") {
-        const char* json = "42";
-        yyjson_doc* doc = yyjson_read(json, strlen(json), 0);
-        yyjson_val* root = yyjson_doc_get_root(doc);
+        const auto json = "42";
+        auto doc = yyjson_read(json, strlen(json), 0);
+        auto root = yyjson_doc_get_root(doc);
 
         hmll_tensor_specs_t tensor = {};
         hmll_error_t err = hmll_safetensors_header_parse_shape(root, &tensor);
@@ -247,9 +247,9 @@ TEST_CASE("safetensors shape parsing", "[safetensors]")
     }
 
     SECTION("parse large shape values") {
-        const char* json = "[4096, 4096]";
-        yyjson_doc* doc = yyjson_read(json, strlen(json), 0);
-        yyjson_val* root = yyjson_doc_get_root(doc);
+        const auto json = "[4096, 4096]";
+        auto doc = yyjson_read(json, strlen(json), 0);
+        auto root = yyjson_doc_get_root(doc);
 
         hmll_tensor_specs_t tensor = {};
         hmll_error_t err = hmll_safetensors_header_parse_shape(root, &tensor);

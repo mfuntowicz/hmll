@@ -70,7 +70,7 @@ TEST_CASE("safetensors integration - read multi-dtype file", "[safetensors][inte
     constexpr std::array backends = { std::make_pair("MMAP", HMLL_FETCHER_MMAP) };
 #endif
 
-    for (auto [name, backend] : backends) {
+    for (const auto [name, backend] : backends) {
         INFO("Testing with backend: " << name);
 
         SECTION("can open and parse safetensors file") {

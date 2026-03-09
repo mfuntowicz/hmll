@@ -276,20 +276,24 @@ TEST_CASE("fetchv - n=0 returns 0", "[fetchv][safetensors]") {
     const char* fpath = std::getenv(HMLL_CI_FETCHV_SAFETENSORS_FPATH);
     if (!fpath) SKIP("HMLL_CI_FETCHV_SAFETENSORS_FPATH not set");
 
-    hmll_t ctx = {};
-    hmll_source_t src = {};
-    REQUIRE_FALSE(hmll_check(hmll_source_open(fpath, &src)));
-    hmll_registry_t registry = {};
-    REQUIRE(hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) > 0);
-    REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), kBackends[0].second)));
+    for (const auto& [name, backend] : kBackends) {
+        INFO("Backend: " << name);
 
-    ssize_t ret = hmll_fetchv(&ctx, 0, nullptr, nullptr, 0);
-    REQUIRE(ret == 0);
-    REQUIRE_FALSE(hmll_check(ctx.error));
+        hmll_t ctx = {};
+        hmll_source_t src = {};
+        REQUIRE_FALSE(hmll_check(hmll_source_open(fpath, &src)));
+        hmll_registry_t registry = {};
+        REQUIRE(hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) > 0);
+        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), backend)));
 
-    hmll_free_registry(&registry);
-    hmll_destroy(&ctx);
-    hmll_source_close(&src);
+        ssize_t ret = hmll_fetchv(&ctx, 0, nullptr, nullptr, 0);
+        REQUIRE(ret == 0);
+        REQUIRE_FALSE(hmll_check(ctx.error));
+
+        hmll_free_registry(&registry);
+        hmll_destroy(&ctx);
+        hmll_source_close(&src);
+    }
 }
 
 TEST_CASE("fetchv - scalar tensors", "[fetchv][safetensors]") {
@@ -411,61 +415,69 @@ TEST_CASE("fetchv - return value equals sum of dst sizes", "[fetchv][safetensors
     const char* fpath = std::getenv(HMLL_CI_FETCHV_SAFETENSORS_FPATH);
     if (!fpath) SKIP("HMLL_CI_FETCHV_SAFETENSORS_FPATH not set");
 
-    hmll_t ctx = {};
-    hmll_source_t src = {};
-    REQUIRE_FALSE(hmll_check(hmll_source_open(fpath, &src)));
-    hmll_registry_t registry = {};
-    REQUIRE(hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) > 0);
-    REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), kBackends[0].second)));
+    for (const auto& [name, backend] : kBackends) {
+        INFO("Backend: " << name);
 
-    const char* names[] = {"float32.vec16", "int32.vec16", "float32.scalar"};
-    hmll_iobuf_t dsts[3];
-    size_t offsets[3];
-    size_t expected_total = 0;
-    for (int i = 0; i < 3; ++i) {
-        hmll_lookup_result_t l = hmll_lookup_tensor(&ctx, &registry, names[i]);
-        REQUIRE(l.specs != nullptr);
-        hmll_range_t r = {l.specs->start, l.specs->end};
-        dsts[i] = hmll_get_buffer_for_range(&ctx, r);
-        offsets[i] = r.start;
-        expected_total += dsts[i].size;
+        hmll_t ctx = {};
+        hmll_source_t src = {};
+        REQUIRE_FALSE(hmll_check(hmll_source_open(fpath, &src)));
+        hmll_registry_t registry = {};
+        REQUIRE(hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) > 0);
+        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), backend)));
+
+        const char* names[] = {"float32.vec16", "int32.vec16", "float32.scalar"};
+        hmll_iobuf_t dsts[3];
+        size_t offsets[3];
+        size_t expected_total = 0;
+        for (int i = 0; i < 3; ++i) {
+            hmll_lookup_result_t l = hmll_lookup_tensor(&ctx, &registry, names[i]);
+            REQUIRE(l.specs != nullptr);
+            hmll_range_t r = {l.specs->start, l.specs->end};
+            dsts[i] = hmll_get_buffer_for_range(&ctx, r);
+            offsets[i] = r.start;
+            expected_total += dsts[i].size;
+        }
+        ssize_t ret = hmll_fetchv(&ctx, 0, dsts, offsets, 3);
+        REQUIRE(ret >= 0);
+        REQUIRE(static_cast<size_t>(ret) == expected_total);
+
+        for (auto & dst : dsts) hmll_free_buffer(&dst);
+        hmll_free_registry(&registry);
+        hmll_destroy(&ctx);
+        hmll_source_close(&src);
     }
-    ssize_t ret = hmll_fetchv(&ctx, 0, dsts, offsets, 3);
-    REQUIRE(ret >= 0);
-    REQUIRE(static_cast<size_t>(ret) == expected_total);
-
-    for (auto & dst : dsts) hmll_free_buffer(&dst);
-    hmll_free_registry(&registry);
-    hmll_destroy(&ctx);
-    hmll_source_close(&src);
 }
 
 TEST_CASE("fetchv - overlapping logical range same data", "[fetchv][safetensors]") {
     const char* fpath = std::getenv(HMLL_CI_FETCHV_SAFETENSORS_FPATH);
     if (!fpath) SKIP("HMLL_CI_FETCHV_SAFETENSORS_FPATH not set");
 
-    hmll_t ctx = {};
-    hmll_source_t src = {};
-    REQUIRE_FALSE(hmll_check(hmll_source_open(fpath, &src)));
-    hmll_registry_t registry = {};
-    REQUIRE(hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) > 0);
-    REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), kBackends[0].second)));
+    for (const auto& [name, backend] : kBackends) {
+        INFO("Backend: " << name);
 
-    hmll_lookup_result_t lookup = hmll_lookup_tensor(&ctx, &registry, "float32.vec16");
-    REQUIRE(lookup.specs != nullptr);
-    hmll_range_t range = {lookup.specs->start, lookup.specs->end};
-    hmll_iobuf_t buf1 = hmll_get_buffer_for_range(&ctx, range);
-    hmll_iobuf_t buf2 = hmll_get_buffer_for_range(&ctx, range);
-    size_t offsets[2] = {range.start, range.start};
-    hmll_iobuf_t dsts[2] = {buf1, buf2};
-    ssize_t ret = hmll_fetchv(&ctx, lookup.file, dsts, offsets, 2);
-    REQUIRE(ret >= 0);
-    REQUIRE(std::memcmp(buf1.ptr, buf2.ptr, buf1.size) == 0);
-    hmll_free_buffer(&buf1);
-    hmll_free_buffer(&buf2);
-    hmll_free_registry(&registry);
-    hmll_destroy(&ctx);
-    hmll_source_close(&src);
+        hmll_t ctx = {};
+        hmll_source_t src = {};
+        REQUIRE_FALSE(hmll_check(hmll_source_open(fpath, &src)));
+        hmll_registry_t registry = {};
+        REQUIRE(hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) > 0);
+        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), backend)));
+
+        hmll_lookup_result_t lookup = hmll_lookup_tensor(&ctx, &registry, "float32.vec16");
+        REQUIRE(lookup.specs != nullptr);
+        hmll_range_t range = {lookup.specs->start, lookup.specs->end};
+        hmll_iobuf_t buf1 = hmll_get_buffer_for_range(&ctx, range);
+        hmll_iobuf_t buf2 = hmll_get_buffer_for_range(&ctx, range);
+        size_t offsets[2] = {range.start, range.start};
+        hmll_iobuf_t dsts[2] = {buf1, buf2};
+        ssize_t ret = hmll_fetchv(&ctx, lookup.file, dsts, offsets, 2);
+        REQUIRE(ret >= 0);
+        REQUIRE(std::memcmp(buf1.ptr, buf2.ptr, buf1.size) == 0);
+        hmll_free_buffer(&buf1);
+        hmll_free_buffer(&buf2);
+        hmll_free_registry(&registry);
+        hmll_destroy(&ctx);
+        hmll_source_close(&src);
+    }
 }
 
 // --- Sharded tests ---
@@ -519,9 +531,9 @@ TEST_CASE("fetchv - sharded fetchv across files", "[fetchv][safetensors][sharded
         REQUIRE(n > 0);
         offset += n;
     }
-    REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, sources.data(), num_files, hmll_device_cpu(), kBackends[0].second)));
 
     for (const auto& [name, backend] : kBackends) {
+        INFO("Backend: " << name);
         hmll_destroy(&ctx);
         REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, sources.data(), num_files, hmll_device_cpu(), backend)));
 
@@ -615,25 +627,29 @@ TEST_CASE("fetchv - pre-existing error returns -1", "[fetchv][error]") {
     const char* fpath = std::getenv(HMLL_CI_FETCHV_SAFETENSORS_FPATH);
     if (!fpath) SKIP("HMLL_CI_FETCHV_SAFETENSORS_FPATH not set");
 
-    hmll_t ctx = {};
-    hmll_source_t src = {};
-    REQUIRE_FALSE(hmll_check(hmll_source_open(fpath, &src)));
-    hmll_registry_t registry = {};
-    REQUIRE(hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) > 0);
-    REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), kBackends[0].second)));
+    for (const auto& [name, backend] : kBackends) {
+        INFO("Backend: " << name);
 
-    // Poison the context with an error
-    ctx.error = HMLL_ERR(HMLL_ERR_IO_ERROR);
+        hmll_t ctx = {};
+        hmll_source_t src = {};
+        REQUIRE_FALSE(hmll_check(hmll_source_open(fpath, &src)));
+        hmll_registry_t registry = {};
+        REQUIRE(hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) > 0);
+        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), backend)));
 
-    hmll_iobuf_t dsts[1] = {};
-    size_t offsets[1] = {0};
-    ssize_t ret = hmll_fetchv(&ctx, 0, dsts, offsets, 1);
-    REQUIRE(ret == -1);
+        // Poison the context with an error
+        ctx.error = HMLL_ERR(HMLL_ERR_IO_ERROR);
 
-    ctx.error = HMLL_OK; // reset so cleanup works
-    hmll_free_registry(&registry);
-    hmll_destroy(&ctx);
-    hmll_source_close(&src);
+        hmll_iobuf_t dsts[1] = {};
+        size_t offsets[1] = {0};
+        ssize_t ret = hmll_fetchv(&ctx, 0, dsts, offsets, 1);
+        REQUIRE(ret == -1);
+
+        ctx.error = HMLL_OK; // reset so cleanup works
+        hmll_free_registry(&registry);
+        hmll_destroy(&ctx);
+        hmll_source_close(&src);
+    }
 }
 
 TEST_CASE("fetchv - multiple large tensors interleaved", "[fetchv][safetensors]") {
@@ -682,68 +698,76 @@ TEST_CASE("fetchv - heap scratch path (large N)", "[fetchv][safetensors]") {
     const char* fpath = std::getenv(HMLL_CI_FETCHV_SAFETENSORS_FPATH);
     if (!fpath) SKIP("HMLL_CI_FETCHV_SAFETENSORS_FPATH not set");
 
-    hmll_t ctx = {};
-    hmll_source_t src = {};
-    REQUIRE_FALSE(hmll_check(hmll_source_open(fpath, &src)));
-    hmll_registry_t registry = {};
-    REQUIRE(hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) > 0);
-    REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), kBackends[0].second)));
+    for (const auto& [name, backend] : kBackends) {
+        INFO("Backend: " << name);
 
-    const size_t N = 300; // exceeds stack_scratch[8192]
-    hmll_lookup_result_t l = hmll_lookup_tensor(&ctx, &registry, "float32.vec16");
-    REQUIRE(l.specs != nullptr);
+        hmll_t ctx = {};
+        hmll_source_t src = {};
+        REQUIRE_FALSE(hmll_check(hmll_source_open(fpath, &src)));
+        hmll_registry_t registry = {};
+        REQUIRE(hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) > 0);
+        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), backend)));
 
-    std::vector<hmll_iobuf_t> dsts(N);
-    std::vector<size_t> offsets(N);
-    for (size_t i = 0; i < N; ++i) {
-        hmll_range_t r = {l.specs->start, l.specs->end};
-        dsts[i] = hmll_get_buffer_for_range(&ctx, r);
-        offsets[i] = r.start;
+        const size_t N = 300; // exceeds stack_scratch[8192]
+        hmll_lookup_result_t l = hmll_lookup_tensor(&ctx, &registry, "float32.vec16");
+        REQUIRE(l.specs != nullptr);
+
+        std::vector<hmll_iobuf_t> dsts(N);
+        std::vector<size_t> offsets(N);
+        for (size_t i = 0; i < N; ++i) {
+            hmll_range_t r = {l.specs->start, l.specs->end};
+            dsts[i] = hmll_get_buffer_for_range(&ctx, r);
+            offsets[i] = r.start;
+        }
+
+        ssize_t ret = hmll_fetchv(&ctx, 0, dsts.data(), offsets.data(), N);
+        REQUIRE(ret >= 0);
+        REQUIRE(static_cast<size_t>(ret) == total_dst_size(dsts.data(), N));
+        for (size_t i = 0; i < N; ++i)
+            validate_float32_arange(dsts[i], 16);
+
+        for (size_t i = 0; i < N; ++i) hmll_free_buffer(&dsts[i]);
+        hmll_free_registry(&registry);
+        hmll_destroy(&ctx);
+        hmll_source_close(&src);
     }
-
-    ssize_t ret = hmll_fetchv(&ctx, 0, dsts.data(), offsets.data(), N);
-    REQUIRE(ret >= 0);
-    REQUIRE(static_cast<size_t>(ret) == total_dst_size(dsts.data(), N));
-    for (size_t i = 0; i < N; ++i)
-        validate_float32_arange(dsts[i], 16);
-
-    for (size_t i = 0; i < N; ++i) hmll_free_buffer(&dsts[i]);
-    hmll_free_registry(&registry);
-    hmll_destroy(&ctx);
-    hmll_source_close(&src);
 }
 
 TEST_CASE("fetchv - zero-size buffer interspersed", "[fetchv][safetensors]") {
     const char* fpath = std::getenv(HMLL_CI_FETCHV_SAFETENSORS_FPATH);
     if (!fpath) SKIP("HMLL_CI_FETCHV_SAFETENSORS_FPATH not set");
 
-    hmll_t ctx = {};
-    hmll_source_t src = {};
-    REQUIRE_FALSE(hmll_check(hmll_source_open(fpath, &src)));
-    hmll_registry_t registry = {};
-    REQUIRE(hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) > 0);
-    REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), kBackends[0].second)));
+    for (const auto& [name, backend] : kBackends) {
+        INFO("Backend: " << name);
 
-    hmll_lookup_result_t l = hmll_lookup_tensor(&ctx, &registry, "float32.vec16");
-    REQUIRE(l.specs != nullptr);
-    hmll_range_t r = {l.specs->start, l.specs->end};
+        hmll_t ctx = {};
+        hmll_source_t src = {};
+        REQUIRE_FALSE(hmll_check(hmll_source_open(fpath, &src)));
+        hmll_registry_t registry = {};
+        REQUIRE(hmll_safetensors_populate_registry(&ctx, &registry, src, 0, 0) > 0);
+        REQUIRE_FALSE(hmll_check(hmll_loader_init(&ctx, &src, 1, hmll_device_cpu(), backend)));
 
-    hmll_iobuf_t dsts[3] = {
-        hmll_get_buffer_for_range(&ctx, r),
-        {.size = 0, .ptr = nullptr, .device = hmll_device_cpu()},  // zero-size
-        hmll_get_buffer_for_range(&ctx, r),
-    };
-    size_t offsets[3] = {r.start, 0, r.start};
+        hmll_lookup_result_t l = hmll_lookup_tensor(&ctx, &registry, "float32.vec16");
+        REQUIRE(l.specs != nullptr);
+        hmll_range_t r = {l.specs->start, l.specs->end};
 
-    ssize_t ret = hmll_fetchv(&ctx, 0, dsts, offsets, 3);
-    REQUIRE(ret >= 0);
-    REQUIRE(static_cast<size_t>(ret) == dsts[0].size + dsts[2].size);
-    validate_float32_arange(dsts[0], 16);
-    validate_float32_arange(dsts[2], 16);
+        hmll_iobuf_t dsts[3] = {
+            hmll_get_buffer_for_range(&ctx, r),
+            {.size = 0, .ptr = nullptr, .device = hmll_device_cpu()},  // zero-size
+            hmll_get_buffer_for_range(&ctx, r),
+        };
+        size_t offsets[3] = {r.start, 0, r.start};
 
-    hmll_free_buffer(&dsts[0]);
-    hmll_free_buffer(&dsts[2]);
-    hmll_free_registry(&registry);
-    hmll_destroy(&ctx);
-    hmll_source_close(&src);
+        ssize_t ret = hmll_fetchv(&ctx, 0, dsts, offsets, 3);
+        REQUIRE(ret >= 0);
+        REQUIRE(static_cast<size_t>(ret) == dsts[0].size + dsts[2].size);
+        validate_float32_arange(dsts[0], 16);
+        validate_float32_arange(dsts[2], 16);
+
+        hmll_free_buffer(&dsts[0]);
+        hmll_free_buffer(&dsts[2]);
+        hmll_free_registry(&registry);
+        hmll_destroy(&ctx);
+        hmll_source_close(&src);
+    }
 }
