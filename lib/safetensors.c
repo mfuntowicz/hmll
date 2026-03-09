@@ -340,6 +340,17 @@ size_t hmll_safetensors_populate_registry(
 
 freeup_and_exit:
     if (document) yyjson_doc_free(document);
+    if (reg->names) {
+        for (size_t i = 0; i < tidx; ++i) {
+            free(reg->names[i]);
+        }
+        free(reg->names);
+        reg->names = NULL;
+    }
+    free(reg->tensors);
+    reg->tensors = NULL;
+    free(reg->indexes);
+    reg->indexes = NULL;
 
 exit:
     if (hmll_check(ctx->error)) return 0;
