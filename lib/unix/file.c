@@ -45,9 +45,6 @@ struct hmll_error hmll_source_open(const char *path, struct hmll_source *src)
 
 #if defined(__linux__)
     src->d_fd = open(path, O_RDONLY | O_DIRECT);
-    /* non-fatal: fall back to buffered-only if O_DIRECT unsupported (e.g. tmpfs) */
-    if (src->d_fd == -1)
-        src->d_fd = -1;
 #else
     src->d_fd = -1;
 #endif
