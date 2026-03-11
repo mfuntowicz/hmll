@@ -39,8 +39,8 @@ pub enum Error {
     #[error("Buffer too small")]
     BufferTooSmall,
 
-    #[error("I/O error")]
-    IoError,
+    #[error("I/O error: {0}")]
+    IoError(String),
 
     #[error("No source provided")]
     NoSourceProvided,
@@ -132,7 +132,17 @@ impl Error {
             HMLL_ERR_INVALID_RANGE => Error::InvalidRange,
             HMLL_ERR_BUFFER_ADDR_NOT_ALIGNED => Error::BufferAddrNotAligned,
             HMLL_ERR_BUFFER_TOO_SMALL => Error::BufferTooSmall,
-            HMLL_ERR_IO_ERROR => Error::IoError,
+            HMLL_ERR_IO_ERROR => {
+                let msg = unsafe {
+                    let ptr = hmll_strerr(err);
+                    if ptr.is_null() {
+                        format!("errno {}", err.sys_err)
+                    } else {
+                        CStr::from_ptr(ptr).to_string_lossy().into_owned()
+                    }
+                };
+                Error::IoError(msg)
+            }
             HMLL_ERR_NO_SOURCE_PROVIDED => Error::NoSourceProvided,
             HMLL_ERR_FILE_NOT_FOUND => Error::FileNotFound(String::new()),
             HMLL_ERR_FILE_EMPTY => Error::FileEmpty,

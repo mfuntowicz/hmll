@@ -17,15 +17,16 @@
 
 static inline int hmll_io_uring_get_setup_flags(void)
 {
-    int flags = IORING_SETUP_SQPOLL;
+    struct utsname uts;
+    int flags = 0;
 
-    // retrieve the current kernel version so we can adjust io_uring flags
-    struct utsname unamedata;
-    uname(&unamedata);
-
-    int major, minor, revision = 0;
-    if (sscanf(unamedata.release, "%d.%d.%d", &major, &minor, &revision)) {
-        if (major >= 6) flags |= IORING_SETUP_SINGLE_ISSUER;
+    if (uname(&uts) == 0) {
+        int major = 0, minor = 0;
+        sscanf(uts.release, "%d.%d", &major, &minor);
+        // SQPOLL requires root or CAP_SYS_NICE, skip for now
+        // SINGLE_ISSUER available since 6.0
+        if (major > 6 || (major == 6 && minor >= 0))
+            flags |= IORING_SETUP_SINGLE_ISSUER;
     }
 
     return flags;
@@ -42,7 +43,9 @@ static struct hmll_error hmll_io_uring_register_staging_buffers(
         return ctx->error;
     }
 
-    unsigned char *arena = hmll_alloc(HMLL_URING_QUEUE_DEPTH * HMLL_URING_BUFFER_SIZE, device, HMLL_MEM_STAGING);
+    const size_t staging_size = HMLL_URING_QUEUE_DEPTH * HMLL_URING_BUFFER_SIZE;
+
+    unsigned char *arena = hmll_alloc(staging_size, device, HMLL_MEM_STAGING);
     if (!arena) {
         ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
         return ctx->error;
@@ -96,13 +99,14 @@ static inline void hmll_io_uring_reclaim_slots(
     // TODO(mfuntowicz): Should we directly store `slots` which are doing memcpy currently to avoid full scan?
     for (size_t i = 0; i < HMLL_URING_QUEUE_DEPTH; ++i) {
         struct hmll_io_uring_cuda_context *cd = dctx + i;
-        if (hmll_io_uring_slot_is_busy(fetcher->iobusy, i)) {
-            if (cd->state == HMLL_CUDA_STREAM_MEMCPY && cudaEventQuery(cd->done) == cudaSuccess) {
+        if (hmll_io_uring_slot_is_busy(fetcher->iobusy, i) && cd->state == HMLL_CUDA_STREAM_MEMCPY) {
+            if (cudaEventQuery(cd->done) == cudaSuccess) {
                 hmll_io_uring_cuda_stream_set_idle(&cd->state);
                 hmll_io_uring_slot_set_available(&fetcher->iobusy, cd->slot);
             }
         }
     }
+
 #else
     HMLL_UNUSED(fetcher);
     HMLL_UNUSED(device);
@@ -134,7 +138,9 @@ static inline void hmll_io_uring_prep_sqe(
         struct hmll_io_uring_cuda_context *dctx = fetcher->device_ctx;
         void *buf = fetcher->iovecs[slot].iov_base;
 
+
         dctx[slot].offset = offset;
+        hmll_io_uring_cuda_stream_set_idle(&dctx[slot].state);
         io_uring_prep_read_fixed(sqe, iofile, buf, len, offset, slot);
         io_uring_sqe_set_data(sqe, dctx + slot);
     }
@@ -239,7 +245,7 @@ static ssize_t hmll_io_uring_fetch_range_impl(
 
             if (unlikely(io_uring_submit_and_wait(&fetcher->ioring, nwait) < 0)) {
                 // todo: do we need to reset the cca? hmll_io_uring_cca_init(&fetcher->iocca)
-                ctx->error = HMLL_ERR(HMLL_ERR_IO_ERROR);
+                ctx->error = HMLL_SYS_ERR(errno);
                 return -1;
             }
             clock_gettime(CLOCK_MONOTONIC, &ts_end);
@@ -344,14 +350,15 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
 
     while (n_active > 0 || n_in_flight > 0) {
         while (n_active > 0) {
-            struct io_uring_sqe *sqe = io_uring_get_sqe(&fetcher->ioring);
-            if (!sqe) break;
-
             if (active_cursor >= n_active) active_cursor = 0;
             const uint32_t current_idx = active_indices[active_cursor];
             struct fetch_state *st = &states[current_idx];
 
+            // Handle fadvise first - doesn't need a buffer slot
             if (unlikely(!st->fadvise_sent)) {
+                struct io_uring_sqe *sqe = io_uring_get_sqe(&fetcher->ioring);
+                if (!sqe) break;
+
                 io_uring_prep_fadvise(sqe, iofile, offsets[current_idx], st->size, POSIX_FADV_SEQUENTIAL | POSIX_FADV_WILLNEED);
                 io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
                 io_uring_sqe_set_data64(sqe, BIT_FADVISE);
@@ -359,12 +366,17 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
                 continue;
             }
 
+            // For read operations, check slot availability BEFORE getting SQE
+            // to avoid leaving uninitialized SQEs in the submission queue
             int slot = hmll_io_uring_slot_find_available(fetcher->iobusy);
             if (slot == -1) {
                 hmll_io_uring_reclaim_slots(fetcher, dsts[0].device);
                 slot = hmll_io_uring_slot_find_available(fetcher->iobusy);
                 if (slot == -1) break;
             }
+
+            struct io_uring_sqe *sqe = io_uring_get_sqe(&fetcher->ioring);
+            if (!sqe) break;
 
             hmll_io_uring_slot_set_busy(&fetcher->iobusy, slot);
 
@@ -385,6 +397,8 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
             );
 
             io_uring_sqe_set_data64(sqe, ((uint64_t)current_idx << SHIFT_RANGE) | slot);
+
+            // Track submission for debug (removed static vars that were causing confusion)
 
             st->submitted += to_read;
             n_in_flight++;
@@ -408,7 +422,7 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
         clock_gettime(CLOCK_MONOTONIC, &ts_start);
 
         if (unlikely(io_uring_submit_and_wait(&fetcher->ioring, nwait) < 0)) {
-            ctx->error = HMLL_ERR(HMLL_ERR_IO_ERROR);
+            ctx->error = HMLL_SYS_ERR(errno);
             goto cleanup;
         }
         clock_gettime(CLOCK_MONOTONIC, &ts_end);
@@ -426,7 +440,7 @@ static ssize_t hmll_io_uring_fetchv_range_impl(
                 n_in_flight--;
 
                 if (unlikely(cqe->res < 0)) {
-                    ctx->error = HMLL_ERR(HMLL_ERR_IO_ERROR);
+                    ctx->error = HMLL_SYS_ERR(-cqe->res);
                     io_uring_cq_advance(&fetcher->ioring, count);
                     goto cleanup;
                 }
@@ -572,7 +586,8 @@ void hmll_io_uring_destroy(void *ptr)
             }
         }
 
-        munmap(backend->iovecs[0].iov_base, HMLL_URING_QUEUE_DEPTH * sizeof(struct iovec));
+        // Staging arena was allocated with cudaHostAlloc
+        cudaFreeHost(backend->iovecs[0].iov_base);
         free(backend->device_ctx);
         backend->device_ctx = NULL;
     }

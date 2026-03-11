@@ -1,6 +1,8 @@
 //
 // Created by mfuntowicz on 1/13/26.
 //
+#include <stdio.h>
+#include <string.h>
 #include <sys/mman.h>
 #include "hmll/hmll.h"
 
@@ -43,8 +45,11 @@ void *hmll_alloc(const size_t size, const struct hmll_device device, const int f
     if (hmll_device_is_cuda(device) && flags == HMLL_MEM_DEVICE)
         cudaMalloc(&ptr, size);
 
-    if (hmll_device_is_cuda(device) && flags == HMLL_MEM_STAGING)
-        cudaHostAlloc(&ptr, size, cudaHostAllocDefault | cudaHostAllocPortable);
+    if (hmll_device_is_cuda(device) && flags == HMLL_MEM_STAGING) {
+        cudaError_t err = cudaHostAlloc(&ptr, size, cudaHostAllocDefault | cudaHostAllocPortable);
+        if (err != cudaSuccess)
+            ptr = NULL;
+    }
 
 #endif
     return ptr;
