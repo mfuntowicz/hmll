@@ -6,6 +6,7 @@
 #include "sys/mman.h"
 
 #define HMLL_IO_URING_FADVISE_TAG (1ULL << 63)
+#define HMLL_IO_URING_DEFAULT_QUEUE_PARAMS IORING_SETUP_SQPOLL
 
 #if defined(__HMLL_CUDA_ENABLED__)
 #include "hmll/cuda.h"
@@ -14,7 +15,6 @@
 #endif
 
 /* ── runtime kernel version detection ───────────────────────────────── */
-
 static inline unsigned hmll_kernel_version_internal(unsigned maj, unsigned min)
 {
     return (maj << 16) | min;
@@ -44,13 +44,11 @@ static unsigned hmll_kernel_version(void)
  */
 static inline int hmll_io_uring_get_setup_flags(void)
 {
-    int flags = IORING_SETUP_SQPOLL;
-
     const unsigned kversion = hmll_kernel_version();
 
+    int flags = HMLL_IO_URING_DEFAULT_QUEUE_PARAMS;
     if (kversion >= hmll_kernel_version_internal(6, 1)) {
-        flags |= IORING_SETUP_COOP_TASKRUN
-              |  IORING_SETUP_TASKRUN_FLAG;
+        flags |= IORING_SETUP_COOP_TASKRUN | IORING_SETUP_TASKRUN_FLAG;
     }
 
     return flags;
@@ -754,12 +752,12 @@ static ssize_t hmll_io_uring_fetchv_impl(
     return hmll_io_uring_fetchv_loop(ctx, bfd, dsts, offsets, n, 1);
 }
 
-struct hmll_error hmll_io_uring_init(struct hmll *ctx, const struct hmll_device device) {
-    if (hmll_check(ctx->error))
-        return ctx->error;
-
-    struct hmll_io_uring *backend = calloc(1, sizeof(struct hmll_io_uring));
-
+static struct hmll_error hmll_io_uring_queue_init(
+    struct hmll *ctx,
+    struct hmll_io_uring *backend,
+    const struct hmll_device device
+) {
+    (void)ctx;
     struct io_uring_params params = {
         .sq_thread_cpu = 0,
         .flags = hmll_io_uring_get_setup_flags(),
@@ -770,8 +768,7 @@ struct hmll_error hmll_io_uring_init(struct hmll *ctx, const struct hmll_device 
 #if defined(__HMLL_CUDA_ENABLED__)
         cudaError_t cuda_err = cudaSetDevice(device.idx);
         if (cuda_err != cudaSuccess) {
-            ctx->error = HMLL_ERR(HMLL_ERR_CUDA_SET_DEVICE_FAILED);
-            return ctx->error;
+            return HMLL_ERR(HMLL_ERR_CUDA_SET_DEVICE_FAILED);
         }
 
         struct hmll_io_uring_cuda_context *data = calloc(HMLL_URING_QUEUE_DEPTH, sizeof(struct hmll_io_uring_cuda_context));
@@ -783,28 +780,51 @@ struct hmll_error hmll_io_uring_init(struct hmll *ctx, const struct hmll_device 
             CHECK_CUDA(cudaEventCreateWithFlags(&data[i].done, cudaEventDisableTiming));
         }
 
-        int res = 0;
-        if ((res = io_uring_queue_init_params(HMLL_URING_QUEUE_DEPTH, &backend->ioring, &params)) < 0) {
-            ctx->error = HMLL_SYS_ERR(-res);
-            return ctx->error;
+        // we get the "optimal" set of flags we would like to enable and attempt to init there
+        int res = io_uring_queue_init_params(HMLL_URING_QUEUE_DEPTH, &backend->ioring, &params);
+        if (res < 0) {
+            if (res == -EINVAL && (params.flags & IORING_SETUP_COOP_TASKRUN)) {
+                params.flags = HMLL_IO_URING_DEFAULT_QUEUE_PARAMS;
+                res = io_uring_queue_init_params(HMLL_URING_QUEUE_DEPTH, &backend->ioring, &params);
+            }
+            if (res < 0) {
+                return HMLL_SYS_ERR(-res);
+            }
         }
 
-        ctx->error = hmll_io_uring_register_staging_buffers(ctx, backend, device);
-        if (hmll_check(ctx->error)) {
-            return ctx->error;
+        struct hmll_error err = hmll_io_uring_register_staging_buffers(ctx, backend, device);
+        if (hmll_check(err)) {
+            return err;
         }
 
+        return HMLL_OK;
 #else
-        ctx->error = HMLL_ERR(HMLL_ERR_CUDA_NOT_ENABLED);
-        return ctx->error;
+        return HMLL_ERR(HMLL_ERR_CUDA_NOT_ENABLED);
 #endif
     } else {
-        int res;
-        if ((res = io_uring_queue_init_params(HMLL_URING_QUEUE_DEPTH, &backend->ioring, &params)) < 0) {
-            ctx->error = HMLL_SYS_ERR(-res);
-            goto cleanup;
+        int res = io_uring_queue_init_params(HMLL_URING_QUEUE_DEPTH, &backend->ioring, &params);
+        if (res < 0) {
+            if (res == -EINVAL && (params.flags & IORING_SETUP_COOP_TASKRUN)) {
+                params.flags = IORING_SETUP_SQPOLL;
+                res = io_uring_queue_init_params(HMLL_URING_QUEUE_DEPTH, &backend->ioring, &params);
+            }
+            if (res < 0) {
+                return HMLL_SYS_ERR(-res);
+            }
         }
+        return HMLL_OK;
     }
+}
+
+struct hmll_error hmll_io_uring_init(struct hmll *ctx, const struct hmll_device device) {
+    if (hmll_check(ctx->error))
+        return ctx->error;
+
+    struct hmll_io_uring *backend = calloc(1, sizeof(struct hmll_io_uring));
+
+    ctx->error = hmll_io_uring_queue_init(ctx, backend, device);
+    if (hmll_check(ctx->error))
+        goto cleanup;
 
     const size_t n_iofiles = ctx->num_sources * 2;
     int *iofiles = calloc(n_iofiles, sizeof(int));
