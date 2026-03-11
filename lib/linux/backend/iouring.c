@@ -57,7 +57,7 @@ static inline int hmll_io_uring_get_setup_flags(void)
 /* ── scratch allocator (stack with heap fallback) ───────────────────── */
 
 static inline void *hmll_scratch_alloc(
-    uint8_t *stack, size_t size, size_t need, void **to_free
+    uint8_t *stack, const size_t size, const size_t need, void **to_free
 ) {
     *to_free = NULL;
     if (need <= size) return stack;

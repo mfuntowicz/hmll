@@ -177,8 +177,8 @@ size_t hmll_safetensors_index(struct hmll *ctx, struct hmll_registry *reg, const
         goto cleanup;
     }
 
-    yyjson_val *root = yyjson_doc_get_root(document);
-    yyjson_val *map = yyjson_obj_get(root, "weight_map");
+    const yyjson_val *root = yyjson_doc_get_root(document);
+    const yyjson_val *map = yyjson_obj_get(root, "weight_map");
     if (map == NULL) {
         ctx->error = HMLL_ERR(HMLL_ERR_SAFETENSORS_JSON_MALFORMED_INDEX);
         goto cleanup;
@@ -276,7 +276,7 @@ size_t hmll_safetensors_populate_registry(
         goto freeup_and_exit;
     }
 
-    yyjson_val *root = yyjson_doc_get_root(document);
+    const yyjson_val *root = yyjson_doc_get_root(document);
     if (!yyjson_is_obj(root)) {
         ctx->error = HMLL_ERR(HMLL_ERR_SAFETENSORS_JSON_INVALID_HEADER);
         goto freeup_and_exit;
@@ -337,6 +337,8 @@ size_t hmll_safetensors_populate_registry(
 
         ++tidx;
     }
+
+    goto exit;
 
 freeup_and_exit:
     if (document) yyjson_doc_free(document);
