@@ -256,13 +256,13 @@ size_t hmll_safetensors_populate_registry(
 ) {
     size_t tidx = 0, num_tensors = 0;
     if (hmll_check(ctx->error))
-        goto exit;
+       return 0;
 
     yyjson_doc *document = NULL;
     FILE *file = hmll_get_file_from_fd(source);
     if (!file) {
         ctx->error = HMLL_ERR(HMLL_ERR_FILE_OPEN_FAILED);
-        goto freeup_and_exit;
+        goto freeup;
     }
 
     uint64_t hsize;
@@ -273,13 +273,13 @@ size_t hmll_safetensors_populate_registry(
     document = yyjson_read_opts((char *)source.content + sizeof(uint64_t), hsize, YYJSON_READ_NOFLAG, NULL, &error);
     if (!document) {
         ctx->error = HMLL_ERR(HMLL_ERR_SAFETENSORS_JSON_INVALID_HEADER);
-        goto freeup_and_exit;
+        goto freeup;
     }
 
     const yyjson_val *root = yyjson_doc_get_root(document);
     if (!yyjson_is_obj(root)) {
         ctx->error = HMLL_ERR(HMLL_ERR_SAFETENSORS_JSON_INVALID_HEADER);
-        goto freeup_and_exit;
+        goto freeup;
     }
 
     // we don't allocate this the number of tensors is already set on the context
@@ -289,17 +289,17 @@ size_t hmll_safetensors_populate_registry(
     if (reg->num_tensors == 0) {
         if ((reg->names = calloc(num_tensors, sizeof(char*))) == NULL) {
             ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
-            goto freeup_and_exit;
+            goto freeup;
         }
 
         if ((reg->tensors = calloc(num_tensors, sizeof(struct hmll_tensor_specs))) == NULL) {
             ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
-            goto freeup_and_exit;
+            goto freeup;
         }
 
         if ((reg->indexes = calloc(num_tensors, sizeof(struct hmll_source))) == NULL) {
             ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
-            goto freeup_and_exit;
+            goto freeup;
         }
     }
 
@@ -323,12 +323,12 @@ size_t hmll_safetensors_populate_registry(
 
         if (!yyjson_is_obj(val)) {
             ctx->error = HMLL_ERR(HMLL_ERR_SAFETENSORS_JSON_MALFORMED_HEADER);
-            goto freeup_and_exit;
+            goto freeup;
         }
 
         if (hmll_check(hmll_safetensors_header_parse_tensor(val, tensors + offset + tidx))) {
             ctx->error = HMLL_ERR(HMLL_ERR_SAFETENSORS_JSON_MALFORMED_HEADER);
-            goto freeup_and_exit;
+            goto freeup;;
         }
 
         // tensor offsets start at 0, we need to add header size + 8 to get the real position in the file
@@ -338,10 +338,9 @@ size_t hmll_safetensors_populate_registry(
         ++tidx;
     }
 
-    goto exit;
+    goto cleanup;
 
-freeup_and_exit:
-    if (document) yyjson_doc_free(document);
+freeup:
     if (reg->names) {
         for (size_t i = 0; i < tidx; ++i) {
             free(reg->names[i]);
@@ -354,8 +353,9 @@ freeup_and_exit:
     free(reg->indexes);
     reg->indexes = NULL;
 
-exit:
-    if (hmll_check(ctx->error)) return 0;
+cleanup:
+    if (document) yyjson_doc_free(document);
+
     if (reg->num_tensors == 0) reg->num_tensors = tidx;
     return tidx;
 }
