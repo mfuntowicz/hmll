@@ -11,8 +11,11 @@
 #define HMLL_URING_BUFFER_SIZE (512U * 1024)
 #endif
 
+#include <assert.h>
 #include <liburing.h>
 #include "hmll/types.h"
+
+static_assert(HMLL_URING_BUFFER_SIZE % 4096 == 0, "HMLL_URING_BUFFER_SIZE should be 4096-aligned");
 
 struct hmll_iouring_iobusy
 {
