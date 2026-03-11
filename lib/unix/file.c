@@ -61,11 +61,11 @@ exit:
 
 void hmll_source_close(struct hmll_source *src)
 {
-    if (src && src->fd > 0) {
+    if (src && src->fd != -1) {
         close(src->fd);
         src->fd = -1;
     }
-    if (src && src->d_fd > 0) {
+    if (src && src->d_fd != -1) {
         close(src->d_fd);
         src->d_fd = -1;
     }
