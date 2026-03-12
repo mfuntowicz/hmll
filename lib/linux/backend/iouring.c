@@ -554,8 +554,6 @@ static ssize_t hmll_io_uring_fetchv_loop(
             io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
             io_uring_sqe_set_data64(sqe, ((uint64_t)bidx << FETCHV_BIDX_SHIFT) | (uint64_t)slot);
 
-            // Track submission for debug (removed static vars that were causing confusion)
-
             st->submitted += to_read;
             n_in_flight++;
 
@@ -891,7 +889,6 @@ void hmll_io_uring_destroy(void *ptr)
             }
         }
 
-        // Staging arena was allocated with cudaHostAlloc
         cudaFreeHost(backend->iovecs[0].iov_base);
         free(backend->device_ctx);
         backend->device_ctx = NULL;
