@@ -132,6 +132,7 @@ HMLL_EXTERN struct hmll_error hmll_get_mmap_view(struct hmll *ctx, int iofile, s
 /** Tensors manipulation stubs - enabled if a higher-level tensor format is enabled **/
 #ifdef __HMLL_TENSORS_ENABLED__
 HMLL_EXTERN uint8_t hmll_nbits(enum hmll_dtype dtype) NO_EXCEPT;
+HMLL_EXTERN size_t hmll_nbytes(const struct hmll_tensor_specs *specs) NO_EXCEPT;
 HMLL_EXTERN size_t hmll_numel(const struct hmll_tensor_specs *specs) NO_EXCEPT;
 HMLL_EXTERN void hmll_free_registry(struct hmll_registry *reg) NO_EXCEPT;
 HMLL_EXTERN unsigned char hmll_contains(const struct hmll *ctx, const struct hmll_registry *reg, const char *name) NO_EXCEPT;

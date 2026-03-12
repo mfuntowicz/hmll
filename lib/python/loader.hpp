@@ -7,6 +7,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/string.h>
+#include <nanobind/stl/tuple.h>
 #include <nanobind/stl/vector.h>
 
 #include "hmll/hmll.h"
@@ -43,8 +44,9 @@ public:
     [[nodiscard]] size_t
     fetch(int iofile, size_t offset, uintptr_t dst, size_t size) const;
 
-    [[nodiscard]] nb::ndarray<nb::ndim<1>, nb::c_contig>
-    fetchv(int iofile, const std::vector<std::tuple<size_t, size_t>>& ranges, hmll_dtype_t dtype) const;
+    /** Batched fetch: write multiple byte ranges from the file into a single pre-allocated buffer. */
+    [[nodiscard]] size_t
+    fetchv(int iofile, const std::vector<std::tuple<size_t, size_t>>& ranges, uintptr_t dst) const;
 };
 
 #endif // PYHMLL_FETCHER_HPP

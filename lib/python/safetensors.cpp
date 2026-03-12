@@ -15,6 +15,7 @@
 #include <nanobind/stl/string_view.h>
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/pair.h>
+#include <nanobind/stl/tuple.h>
 #include <hmll/hmll.h>
 
 #include "loader.hpp"
@@ -68,7 +69,7 @@ public:
             if (hmll_check(hmll_source_open(path_str.c_str(), &source)))
                 throw std::runtime_error("Failed to open file: " + path_str);
 
-            const auto registry = std::make_shared<hmll_registry_t>();
+            auto registry = std::make_shared<hmll_registry_t>();
             auto ctx = std::make_unique<hmll_t>();
 
             if (const auto n_tensors = hmll_safetensors_populate_registry(ctx.get(), registry.get(), source, 0, 0); n_tensors == 0) {
@@ -76,7 +77,7 @@ public:
                 throw std::runtime_error(fmt::format(FMT_COMPILE("Failed to read tensor definition in file {}: {}"), path, hmll_strerr(ctx->error)));
             }
 
-            auto sources = std::vector<hmll_source_t>{source};
+            auto sources = std::vector{source};
             loader_ = std::make_unique<WeightLoader>(std::move(sources), device, std::move(ctx), backend);
             registry_ = std::move(registry);
         }
@@ -151,9 +152,40 @@ public:
 
         const auto specs = registry->tensors[index];
         const auto iofile = registry->indexes[index];
+        const auto nbytes = hmll_nbytes(&specs);
+
+        if (size < nbytes)
+            throw std::runtime_error(fmt::format(
+                FMT_COMPILE("Provided destination buffer cannot be smaller than tensor size (provided={}, required={})"), size, nbytes));
+
 
         // Delegate to WeightLoader for actual fetching
         return loader_->fetch(iofile, specs.start, dst, size);
+    }
+
+    /** Fetch only the given element ranges into dst. Dtype is taken from the registry. */
+    [[nodiscard]] size_t fetchv(const std::string& name, const std::vector<std::tuple<size_t, size_t>>& ranges, const uintptr_t dst) const
+    {
+        const auto registry = registry_.get();
+        const hmll_lookup_result lookup = hmll_lookup_tensor(loader_->context(), registry, name.c_str());
+        if (lookup.specs == nullptr)
+            throw nb::key_error(name.c_str());
+
+        const hmll_tensor_specs_t* specs = lookup.specs;
+        const int iofile = lookup.file;
+        const size_t numel = hmll_numel(specs);
+        const size_t nbytes = specs->end - specs->start;
+        const size_t nbits = (numel > 0) ? (nbytes / numel) : 0;
+
+        std::vector<std::tuple<size_t, size_t>> byte_ranges;
+        byte_ranges.reserve(ranges.size());
+        for (const auto& [start, end] : ranges) {
+            const size_t file_start = specs->start + start * nbits;
+            const size_t file_end = specs->start + end * nbits;
+            byte_ranges.emplace_back(file_start, file_end);
+        }
+
+        return loader_->fetchv(iofile, byte_ranges, dst);
     }
 };
 
@@ -180,8 +212,8 @@ void init_safetensors(nb::module_& m)
     .def("values", &SafetensorsAccessor::specs, nb::rv_policy::reference_internal)
     .def("items", &SafetensorsAccessor::named_specs, nb::rv_policy::reference_internal)
     .def("afetch", &SafetensorsAccessor::afetch)
-    .def("fetch", &SafetensorsAccessor::fetch);
-
+    .def("fetch", &SafetensorsAccessor::fetch)
+    .def("fetchv", &SafetensorsAccessor::fetchv);
     m.def("safetensors", [](const std::filesystem::path& path, const hmll_device_t device, const bool is_sharded, const hmll_fetcher_kind_t backend) {
         return new SafetensorsAccessor(path, device, is_sharded, backend);
     }, nb::rv_policy::take_ownership, "path"_a, "device"_a, "is_sharded"_a = false, "backend"_a = HMLL_FETCHER_AUTO);

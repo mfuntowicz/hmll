@@ -19,5 +19,6 @@ void hmll_destroy(struct hmll *ctx)
     if (ctx->fetcher) {
         ctx->fetcher->backend_free(ctx->fetcher->backend_impl_);
         free(ctx->fetcher);
+        ctx->fetcher = NULL;
     }
 }

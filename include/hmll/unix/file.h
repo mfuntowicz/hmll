@@ -6,6 +6,7 @@
 
 struct hmll_source {
     int fd;
+    int d_fd;   /* O_DIRECT fd for aligned I/O (Linux only, -1 elsewhere) */
     size_t size;
     const unsigned char *content;
 };

@@ -21,7 +21,7 @@
 #endif
 
 static ssize_t
-hmll_mmap_fetch_range_impl(struct hmll *ctx, const int iofile, const struct hmll_iobuf *dst, const size_t offset)
+hmll_mmap_fetch_range_impl(struct hmll *ctx, const unsigned iofile, const struct hmll_iobuf *dst, const size_t offset)
 {
     if (hmll_check(ctx->error)) return -1;
     if (dst->size == 0) return 0;
@@ -44,7 +44,7 @@ hmll_mmap_fetch_range_impl(struct hmll *ctx, const int iofile, const struct hmll
 }
 
 static ssize_t
-hmll_mmap_fetchv_range_impl(struct hmll *ctx, const int iofile, const struct hmll_iobuf *dsts, const size_t *offsets, const size_t n)
+hmll_mmap_fetchv_range_impl(struct hmll *ctx, const unsigned iofile, const struct hmll_iobuf *dsts, const size_t *offsets, const size_t n)
 {
     if (hmll_check(ctx->error)) return -1;
 
