@@ -79,9 +79,7 @@ static struct hmll_error hmll_io_uring_register_staging_buffers(
         return ctx->error;
     }
 
-    const size_t staging_size = HMLL_URING_QUEUE_DEPTH * HMLL_URING_BUFFER_SIZE;
-
-    unsigned char *arena = hmll_alloc(staging_size, device, HMLL_MEM_STAGING);
+    unsigned char *arena = hmll_alloc(HMLL_URING_QUEUE_DEPTH * HMLL_URING_BUFFER_SIZE, device, HMLL_MEM_STAGING);
     if (!arena) {
         ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
         return ctx->error;
