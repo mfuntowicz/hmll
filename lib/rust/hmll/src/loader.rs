@@ -2,12 +2,9 @@
 
 use hmll_sys::hmll_iobuf;
 
-use crate::source::SourceHandle;
 use crate::{Buffer, Device, Error, Range, Result, Source};
 use std::collections::HashSet;
-use std::marker::PhantomData;
 use std::ptr;
-use std::sync::Arc;
 
 /// Loader backend kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -36,8 +33,6 @@ impl LoaderKind {
 
 impl Default for LoaderKind {
     /// Default loader kind is Auto.
-    ///
-    /// Hot path - inline always for zero-cost default.
     #[inline(always)]
     fn default() -> Self {
         LoaderKind::Auto
@@ -59,11 +54,11 @@ impl Default for LoaderKind {
 /// let source1 = Source::open("model-00001-of-00003.safetensors")?;
 /// let source2 = Source::open("model-00002-of-00003.safetensors")?;
 /// let source3 = Source::open("model-00003-of-00003.safetensors")?;
-/// let sources = [source1, source2, source3];
+/// let sources = vec![source1, source2, source3];
 ///
 /// // Create a loader
 /// let mut loader = WeightLoader::new(
-///     &sources,
+///     sources,
 ///     Device::Cpu,
 ///     LoaderKind::Auto
 /// )?;
@@ -74,17 +69,14 @@ impl Default for LoaderKind {
 /// # Ok(())
 /// # }
 /// ```
-pub struct WeightLoader<'a> {
+#[derive(Debug)]
+pub struct WeightLoader {
     context: Box<hmll_sys::hmll>,
-    /// Raw sources passed to C layer
-    sources: Vec<hmll_sys::hmll_source>,
-    /// Arc handles for each source - keeps mmap alive while views exist
-    source_handles: Vec<Arc<SourceHandle>>,
+    sources: Vec<Source>,
     device: Device,
-    _marker: PhantomData<&'a ()>,
 }
 
-impl<'a> WeightLoader<'a> {
+impl WeightLoader {
     /// Create a new weight loader.
     ///
     /// # Arguments
@@ -96,14 +88,10 @@ impl<'a> WeightLoader<'a> {
     /// # Errors
     ///
     /// Returns an error if the loader initialization fails.
-    pub fn new(sources: &'a [Source], device: Device, kind: LoaderKind) -> Result<Self> {
+    pub fn new(sources: Vec<Source>, device: Device, kind: LoaderKind) -> Result<Self> {
         if sources.is_empty() {
             return Err(Error::InvalidRange);
         }
-
-        // Clone Arc handles to keep sources alive while views exist
-        let source_handles: Vec<Arc<SourceHandle>> =
-            sources.iter().map(|s| s.handle().clone()).collect();
 
         let mut sources_vec: Vec<hmll_sys::hmll_source> =
             sources.iter().map(|s| *s.as_raw()).collect();
@@ -130,19 +118,16 @@ impl<'a> WeightLoader<'a> {
             // For mmap backend, close fds immediately - mmap is independent of fd.
             // NOTE: Could detect Auto resolving to mmap and close too, but left out for now.
             if kind == LoaderKind::Mmap {
-                for handle in &source_handles {
-                    let inner_ptr = &handle.inner as *const _ as *mut hmll_sys::hmll_source;
-                    hmll_sys::hmll_source_close(inner_ptr);
+                for source in &sources {
+                    source.close_fd();
                 }
             }
         }
 
         Ok(Self {
             context,
-            sources: sources_vec,
-            source_handles,
+            sources,
             device,
-            _marker: PhantomData,
         })
     }
 
@@ -172,8 +157,8 @@ impl<'a> WeightLoader<'a> {
     /// # use hmll::{Source, WeightLoader, Device, LoaderKind, Range};
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let source = Source::open("model.safetensors")?;
-    /// # let sources = [source];
-    /// # let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)?;
+    /// # let sources = vec![source];
+    /// # let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Auto)?;
     ///
     /// // Fetch multiple weight tensors in a single batch
     /// let ranges = vec![
@@ -189,7 +174,7 @@ impl<'a> WeightLoader<'a> {
     /// # }
     /// ```
     pub fn fetchv(&mut self, ranges: &[Range], file_index: usize) -> Result<Vec<Buffer>> {
-        if file_index >= self.sources.len() {
+        if file_index >= self.num_sources() {
             return Err(Error::InvalidFileIndex(file_index));
         }
 
@@ -289,8 +274,8 @@ impl<'a> WeightLoader<'a> {
     /// # use hmll::{Source, WeightLoader, Device, LoaderKind};
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let source = Source::open("model.safetensors")?;
-    /// # let sources = [source];
-    /// # let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)?;
+    /// # let sources = vec![source];
+    /// # let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Auto)?;
     ///
     /// // Fetch first 1MB from the first file
     /// let data = loader.fetch(0..1024 * 1024, 0)?;
@@ -301,7 +286,7 @@ impl<'a> WeightLoader<'a> {
     pub fn fetch<R: Into<Range>>(&mut self, range: R, file_index: usize) -> Result<Buffer> {
         let range = range.into();
 
-        if file_index >= self.sources.len() {
+        if file_index >= self.num_sources() {
             return Err(Error::InvalidFileIndex(file_index));
         }
 
@@ -364,8 +349,8 @@ impl<'a> WeightLoader<'a> {
     /// # use hmll::{Source, WeightLoader, Device, LoaderKind};
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let source = Source::open("model.safetensors")?;
-    /// # let sources = [source];
-    /// # let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Mmap)?;
+    /// # let sources = vec![source];
+    /// # let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Mmap)?;
     ///
     /// // Get a zero-copy view into the first 1MB
     /// let view = loader.fetch_view(0..1024 * 1024, 0)?;
@@ -378,10 +363,6 @@ impl<'a> WeightLoader<'a> {
     pub fn fetch_view<R: Into<Range>>(&mut self, range: R, file_index: usize) -> Result<Buffer> {
         let range = range.into();
 
-        if file_index >= self.sources.len() {
-            return Err(Error::InvalidFileIndex(file_index));
-        }
-
         if range.is_empty() {
             return Ok(Buffer::empty(self.device));
         }
@@ -392,10 +373,14 @@ impl<'a> WeightLoader<'a> {
         }
 
         // Clone the Arc to keep the source (and its mmap) alive
-        let source_handle = self.source_handles[file_index].clone();
+        let source = self
+            .sources
+            .get(file_index)
+            .cloned()
+            .ok_or(Error::InvalidFileIndex(file_index))?;
 
         // Get the mmap'd content pointer directly from the source
-        let content_ptr = source_handle.inner.content;
+        let content_ptr = source.as_raw().content;
         if content_ptr.is_null() {
             return Err(Error::MmapFailed);
         }
@@ -406,7 +391,7 @@ impl<'a> WeightLoader<'a> {
         let view_size = range.len();
 
         // Create a view buffer - Arc keeps source (and mmap) alive
-        Ok(unsafe { Buffer::from_source_view(view_ptr, view_size, self.device, source_handle) })
+        Ok(unsafe { Buffer::from_source_view(view_ptr, view_size, self.device, source.handle()) })
     }
 
     /// Get the device this loader is configured for.
@@ -424,11 +409,13 @@ impl<'a> WeightLoader<'a> {
     /// Get information about a specific source file.
     #[inline]
     pub fn source_info(&self, index: usize) -> Option<SourceInfo> {
-        self.sources.get(index).map(|s| SourceInfo { size: s.size })
+        self.sources
+            .get(index)
+            .map(|s| SourceInfo { size: s.size() })
     }
 }
 
-impl<'a> Drop for WeightLoader<'a> {
+impl Drop for WeightLoader {
     fn drop(&mut self) {
         unsafe {
             hmll_sys::hmll_destroy(self.context.as_mut());
@@ -459,7 +446,7 @@ mod tests {
 
     #[test]
     fn test_empty_sources() {
-        let result = WeightLoader::new(&[], Device::Cpu, LoaderKind::Auto);
+        let result = WeightLoader::new(vec![], Device::Cpu, LoaderKind::Auto);
         assert!(result.is_err());
     }
 
@@ -479,9 +466,9 @@ mod tests {
         let temp_file = create_test_file(content);
 
         let source = Source::open(temp_file.path()).expect("Failed to open source");
-        let sources = [source];
+        let sources = vec![source];
 
-        let loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)
+        let loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Auto)
             .expect("Failed to create loader");
 
         assert_eq!(loader.device(), Device::Cpu);
@@ -497,9 +484,9 @@ mod tests {
         let temp_file = create_test_file(content);
 
         let source = Source::open(temp_file.path()).expect("Failed to open source");
-        let sources = [source];
+        let sources = vec![source];
 
-        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)
+        let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Auto)
             .expect("Failed to create loader");
 
         let buffer = loader
@@ -519,9 +506,9 @@ mod tests {
         let temp_file = create_test_file(content);
 
         let source = Source::open(temp_file.path()).expect("Failed to open source");
-        let sources = [source];
+        let sources = vec![source];
 
-        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)
+        let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Auto)
             .expect("Failed to create loader");
 
         let buffer = loader
@@ -540,9 +527,9 @@ mod tests {
         let temp_file = create_test_file(content);
 
         let source = Source::open(temp_file.path()).expect("Failed to open source");
-        let sources = [source];
+        let sources = vec![source];
 
-        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)
+        let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Auto)
             .expect("Failed to create loader");
 
         let buffer = loader.fetch(5..5, 0).expect("Failed to fetch empty range");
@@ -557,9 +544,9 @@ mod tests {
         let temp_file = create_test_file(content);
 
         let source = Source::open(temp_file.path()).expect("Failed to open source");
-        let sources = [source];
+        let sources = vec![source];
 
-        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)
+        let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Auto)
             .expect("Failed to create loader");
 
         let result = loader.fetch(0..10, 99);
@@ -580,9 +567,9 @@ mod tests {
         let source2 = Source::open(temp2.path()).expect("Failed to open source 2");
         let source3 = Source::open(temp3.path()).expect("Failed to open source 3");
 
-        let sources = [source1, source2, source3];
+        let sources = vec![source1, source2, source3];
 
-        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)
+        let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Auto)
             .expect("Failed to create loader");
 
         assert_eq!(loader.num_sources(), 3);
@@ -609,9 +596,9 @@ mod tests {
         let temp_file = create_test_file(&content);
 
         let source = Source::open(temp_file.path()).expect("Failed to open source");
-        let sources = [source];
+        let sources = vec![source];
 
-        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)
+        let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Auto)
             .expect("Failed to create loader");
 
         let buffer = loader
@@ -630,9 +617,9 @@ mod tests {
         let temp_file = create_test_file(content);
 
         let source = Source::open(temp_file.path()).expect("Failed to open source");
-        let sources = [source];
+        let sources = vec![source];
 
-        let loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)
+        let loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Auto)
             .expect("Failed to create loader");
 
         let info = loader.source_info(0);
@@ -649,9 +636,9 @@ mod tests {
         let temp_file = create_test_file(content);
 
         let source = Source::open(temp_file.path()).expect("Failed to open source");
-        let sources = [source];
+        let sources = vec![source];
 
-        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)
+        let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Auto)
             .expect("Failed to create loader");
 
         let buffer = loader.fetch(0..content.len(), 0).expect("Failed to fetch");
@@ -666,9 +653,9 @@ mod tests {
         let temp_file = create_test_file(content);
 
         let source = Source::open(temp_file.path()).expect("Failed to open source");
-        let sources = [source];
+        let sources = vec![source];
 
-        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Mmap)
+        let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Mmap)
             .expect("Failed to create mmap loader");
 
         let buffer = loader
@@ -684,9 +671,9 @@ mod tests {
         let temp_file = create_test_file(content);
 
         let source = Source::open(temp_file.path()).expect("Failed to open source");
-        let sources = [source];
+        let sources = vec![source];
 
-        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Mmap)
+        let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Mmap)
             .expect("Failed to create mmap loader");
 
         let view = loader
@@ -705,9 +692,9 @@ mod tests {
         let temp_file = create_test_file(content);
 
         let source = Source::open(temp_file.path()).expect("Failed to open source");
-        let sources = [source];
+        let sources = vec![source];
 
-        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Mmap)
+        let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Mmap)
             .expect("Failed to create mmap loader");
 
         // Get a view of just the uppercase letters
@@ -726,9 +713,9 @@ mod tests {
         let temp_file = create_test_file(content);
 
         let source = Source::open(temp_file.path()).expect("Failed to open source");
-        let sources = [source];
+        let sources = vec![source];
 
-        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Mmap)
+        let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Mmap)
             .expect("Failed to create mmap loader");
 
         let view = loader
@@ -745,9 +732,9 @@ mod tests {
         let temp_file = create_test_file(content);
 
         let source = Source::open(temp_file.path()).expect("Failed to open source");
-        let sources = [source];
+        let sources = vec![source];
 
-        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Mmap)
+        let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Mmap)
             .expect("Failed to create mmap loader");
 
         let result = loader.fetch_view(0..10, 99);
@@ -762,9 +749,9 @@ mod tests {
 
         let view = {
             let source = Source::open(temp_file.path()).expect("Failed to open source");
-            let sources = [source];
+            let sources = vec![source];
 
-            let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Mmap)
+            let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Mmap)
                 .expect("Failed to create mmap loader");
 
             loader
@@ -784,9 +771,9 @@ mod tests {
         let temp_file = create_test_file(content);
 
         let source = Source::open(temp_file.path()).expect("Failed to open source");
-        let sources = [source];
+        let sources = vec![source];
 
-        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Mmap)
+        let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Mmap)
             .expect("Failed to create mmap loader");
 
         // Create multiple views from the same source
@@ -817,9 +804,9 @@ mod tests {
         let source1 = Source::open(temp1.path()).expect("Failed to open source 1");
         let source2 = Source::open(temp2.path()).expect("Failed to open source 2");
 
-        let sources = [source1, source2];
+        let sources = vec![source1, source2];
 
-        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Mmap)
+        let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Mmap)
             .expect("Failed to create mmap loader");
 
         let view1 = loader
@@ -843,9 +830,9 @@ mod tests {
         let temp_file = create_test_file(content);
 
         let source = Source::open(temp_file.path()).expect("Failed to open source");
-        let sources = [source];
+        let sources = vec![source];
 
-        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)
+        let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Auto)
             .expect("Failed to create loader");
 
         let ranges = vec![Range::new(0, 10), Range::new(10, 20), Range::new(20, 36)];
@@ -864,9 +851,9 @@ mod tests {
         let temp_file = create_test_file(content);
 
         let source = Source::open(temp_file.path()).expect("Failed to open source");
-        let sources = [source];
+        let sources = vec![source];
 
-        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)
+        let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Auto)
             .expect("Failed to create loader");
 
         let ranges = vec![Range::new(0, content.len())];
@@ -882,9 +869,9 @@ mod tests {
         let temp_file = create_test_file(content);
 
         let source = Source::open(temp_file.path()).expect("Failed to open source");
-        let sources = [source];
+        let sources = vec![source];
 
-        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)
+        let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Auto)
             .expect("Failed to create loader");
 
         let buffers = loader.fetchv(&[], 0).expect("Failed to fetchv");
@@ -897,9 +884,9 @@ mod tests {
         let temp_file = create_test_file(content);
 
         let source = Source::open(temp_file.path()).expect("Failed to open source");
-        let sources = [source];
+        let sources = vec![source];
 
-        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)
+        let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Auto)
             .expect("Failed to create loader");
 
         let ranges = vec![
@@ -924,9 +911,9 @@ mod tests {
         let temp_file = create_test_file(content);
 
         let source = Source::open(temp_file.path()).expect("Failed to open source");
-        let sources = [source];
+        let sources = vec![source];
 
-        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)
+        let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Auto)
             .expect("Failed to create loader");
 
         let ranges = vec![Range::new(0, 0), Range::new(5, 5), Range::new(10, 3)];
@@ -943,9 +930,9 @@ mod tests {
         let temp_file = create_test_file(content);
 
         let source = Source::open(temp_file.path()).expect("Failed to open source");
-        let sources = [source];
+        let sources = vec![source];
 
-        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)
+        let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Auto)
             .expect("Failed to create loader");
 
         let ranges = vec![Range::new(0, 10)];
@@ -963,9 +950,9 @@ mod tests {
 
         let source1 = Source::open(temp1.path()).expect("Failed to open source 1");
         let source2 = Source::open(temp2.path()).expect("Failed to open source 2");
-        let sources = [source1, source2];
+        let sources = vec![source1, source2];
 
-        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)
+        let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Auto)
             .expect("Failed to create loader");
 
         let ranges1 = vec![Range::new(0, content1.len())];
@@ -985,9 +972,9 @@ mod tests {
         let temp_file = create_test_file(&content);
 
         let source = Source::open(temp_file.path()).expect("Failed to open source");
-        let sources = [source];
+        let sources = vec![source];
 
-        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)
+        let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Auto)
             .expect("Failed to create loader");
 
         // Split into 16 equal chunks
@@ -1012,9 +999,9 @@ mod tests {
         let temp_file = create_test_file(content);
 
         let source = Source::open(temp_file.path()).expect("Failed to open source");
-        let sources = [source];
+        let sources = vec![source];
 
-        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)
+        let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Auto)
             .expect("Failed to create loader");
 
         let ranges = vec![Range::new(0, 10), Range::new(10, 20), Range::new(36, 46)];
@@ -1044,9 +1031,9 @@ mod tests {
         let temp_file = create_test_file(content);
 
         let source = Source::open(temp_file.path()).expect("Failed to open source");
-        let sources = [source];
+        let sources = vec![source];
 
-        let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Mmap)
+        let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Mmap)
             .expect("Failed to create mmap loader");
 
         let ranges = vec![Range::new(0, 10), Range::new(10, 20)];

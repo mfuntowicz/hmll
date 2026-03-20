@@ -105,8 +105,13 @@ static inline int hmll_io_uring_slot_find_available(const struct hmll_iouring_io
 {
     for (unsigned i = 0; i < HMLL_URING_IOBUSY_WORDS; ++i) {
         const int pos = __builtin_ffsll(~iobusy.bits[i]);
-        if (pos > 0)
-            return (int)(i * 64) + pos - 1;
+        if (pos > 0) {
+            const int slot = (int)(i * 64) + pos - 1;
+            // Ensure we don't return slots beyond QUEUE_DEPTH
+            if (slot >= (int)HMLL_URING_QUEUE_DEPTH)
+                return -1;
+            return slot;
+        }
     }
     return -1;
 }

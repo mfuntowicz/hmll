@@ -22,16 +22,16 @@
 //! ```no_run
 //! # use hmll::{Source, WeightLoader, Device, LoaderKind};
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let sources = [
-//!     Source::open("shard-00001.bin")?,
-//!     Source::open("shard-00002.bin")?,
+//! let sources = vec![
+//!     Source::open("model-00001.bin")?,
+//!     Source::open("model-00002.bin")?,
 //! ];
 //!
-//! let mut loader = WeightLoader::new(&sources, Device::Cpu, LoaderKind::Auto)?;
+//! let mut loader = WeightLoader::new(sources, Device::Cpu, LoaderKind::Auto)?;
 //!
 //! // Fetch bytes from specific file by index
-//! let data = loader.fetch(0..1024, 0)?;  // from shard 1
-//! let data = loader.fetch(0..1024, 1)?;  // from shard 2
+//! let data = loader.fetch(0..1024, 0)?;  // from source 1
+//! let data = loader.fetch(0..1024, 1)?;  // from source 2
 //! # Ok(())
 //! # }
 //! ```

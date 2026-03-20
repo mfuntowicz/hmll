@@ -1,4 +1,7 @@
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <sched.h>
 #include <sys/utsname.h>
 #include "hmll/hmll.h"
 #include "hmll/memory.h"
@@ -13,6 +16,61 @@
 #include <cuda_runtime_api.h>
 #include <driver_types.h>
 #endif
+
+/* ── NUMA topology helpers ──────────────────────────────────────────── */
+
+/**
+ * Get the NUMA node for a CUDA device by reading sysfs via the PCI bus ID.
+ * Returns -1 on failure.
+ */
+static int hmll_get_gpu_numa_node(const int device_idx)
+{
+#if defined(__HMLL_CUDA_ENABLED__)
+    char pci_bus_id[64] = {0};
+    if (cudaDeviceGetPCIBusId(pci_bus_id, sizeof(pci_bus_id), device_idx) != cudaSuccess)
+        return -1;
+
+    /* Convert to lowercase for sysfs path (CUDA returns uppercase hex) */
+    for (char *p = pci_bus_id; *p; p++)
+        *p = (*p >= 'A' && *p <= 'Z') ? (*p + 32) : *p;
+
+    char path[256];
+    snprintf(path, sizeof(path), "/sys/bus/pci/devices/%s/numa_node", pci_bus_id);
+
+    FILE *f = fopen(path, "r");
+    if (!f) return -1;
+
+    int node = -1;
+    if (fscanf(f, "%d", &node) != 1) node = -1;
+    fclose(f);
+
+    return node;
+#else
+    (void)device_idx;
+    return -1;
+#endif
+}
+
+/**
+ * Get the first CPU core on a given NUMA node by parsing sysfs.
+ * Returns -1 on failure.
+ */
+static int hmll_get_first_cpu_on_node(const int numa_node)
+{
+    if (numa_node < 0) return -1;
+
+    char path[256];
+    snprintf(path, sizeof(path), "/sys/devices/system/node/node%d/cpulist", numa_node);
+
+    FILE *f = fopen(path, "r");
+    if (!f) return -1;
+
+    int first_cpu = -1;
+    if (fscanf(f, "%d", &first_cpu) != 1) first_cpu = -1;
+    fclose(f);
+
+    return first_cpu;
+}
 
 /* ── runtime kernel version detection ───────────────────────────────── */
 static inline unsigned hmll_kernel_version_internal(unsigned maj, unsigned min)
@@ -80,6 +138,7 @@ static struct hmll_error hmll_io_uring_register_staging_buffers(
     }
 
     unsigned char *arena = hmll_alloc(HMLL_URING_QUEUE_DEPTH * HMLL_URING_BUFFER_SIZE, device, HMLL_MEM_STAGING);
+
     if (!arena) {
         ctx->error = HMLL_ERR(HMLL_ERR_ALLOCATION_FAILED);
         return ctx->error;
@@ -139,13 +198,14 @@ static inline void hmll_io_uring_reclaim_slots(
     struct hmll_io_uring_cuda_context *dctx = fetcher->device_ctx;
     for (size_t i = 0; i < HMLL_URING_QUEUE_DEPTH; ++i) {
         struct hmll_io_uring_cuda_context *cd = dctx + i;
-        if (hmll_io_uring_slot_is_busy(fetcher->iobusy, i)) {
-            if (cd->state == HMLL_CUDA_STREAM_MEMCPY && cudaEventQuery(cd->done) == cudaSuccess) {
+        if (hmll_io_uring_slot_is_busy(fetcher->iobusy, i) && cd->state == HMLL_CUDA_STREAM_MEMCPY) {
+            if (cudaEventQuery(cd->done) == cudaSuccess) {
                 hmll_io_uring_cuda_stream_set_idle(&cd->state);
                 hmll_io_uring_slot_set_available(&fetcher->iobusy, cd->slot);
             }
         }
     }
+
 #else
     HMLL_UNUSED(fetcher);
     HMLL_UNUSED(device);
@@ -196,6 +256,7 @@ static inline void hmll_io_uring_prep_sqe(
 #if defined(__HMLL_CUDA_ENABLED__)
     else if (hmll_device_is_cuda(device)) {
         struct hmll_io_uring_cuda_context *dctx = fetcher->device_ctx;
+
         dctx[slot].offset = offset;
         io_uring_prep_read_fixed(sqe, iofile, fetcher->iovecs[slot].iov_base, len, offset, slot);
         io_uring_sqe_set_data(sqe, dctx + slot);
@@ -296,7 +357,7 @@ static ssize_t hmll_io_uring_fetch_loop(
         if (count == 0 && n_inflight > 0) {
             struct io_uring_cqe *cqe;
             if (unlikely(io_uring_wait_cqe(&fetcher->ioring, &cqe) < 0)) {
-                ctx->error = HMLL_ERR(HMLL_ERR_IO_ERROR);
+                ctx->error = HMLL_SYS_ERR(errno);
                 return -1;
             }
             cqes[0] = cqe;
@@ -758,8 +819,19 @@ static struct hmll_error hmll_io_uring_queue_init(
     const struct hmll_device device
 ) {
     (void)ctx;
+
+    /* Detect NUMA node for the target device and pin SQPOLL thread accordingly */
+    int numa_node = -1;
+    int sq_cpu = 0;
+
+    if (hmll_device_is_cuda(device)) {
+        numa_node = hmll_get_gpu_numa_node(device.idx);
+        int cpu = hmll_get_first_cpu_on_node(numa_node);
+        if (cpu >= 0) sq_cpu = cpu;
+    }
+
     struct io_uring_params params = {
-        .sq_thread_cpu = 0,
+        .sq_thread_cpu = (unsigned)sq_cpu,
         .flags = hmll_io_uring_get_setup_flags(),
         .sq_thread_idle = 500
     };
@@ -769,6 +841,33 @@ static struct hmll_error hmll_io_uring_queue_init(
         cudaError_t cuda_err = cudaSetDevice(device.idx);
         if (cuda_err != cudaSuccess) {
             return HMLL_ERR(HMLL_ERR_CUDA_SET_DEVICE_FAILED);
+        }
+
+        /* Pin this thread to the GPU's NUMA node for optimal memory allocation */
+        if (numa_node >= 0) {
+            cpu_set_t cpuset;
+            CPU_ZERO(&cpuset);
+            char path[256];
+            snprintf(path, sizeof(path), "/sys/devices/system/node/node%d/cpulist", numa_node);
+            FILE *f = fopen(path, "r");
+            if (f) {
+                char buf[1024] = {0};
+                if (fgets(buf, sizeof(buf), f)) {
+                    /* Parse cpulist format: "0-23,48-71" */
+                    char *tok = strtok(buf, ",\n");
+                    while (tok) {
+                        int lo, hi;
+                        if (sscanf(tok, "%d-%d", &lo, &hi) == 2) {
+                            for (int c = lo; c <= hi; c++) CPU_SET(c, &cpuset);
+                        } else if (sscanf(tok, "%d", &lo) == 1) {
+                            CPU_SET(lo, &cpuset);
+                        }
+                        tok = strtok(NULL, ",\n");
+                    }
+                }
+                fclose(f);
+                sched_setaffinity(0, sizeof(cpuset), &cpuset);
+            }
         }
 
         struct hmll_io_uring_cuda_context *data = calloc(HMLL_URING_QUEUE_DEPTH, sizeof(struct hmll_io_uring_cuda_context));
@@ -887,7 +986,7 @@ void hmll_io_uring_destroy(void *ptr)
             }
         }
 
-        munmap(backend->iovecs[0].iov_base, HMLL_URING_QUEUE_DEPTH * sizeof(struct iovec));
+        cudaFreeHost(backend->iovecs[0].iov_base);
         free(backend->device_ctx);
         backend->device_ctx = NULL;
     }

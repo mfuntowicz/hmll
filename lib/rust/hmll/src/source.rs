@@ -100,8 +100,17 @@ impl Source {
     ///
     /// This is used internally for creating views that outlive the loader.
     #[inline(always)]
-    pub(crate) fn handle(&self) -> &Arc<SourceHandle> {
-        &self.handle
+    pub(crate) fn handle(&self) -> Arc<SourceHandle> {
+        self.handle.clone()
+    }
+
+    /// Close the file descriptor associated to the [`Source`].
+    /// Useful for mmap when we don't need a dangling file descriptor.
+    pub(crate) fn close_fd(&self) {
+        unsafe {
+            let inner_ptr = &self.handle.inner as *const _ as *mut hmll_sys::hmll_source;
+            hmll_sys::hmll_source_close(inner_ptr);
+        }
     }
 }
 
